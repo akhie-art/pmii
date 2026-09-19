@@ -254,8 +254,15 @@ export default function Home() {
       <header className="w-full border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40 transition-colors duration-200">
         <div className="container mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-600 dark:bg-blue-700 flex items-center justify-center text-white font-bold text-xs shadow-xs tracking-wider shrink-0">
-              PMII
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white border border-zinc-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shadow-xs shrink-0">
+              <Image
+                src="/image/logo_komsat.png"
+                alt="Logo PK PMII Ki Ageng Getas Pendawa"
+                width={36}
+                height={36}
+                className="w-full h-full object-contain"
+                priority
+              />
             </div>
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-[11px] sm:text-sm tracking-tight text-zinc-900 dark:text-zinc-100 leading-tight truncate">

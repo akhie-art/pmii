@@ -16,6 +16,11 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Portal PMII - Admin & Database Organisasi",
   description: "Aplikasi pengelolaan administrasi, database anggota, dan arsip digital PMII.",
+  icons: {
+    icon: "/image/logo_komsat.png",
+    shortcut: "/image/logo_komsat.png",
+    apple: "/image/logo_komsat.png",
+  },
 };
 
 export default function RootLayout({

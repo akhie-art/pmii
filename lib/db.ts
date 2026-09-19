@@ -216,7 +216,19 @@ async function saveTableData<T extends { id: string | number }>(
 
       // Upsert the remaining list with automatic column self-healing
       if (sanitizedList.length > 0) {
-        let currentList = [...sanitizedList] as any[];
+        let currentList = sanitizedList.map((item: any) => {
+          if (tableName === "articles") {
+            const copy = { ...item };
+            copy.created_at = copy.created_at || copy.createdAt || new Date().toISOString();
+            copy.updated_at = copy.updated_at || copy.updatedAt || new Date().toISOString();
+            delete copy.createdAt;
+            delete copy.updatedAt;
+            delete copy.date;
+            delete copy.readTime;
+            return copy;
+          }
+          return { ...item };
+        });
         let attempts = 0;
         const maxAttempts = 50;
 
