@@ -795,18 +795,20 @@ export const db = {
         const { data, error } = await supabase
           .from("kurikulum")
           .select("id, name, syllabus, materials, quiz");
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           const result: Record<string, KaderisasiLevel> = {};
-          data.forEach((row: any) => {
-            const key = row.name || row.id;
-            result[key] = {
-              id: row.id,
-              name: row.name,
-              syllabus: row.syllabus || [],
-              materials: row.materials || [],
-              quiz: row.quiz || []
-            };
-          });
+          if (data.length > 0) {
+            data.forEach((row: any) => {
+              const key = row.name || row.id;
+              result[key] = {
+                id: row.id,
+                name: row.name,
+                syllabus: row.syllabus || [],
+                materials: row.materials || [],
+                quiz: row.quiz || []
+              };
+            });
+          }
           if (typeof window !== "undefined") {
             localStorage.setItem(KEYS.KURIKULUM, JSON.stringify(result));
           }
@@ -819,7 +821,7 @@ export const db = {
         console.error("Failed to fetch from Supabase for kurikulum:", err);
       }
     }
-    // LocalStorage Fallback
+    // LocalStorage Fallback (only if Supabase is not configured or failed to connect)
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem(KEYS.KURIKULUM);
       if (stored) {
@@ -924,36 +926,5 @@ export const DEFAULT_USERS: UserAccount[] = [
 ];
 
 export const DEFAULT_KADERISASI: Kaderisasi[] = [];
-
-export const DEFAULT_KURIKULUM: Record<string, KaderisasiLevel> = {
-  MAPABA: {
-    id: "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c01",
-    name: "MAPABA",
-    syllabus: [],
-    materials: [],
-    quiz: []
-  },
-  PKD: {
-    id: "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02",
-    name: "PKD",
-    syllabus: [],
-    materials: [],
-    quiz: []
-  },
-  PKL: {
-    id: "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c03",
-    name: "PKL",
-    syllabus: [],
-    materials: [],
-    quiz: []
-  },
-  PKN: {
-    id: "c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c04",
-    name: "PKN",
-    syllabus: [],
-    materials: [],
-    quiz: []
-  }
-};
 
 

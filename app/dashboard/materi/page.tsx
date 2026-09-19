@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/select";
 
 import { toast } from "sonner";
-import { db, Kaderisasi, DEFAULT_KURIKULUM } from "@/lib/db";
+import { db, Kaderisasi } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { KaderisasiLevel, SyllabusItem, MaterialFile, QuizQuestion, FileAttachment } from "@/lib/db";
 

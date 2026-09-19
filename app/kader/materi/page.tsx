@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { db, DEFAULT_KURIKULUM } from "@/lib/db";
+import { db } from "@/lib/db";
 import type { KaderisasiLevel, SyllabusItem, MaterialFile, QuizQuestion } from "@/lib/db";
 
 const LEVEL_ORDER: Record<"MAPABA" | "PKD" | "PKL" | "PKN", number> = {
@@ -34,7 +34,7 @@ const LEVEL_ORDER: Record<"MAPABA" | "PKD" | "PKL" | "PKN", number> = {
 
 export default function KaderMateriPage() {
   const [mounted, setMounted] = useState(false);
-  const [kaderisasiData, setKaderisasiData] = useState<Record<"MAPABA" | "PKD" | "PKL" | "PKN", KaderisasiLevel>>(DEFAULT_KURIKULUM);
+  const [kaderisasiData, setKaderisasiData] = useState<Record<string, KaderisasiLevel>>({});
   const [selectedLevelId, setSelectedLevelId] = useState<"MAPABA" | "PKD" | "PKL" | "PKN">("MAPABA");
   const [userCadreLevel, setUserCadreLevel] = useState<"MAPABA" | "PKD" | "PKL" | "PKN">("MAPABA");
   const [isAdminOrPengurus, setIsAdminOrPengurus] = useState(false);
@@ -57,7 +57,7 @@ export default function KaderMateriPage() {
         if (kurikulumRes && Object.keys(kurikulumRes).length > 0) {
           setKaderisasiData(kurikulumRes);
         } else {
-          setKaderisasiData(DEFAULT_KURIKULUM);
+          setKaderisasiData({});
         }
 
         // Determine cadre's current level
@@ -101,7 +101,7 @@ export default function KaderMateriPage() {
     loadData();
   }, []);
 
-  const currentLevel: KaderisasiLevel = kaderisasiData[selectedLevelId] || DEFAULT_KURIKULUM[selectedLevelId];
+  const currentLevel: KaderisasiLevel | undefined = kaderisasiData[selectedLevelId];
   const syllabusList: SyllabusItem[] = currentLevel?.syllabus || [];
   const materialsList: MaterialFile[] = currentLevel?.materials || [];
   const quizList: QuizQuestion[] = currentLevel?.quiz || [];
