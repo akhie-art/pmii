@@ -12,6 +12,7 @@ const KEYS = {
   USERS: "PMII_USER_ACCOUNTS",
   KADERISASI: "PMII_KADERISASI",
   KURIKULUM: "PMII_KURIKULUM",
+  ARTICLES: "PMII_ARTICLES_DATA",
 };
 
 // Normalization Helpers
@@ -106,6 +107,16 @@ async function getTableData<T>(tableName: string, localStorageKey: string, defau
           }
           localStorage.setItem(localStorageKey, JSON.stringify(mergedData));
         }
+        if (tableName === "articles" && Array.isArray(mergedData)) {
+          mergedData = mergedData.map((item: any) => {
+            const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+            return {
+              ...item,
+              createdAt: dateVal,
+              created_at: dateVal,
+            };
+          });
+        }
         return mergedData as T[];
       }
     } catch (err) {
@@ -118,11 +129,32 @@ async function getTableData<T>(tableName: string, localStorageKey: string, defau
     const stored = localStorage.getItem(localStorageKey);
     if (stored) {
       try {
-        return JSON.parse(stored) as T[];
+        let parsed = JSON.parse(stored) as any[];
+        if (tableName === "articles" && Array.isArray(parsed)) {
+          parsed = parsed.map((item: any) => {
+            const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+            return {
+              ...item,
+              createdAt: dateVal,
+              created_at: dateVal,
+            };
+          });
+        }
+        return parsed as T[];
       } catch (e) {
         console.error(`Error parsing localStorage for ${localStorageKey}:`, e);
       }
     }
+  }
+  if (tableName === "articles" && Array.isArray(defaultData)) {
+    return defaultData.map((item: any) => {
+      const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+      return {
+        ...item,
+        createdAt: dateVal,
+        created_at: dateVal,
+      };
+    }) as unknown as T[];
   }
   return defaultData;
 }
@@ -872,6 +904,41 @@ export const db = {
     }
     return true;
   },
+  getArticles: async (): Promise<Article[]> => {
+    const list = await getTableData<Article>("articles", KEYS.ARTICLES, DEFAULT_ARTICLES);
+    return list.map((item: any) => {
+      const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+      return {
+        ...item,
+        createdAt: dateVal,
+        created_at: dateVal,
+      };
+    });
+  },
+  saveArticles: async (articles: Article[]): Promise<boolean> => {
+    const sanitized = articles.map((item: any) => {
+      const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+      return {
+        ...item,
+        createdAt: dateVal,
+        created_at: dateVal,
+      };
+    });
+    return saveTableData<Article>("articles", KEYS.ARTICLES, sanitized);
+  },
+  likeArticle: async (articleId: string): Promise<number> => {
+    const articles = await getTableData<Article>("articles", KEYS.ARTICLES, DEFAULT_ARTICLES);
+    let newLikes = 0;
+    const updated = articles.map((a) => {
+      if (a.id === articleId || a.slug === articleId) {
+        newLikes = (a.likes || 0) + 1;
+        return { ...a, likes: newLikes };
+      }
+      return a;
+    });
+    await saveTableData<Article>("articles", KEYS.ARTICLES, updated);
+    return newLikes;
+  },
 };
 
 // -------------------------------------------------------------
@@ -927,5 +994,143 @@ export const DEFAULT_USERS: UserAccount[] = [
 ];
 
 export const DEFAULT_KADERISASI: Kaderisasi[] = [];
+
+export function formatArticleDate(input?: any): string {
+  let dateVal: any = input;
+  if (typeof input === "object" && input !== null && !(input instanceof Date)) {
+    dateVal = input.createdAt || input.created_at || input.date || input.establishedDate;
+  }
+
+  if (!dateVal) {
+    dateVal = new Date();
+  }
+
+  try {
+    let d: Date;
+    if (dateVal instanceof Date) {
+      d = dateVal;
+    } else {
+      d = new Date(String(dateVal));
+    }
+
+    if (isNaN(d.getTime())) {
+      const parsed = Date.parse(String(dateVal));
+      if (!isNaN(parsed)) {
+        d = new Date(parsed);
+      } else {
+        return String(dateVal);
+      }
+    }
+
+    const dayName = d.toLocaleDateString("id-ID", { weekday: "long" });
+    const dateFormatted = d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+
+    return `${dayName}, ${dateFormatted}, pukul ${hours}.${minutes} WIB`;
+  } catch {
+    return String(dateVal || "");
+  }
+}
+
+export interface Article {
+  id: string;
+  slug?: string;
+  title: string;
+  category: string;
+  excerpt: string;
+  content: string[];
+  authorName: string;
+  authorRole: string;
+  authorInitials: string;
+  image: string;
+  tags: string[];
+  status: "DITAMPILKAN" | "DRAFT" | "ARSIP";
+  views?: number;
+  likes?: number;
+  commissariat?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  date?: string;
+}
+
+export const DEFAULT_ARTICLES: Article[] = [
+  {
+    id: "art-1",
+    slug: "refleksi-mapaba-menumbuhkan-daya-kritis",
+    title: "Refleksi Mapaba: Menumbuhkan Daya Kritis & Komitmen Nilai Kader Ulul Albab",
+    category: "Kaderisasi",
+    excerpt: "Masa Penerimaan Anggota Baru (Mapaba) bukan sekadar gerbang masuk, melainkan ruang pembongkaran stagnasi berpikir mahasiswa.",
+    content: [
+      "Masa Penerimaan Anggota Baru (Mapaba) merupakan fase inisiasi paling sakral dalam perjalanan seorang kader PMII. Di sini, nilai-nilai dasar pergerakan (NDP) diperkenalkan bukan hanya sebagai doktrin teks kaku, melainkan sebagai kacamata analitis dalam membedah realitas sosial-kemasyarakatan.",
+      "Tantangan generasi muda di era serbuan informasi menuntut kader PMII untuk memiliki daya saring intelektual yang kokoh. Paradigma kritis transformatif mendorong setiap anggota untuk tidak pasif menerima narasi dominan, melainkan senantiasa bertanya dan menghadirkan solusi konkret.",
+      "Melalui kaderisasi yang terstruktur dan pendampingan pasca-Mapaba, PK PMII Ki Ageng Getas Pendawa berkomitmen melahirkan pribadi Ulul Albab yang memadukan kedalaman spiritual, keluasan ilmu pengetahuan, dan ketulusan pengabdian sosial."
+    ],
+    authorName: "Ahmad Farisi",
+    authorRole: "Biro Kaderisasi & Litbang",
+    authorInitials: "AF",
+    image: "/image/kaderisasi.jpg",
+    tags: ["Mapaba", "Kaderisasi", "Ulul Albab"],
+    status: "DITAMPILKAN",
+    views: 342,
+    likes: 48,
+    commissariat: "Ki Ageng Getas Pendawa",
+    createdAt: "2026-09-18T08:00:00.000Z",
+    created_at: "2026-09-18T08:00:00.000Z"
+  },
+  {
+    id: "art-2",
+    slug: "meneguhkan-aswaja-an-nahdliyah",
+    title: "Meneguhkan Aswaja An-Nahdliyah dalam Dinamika Kebangsaan Kontemporer",
+    category: "Opini & Pergerakan",
+    excerpt: "Prinsip tawasuth, tawazun, tasamuh, dan i'tidal menjadi kompas moral kader pergerakan dalam mengawal keutuhan bangsa dan keadilan sosial.",
+    content: [
+      "Ahlussunnah wal Jama'ah (Aswaja) bukan sekadar madzhab pemikiran keagamaan, melainkan manhaj al-fikr (metodologi berpikir) yang lentur namun kokoh dalam merespons dinamika perubahan zaman.",
+      "Kader PMII Ki Ageng Getas Pendawa senantiasa menginternalisasikan empat pilar Aswaja: Tawasuth (moderat), Tawazun (seimbang), Tasamuh (toleran), dan I'tidal (adil). Keempat nilai ini menjadi benteng penangkal ekstremisme sekaligus pendorong perjuangan membela kaum mustadh'afin.",
+      "Di tengah polarisasi wacana dan tantangan kebangsaan, kehadiran kader PMII yang inklusif dan berakar pada tradisi keilmuan pesantren merupakan modal sosial penting bagi peradaban kemanusiaan."
+    ],
+    authorName: "M. Zulkarnain",
+    authorRole: "Ketua Komisariat",
+    authorInitials: "MZ",
+    image: "/image/landing_page.png",
+    tags: ["Aswaja", "Ideologi", "Kebangsaan"],
+    status: "DITAMPILKAN",
+    views: 520,
+    likes: 64,
+    commissariat: "Ki Ageng Getas Pendawa",
+    createdAt: "2026-09-12T09:30:00.000Z",
+    created_at: "2026-09-12T09:30:00.000Z"
+  },
+  {
+    id: "art-3",
+    slug: "modernisasi-persuratan-digital",
+    title: "Modernisasi Persuratan Digital: Efisiensi Birokrasi Menuju Organisasi Adaptif",
+    category: "Tata Kelola",
+    excerpt: "Transformasi pengelolaan arsip, nomor surat digital, dan verifikasi sertifikat mempercepat akselerasi kerja-kerja organisasi di tingkat komisariat dan rayon.",
+    content: [
+      "Era digital mengharuskan organisasi pergerakan untuk mereformasi tata kelola administrasinya. Ketertiban surat-menyurat dan keabsahan dokumen adalah cerminan profesionalisme sebuah organisasi kader yang maju.",
+      "Dengan implementasi portal digital terpadu di PK PMII Ki Ageng Getas Pendawa, proses penerbitan nomor surat resmi, legalisir sertifikat pelatihan, dan pencatatan inventaris kini dapat diselesaikan secara terverifikasi dalam hitungan menit.",
+      "Sistem ini tidak hanya menghemat penggunaan kertas dan ruang arsip fisik, namun juga menghadirkan keterbukaan data riwayat kader yang transparan dan akuntabel bagi seluruh pengurus."
+    ],
+    authorName: "Siti Rahmawati",
+    authorRole: "Sekretaris Komisariat",
+    authorInitials: "SR",
+    image: "/image/administrasi.jpg",
+    tags: ["Digitalisasi", "Administrasi", "Tata Kelola"],
+    status: "DITAMPILKAN",
+    views: 285,
+    likes: 35,
+    commissariat: "Ki Ageng Getas Pendawa",
+    createdAt: "2026-09-08T14:15:00.000Z",
+    created_at: "2026-09-08T14:15:00.000Z"
+  }
+];
 
 

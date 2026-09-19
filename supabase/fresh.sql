@@ -227,6 +227,29 @@ CREATE TABLE arsip (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Table: articles
+CREATE TABLE articles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Kaderisasi',
+  excerpt TEXT,
+  content JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "authorName" TEXT NOT NULL,
+  "authorRole" TEXT DEFAULT 'Pengurus',
+  "authorInitials" TEXT DEFAULT 'PM',
+  image TEXT NOT NULL DEFAULT '/image/kaderisasi.jpg',
+  tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status TEXT NOT NULL DEFAULT 'DITAMPILKAN',
+  views INTEGER DEFAULT 0 NOT NULL,
+  likes INTEGER DEFAULT 0 NOT NULL,
+  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
+  slug TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX idx_articles_slug ON articles(slug);
+
 -- -------------------------------------------------------------
 -- 2. INDEXES & PERFORMANCE OPTIMIZATIONS
 -- -------------------------------------------------------------
@@ -239,6 +262,9 @@ CREATE INDEX idx_persyaratan_level ON persyaratan(level);
 CREATE INDEX idx_kurikulum_id ON kurikulum(id);
 CREATE INDEX idx_surat_commissariat ON surat(commissariat);
 CREATE INDEX idx_arsip_commissariat ON arsip(commissariat);
+CREATE INDEX idx_articles_status ON articles(status);
+CREATE INDEX idx_articles_category ON articles(category);
+CREATE INDEX idx_articles_created_at ON articles(created_at DESC);
 
 -- -------------------------------------------------------------
 -- 3. AUTOMATIC TIMESTAMP TRIGGERS
@@ -272,6 +298,7 @@ CREATE TRIGGER trg_kader_created_at BEFORE INSERT ON kader FOR EACH ROW EXECUTE 
 CREATE TRIGGER trg_surat_created_at BEFORE INSERT ON surat FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
 CREATE TRIGGER trg_arsip_created_at BEFORE INSERT ON arsip FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
 CREATE TRIGGER trg_kurikulum_created_at BEFORE INSERT ON kurikulum FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
+CREATE TRIGGER trg_articles_created_at BEFORE INSERT ON articles FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
 
 CREATE TRIGGER trg_pengguna_created_at BEFORE INSERT ON pengguna FOR EACH ROW EXECUTE FUNCTION set_default_created_at_camel();
 CREATE TRIGGER trg_kaderisasi_created_at BEFORE INSERT ON kaderisasi FOR EACH ROW EXECUTE FUNCTION set_default_created_at_camel();
@@ -346,6 +373,13 @@ CREATE POLICY "allow_insert" ON arsip FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_update" ON arsip FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "allow_delete" ON arsip FOR DELETE USING (true);
 
+ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "allow_select" ON articles FOR SELECT USING (true);
+CREATE POLICY "allow_insert" ON articles FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update" ON articles FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "allow_delete" ON articles FOR DELETE USING (true);
+
 GRANT ALL ON TABLE komisariat TO anon, authenticated;
 GRANT ALL ON TABLE persyaratan TO anon, authenticated;
 GRANT ALL ON TABLE pengurus TO anon, authenticated;
@@ -357,6 +391,7 @@ GRANT ALL ON TABLE kaderisasi TO anon, authenticated;
 GRANT ALL ON TABLE kurikulum TO anon, authenticated;
 GRANT ALL ON TABLE surat TO anon, authenticated;
 GRANT ALL ON TABLE arsip TO anon, authenticated;
+GRANT ALL ON TABLE articles TO anon, authenticated;
 
 -- -------------------------------------------------------------
 -- 5. STORAGE BUCKETS CONFIGURATION
@@ -475,3 +510,73 @@ ON CONFLICT (id) DO UPDATE SET
     THEN EXCLUDED.quiz 
     ELSE kurikulum.quiz 
   END;
+
+-- 8. SEED DATA ARTIKEL
+INSERT INTO articles (
+  id,
+  title,
+  category,
+  excerpt,
+  content,
+  "authorName",
+  "authorRole",
+  "authorInitials",
+  image,
+  tags,
+  status,
+  views,
+  commissariat,
+  created_at
+) VALUES 
+(
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21'::uuid,
+  'Refleksi Mapaba: Menumbuhkan Daya Kritis & Komitmen Nilai Kader Ulul Albab',
+  'Kaderisasi',
+  'Masa Penerimaan Anggota Baru (Mapaba) bukan sekadar gerbang masuk, melainkan ruang pembongkaran stagnasi berpikir mahasiswa.',
+  '["Masa Penerimaan Anggota Baru (Mapaba) merupakan fase inisiasi paling sakral dalam perjalanan seorang kader PMII. Di sini, nilai-nilai dasar pergerakan (NDP) diperkenalkan bukan hanya sebagai doktrin teks kaku, melainkan sebagai kacamata analitis dalam membedah realitas sosial-kemasyarakatan.", "Tantangan generasi muda di era serbuan informasi menuntut kader PMII untuk memiliki daya saring intelektual yang kokoh. Paradigma kritis transformatif mendorong setiap anggota untuk tidak pasif menerima narasi dominan, melainkan senantiasa bertanya dan menghadirkan solusi konkret.", "Melalui kaderisasi yang terstruktur dan pendampingan pasca-Mapaba, PK PMII Ki Ageng Getas Pendawa berkomitmen melahirkan pribadi Ulul Albab yang memadukan kedalaman spiritual, keluasan ilmu pengetahuan, dan ketulusan pengabdian sosial."]'::jsonb,
+  'Ahmad Farisi',
+  'Biro Kaderisasi & Litbang',
+  'AF',
+  '/image/kaderisasi.jpg',
+  '["Mapaba", "Kaderisasi", "Ulul Albab"]'::jsonb,
+  'DITAMPILKAN',
+  342,
+  'Ki Ageng Getas Pendawa',
+  '2026-09-18 08:00:00+00'
+),
+(
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22'::uuid,
+  'Meneguhkan Aswaja An-Nahdliyah dalam Dinamika Kebangsaan Kontemporer',
+  'Opini & Pergerakan',
+  'Prinsip tawasuth, tawazun, tasamuh, dan i''tidal menjadi kompas moral kader pergerakan dalam mengawal keutuhan bangsa dan keadilan sosial.',
+  '["Ahlussunnah wal Jama''ah (Aswaja) bukan sekadar madzhab pemikiran keagamaan, melainkan manhaj al-fikr (metodologi berpikir) yang lentur namun kokoh dalam merespons dinamika perubahan zaman.", "Kader PMII Ki Ageng Getas Pendawa senantiasa menginternalisasikan empat pilar Aswaja: Tawasuth (moderat), Tawazun (seimbang), Tasamuh (toleran), dan I''tidal (adil). Keempat nilai ini menjadi benteng penangkal ekstremisme sekaligus pendorong perjuangan membela kaum mustadh''afin.", "Di tengah polarisasi wacana dan tantangan kebangsaan, kehadiran kader PMII yang inklusif dan berakar pada tradisi keilmuan pesantren merupakan modal sosial penting bagi peradaban kemanusiaan."]'::jsonb,
+  'M. Zulkarnain',
+  'Ketua Komisariat',
+  'MZ',
+  '/image/landing_page.png',
+  '["Aswaja", "Ideologi", "Kebangsaan"]'::jsonb,
+  'DITAMPILKAN',
+  520,
+  64,
+  'Ki Ageng Getas Pendawa',
+  '2026-09-12 09:30:00+00'
+),
+(
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23'::uuid,
+  'Modernisasi Persuratan Digital: Efisiensi Birokrasi Menuju Organisasi Adaptif',
+  'Tata Kelola',
+  'Transformasi pengelolaan arsip, nomor surat digital, dan verifikasi sertifikat mempercepat akselerasi kerja-kerja organisasi di tingkat komisariat dan rayon.',
+  '["Era digital mengharuskan organisasi pergerakan untuk mereformasi tata kelola administrasinya. Ketertiban surat-menyurat dan keabsahan dokumen adalah cerminan profesionalisme sebuah organisasi kader yang maju.", "Dengan implementasi portal digital terpadu di PK PMII Ki Ageng Getas Pendawa, proses penerbitan nomor surat resmi, legalisir sertifikat pelatihan, dan pencatatan inventaris kini dapat diselesaikan secara terverifikasi dalam hitungan menit.", "Sistem ini tidak hanya menghemat penggunaan kertas dan ruang arsip fisik, namun juga menghadirkan keterbukaan data riwayat kader yang transparan dan akuntabel bagi seluruh pengurus."]'::jsonb,
+  'Siti Rahmawati',
+  'Sekretaris Komisariat',
+  'SR',
+  '/image/administrasi.jpg',
+  '["Digitalisasi", "Administrasi", "Tata Kelola"]'::jsonb,
+  'DITAMPILKAN',
+  285,
+  35,
+  'Ki Ageng Getas Pendawa',
+  '2026-09-08 14:15:00+00'
+)
+ON CONFLICT (id) DO NOTHING;
+

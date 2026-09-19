@@ -22,7 +22,8 @@ import {
   Calendar,
   ClipboardCheck,
   UserCheck,
-  GraduationCap
+  GraduationCap,
+  Newspaper
 } from "lucide-react";
 
 // Import shadcn/ui components
@@ -175,6 +176,12 @@ export default function DashboardLayout({
       ]
     },
     {
+      groupLabel: "Publikasi & Media",
+      items: [
+        { name: "Artikel & Berita", href: "/dashboard/artikel", icon: Newspaper, roles: ["ADMIN", "KOMISARIAT"] },
+      ]
+    },
+    {
       groupLabel: "Konfigurasi & Pengaturan",
       items: [
         { name: "Manajemen Pengguna", href: "/dashboard/pengguna", icon: ShieldCheck, roles: ["ADMIN", "KOMISARIAT"] },
@@ -323,7 +330,7 @@ export default function DashboardLayout({
         </Sidebar>
 
         {/* OFFICIAL SHADCN SIDEBAR INSET COMPONENT */}
-        <SidebarInset className="flex-1 flex flex-col min-w-0 relative z-10 bg-zinc-50 dark:bg-zinc-950 min-h-screen">
+        <SidebarInset className="flex-1 flex flex-col min-w-0 bg-zinc-50 dark:bg-zinc-950 min-h-screen">
           
           {/* HEADER */}
           <header className="h-16 flex items-center justify-between px-6 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-30 w-full">
@@ -419,7 +426,7 @@ export default function DashboardLayout({
           </header>
 
           {/* PAGE CONTENT */}
-          <main className="flex-1 p-3.5 sm:p-6 overflow-y-auto relative z-10 custom-scrollbar">
+          <main className="flex-1 p-3.5 sm:p-6 overflow-y-auto custom-scrollbar">
             {children}
           </main>
         </SidebarInset>
