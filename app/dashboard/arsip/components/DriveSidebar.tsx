@@ -92,7 +92,7 @@ export default function DriveSidebar({ activeTab, setActiveTab, selectedFolder, 
 
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalCategory = selectedFolder || newCategory;
+    const finalCategory = selectedFolder || (newCategory === "ROOT" ? "" : newCategory);
 
     if (!selectedFile) {
       alert("Silakan pilih file terlebih dahulu!");
@@ -100,10 +100,6 @@ export default function DriveSidebar({ activeTab, setActiveTab, selectedFolder, 
     }
 
     if (!newTitle.trim()) return;
-    if (!finalCategory && folders.length > 0) {
-      alert("Silakan pilih folder tujuan berkas!");
-      return;
-    }
 
     setIsUploading(true);
 
@@ -282,6 +278,7 @@ export default function DriveSidebar({ activeTab, setActiveTab, selectedFolder, 
                           <SelectValue placeholder="Pilih Folder Tujuan" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
+                            <SelectItem value="ROOT">Tanpa Folder (Root Arsip)</SelectItem>
                             {folders.map(f => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)}
                         </SelectContent>
                     </Select>

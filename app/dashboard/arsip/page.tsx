@@ -504,32 +504,42 @@ export default function DrivePage() {
         console.error("Failed to load documents from Supabase:", err);
       }
 
+      const DUMMY_FOLDER_NAMES = [
+        "SK Kepengurusan",
+        "Modul Kaderisasi",
+        "Ketetapan Rapat",
+        "Sertifikat",
+        "Publikasi"
+      ];
+
       const storedFolders = localStorage.getItem("pmii_drive_folders");
       if (storedFolders) {
-        setFolders(JSON.parse(storedFolders));
+        try {
+          const parsed: FolderItem[] = JSON.parse(storedFolders);
+          const cleaned = parsed.filter((f) => !DUMMY_FOLDER_NAMES.includes(f.name));
+          setFolders(cleaned);
+          localStorage.setItem("pmii_drive_folders", JSON.stringify(cleaned));
+        } catch (e) {
+          setFolders([]);
+          localStorage.setItem("pmii_drive_folders", JSON.stringify([]));
+        }
       } else {
-        // Inisialisasi folder bawaan jika kosong agar tampilan menarik
-        const defaultFolders: FolderItem[] = [
-          { name: "SK Kepengurusan", color: "bg-zinc-500/[0.02]", borderColor: "border-zinc-500/20", iconColor: "text-zinc-500", parent: null },
-          { name: "Modul Kaderisasi", color: "bg-zinc-500/[0.02]", borderColor: "border-zinc-500/20", iconColor: "text-zinc-500", parent: null },
-          { name: "Ketetapan Rapat", color: "bg-zinc-500/[0.02]", borderColor: "border-zinc-500/20", iconColor: "text-zinc-500", parent: null },
-          { name: "Sertifikat", color: "bg-zinc-500/[0.02]", borderColor: "border-zinc-500/20", iconColor: "text-zinc-500", parent: null },
-          { name: "Publikasi", color: "bg-zinc-500/[0.02]", borderColor: "border-zinc-500/20", iconColor: "text-zinc-500", parent: null }
-        ];
-        setFolders(defaultFolders);
-        localStorage.setItem("pmii_drive_folders", JSON.stringify(defaultFolders));
+        setFolders([]);
+        localStorage.setItem("pmii_drive_folders", JSON.stringify([]));
       }
     };
     loadData();
   }, []);
 
-  const currentFolders = folders.filter(f => f.parent === (selectedFolder || null));
+  const currentFolders = folders.filter((f) => f.parent === (selectedFolder || null));
 
   const filteredDocs = documents.filter((doc) => {
-    const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) || doc.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.code.toLowerCase().includes(searchTerm.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (activeTab === "MY_DRIVE" && doc.category !== (selectedFolder || "")) return false;
+    if (activeTab === "MY_DRIVE" && selectedFolder && doc.category !== selectedFolder) return false;
     if (activeTab !== "MY_DRIVE" && selectedFolder && doc.category !== selectedFolder) return false;
 
     switch (activeTab) {

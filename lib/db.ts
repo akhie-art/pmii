@@ -368,6 +368,7 @@ export interface BoardMember {
   department?: string;
   gender?: string;
   status?: string;
+  avatar?: string;
 }
 
 export interface KomisariatRayon {

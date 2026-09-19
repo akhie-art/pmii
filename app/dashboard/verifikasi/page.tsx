@@ -10,18 +10,31 @@ import {
   XCircle,
   ExternalLink,
   MessageSquare,
-  Sparkles,
   ClipboardList,
   Check,
   X,
-  AlertCircle,
   Clock,
-  Compass
+  Search,
+  Filter,
+  ShieldCheck,
+  AlertTriangle,
+  User,
+  Layers,
+  ArrowUpRight
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface CadreSubmission {
   id: string;
@@ -43,6 +56,7 @@ interface CadreFollowUp {
   startDate: string;
   status: "AKTIF" | "SELESAI" | "REVISI";
   submissions: CadreSubmission[];
+  avatar?: string;
   phone?: string;
   email?: string;
   address?: string;
@@ -56,18 +70,28 @@ export default function KomisariatVerifikasiPage() {
   const [activeTab, setActiveTab] = useState<"PENDING" | "APPROVED" | "REJECTED">("PENDING");
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
+  // Search & Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLevel, setSelectedLevel] = useState<string>("ALL");
+
   // Review Dialog states
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewingSubmission, setReviewingSubmission] = useState<CadreSubmission | null>(null);
   const [reviewingCadreId, setReviewingCadreId] = useState<string>("");
   const [reviewingCadreName, setReviewingCadreName] = useState<string>("");
+  const [reviewingCadreLevel, setReviewingCadreLevel] = useState<string>("");
   const [reviewFeedback, setReviewFeedback] = useState<string>("");
   const [reviewStatus, setReviewStatus] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  // Feedback notifications
-  const [successMessage, setSuccessMessage] = useState<string>("");
+  // Toast notification
+  const [toastMessage, setToastMessage] = useState<string>("");
 
   useEffect(() => {
-    const storedCampus = typeof window !== "undefined" ? (localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || "UIN Walisongo") : "UIN Walisongo";
+    const storedCampus =
+      typeof window !== "undefined"
+        ? localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || "UIN Walisongo"
+        : "UIN Walisongo";
     setActiveCampus(storedCampus);
 
     if (typeof window !== "undefined") {
@@ -87,12 +111,31 @@ export default function KomisariatVerifikasiPage() {
     });
   }, []);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage("");
+    }, 3000);
+  };
+
+  const getInitials = (name: string): string => {
+    return (
+      name
+        .split(" ")
+        .filter((w) => w.toLowerCase() !== "sahabat" && w.toLowerCase() !== "sahabati")
+        .slice(0, 2)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase() || "KD"
+    );
+  };
+
   if (!mounted) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-10 bg-zinc-200 dark:bg-zinc-800 rounded-lg w-1/4" />
-        <div className="h-12 bg-zinc-200 dark:bg-zinc-800 rounded-2xl w-full" />
-        <div className="h-96 bg-zinc-200 dark:bg-zinc-800 rounded-2xl w-full" />
+        <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-xl w-full" />
+        <div className="h-10 bg-zinc-200 dark:bg-zinc-800 rounded-lg w-1/3" />
+        <div className="h-96 bg-zinc-200 dark:bg-zinc-800 rounded-xl w-full" />
       </div>
     );
   }
@@ -111,10 +154,26 @@ export default function KomisariatVerifikasiPage() {
       cadreId: c.id,
       cadreName: c.name,
       cadreLevel: c.level,
+      cadreAvatar: c.avatar
     }))
   );
 
-  const filteredSubmissions = flatSubmissions.filter((s) => s.status === activeTab);
+  // Statistics calculation
+  const pendingCount = flatSubmissions.filter((s) => s.status === "PENDING").length;
+  const approvedCount = flatSubmissions.filter((s) => s.status === "APPROVED").length;
+  const rejectedCount = flatSubmissions.filter((s) => s.status === "REJECTED").length;
+
+  // Filtered submissions
+  const filteredSubmissions = flatSubmissions.filter((s) => {
+    const matchesTab = s.status === activeTab;
+    const matchesSearch =
+      searchQuery.trim() === "" ||
+      s.cadreName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesLevel = selectedLevel === "ALL" || s.cadreLevel === selectedLevel;
+    return matchesTab && matchesSearch && matchesLevel;
+  });
 
   const handleOpenReview = (sub: typeof flatSubmissions[0]) => {
     setReviewingSubmission({
@@ -129,130 +188,226 @@ export default function KomisariatVerifikasiPage() {
     });
     setReviewingCadreId(sub.cadreId);
     setReviewingCadreName(sub.cadreName);
-    setReviewStatus("APPROVED");
+    setReviewingCadreLevel(sub.cadreLevel);
+    setReviewStatus(sub.status === "REJECTED" ? "REJECTED" : "APPROVED");
     setReviewFeedback(sub.feedback || "");
+    setIsReviewModalOpen(true);
   };
 
   const handleSaveReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewingSubmission || !reviewingCadreId) return;
 
-    const updatedCadres = cadres.map((cadre) => {
-      if (cadre.id === reviewingCadreId) {
-        const updatedSubmissions = cadre.submissions.map((sub) => {
-          if (sub.id === reviewingSubmission.id) {
-            return {
-              ...sub,
-              status: reviewStatus,
-              feedback: reviewFeedback
-            };
-          }
-          return sub;
-        });
+    setIsSubmittingReview(true);
+    try {
+      const updatedCadres = cadres.map((cadre) => {
+        if (cadre.id === reviewingCadreId) {
+          const updatedSubmissions = cadre.submissions.map((sub) => {
+            if (sub.id === reviewingSubmission.id) {
+              return {
+                ...sub,
+                status: reviewStatus,
+                feedback: reviewFeedback.trim()
+              };
+            }
+            return sub;
+          });
 
-        // Determine updated cadre status
-        let newStatus = cadre.status;
-        if (reviewStatus === "REJECTED") {
-          newStatus = "REVISI";
-        } else {
-          // Check if all needed submissions are approved for their level
-          const hasPending = updatedSubmissions.some(s => s.status === "PENDING");
-          const hasRejected = updatedSubmissions.some(s => s.status === "REJECTED");
-          const totalReq = cadre.level === "MAPABA" ? 3 : cadre.level === "PKD" ? 3 : 4;
-          const approvedCount = updatedSubmissions.filter(s => s.status === "APPROVED").length;
-          
-          if (!hasPending && !hasRejected && approvedCount >= totalReq) {
-            newStatus = "SELESAI";
+          // Determine updated cadre status
+          let newStatus = cadre.status;
+          if (reviewStatus === "REJECTED") {
+            newStatus = "REVISI";
           } else {
-            newStatus = "AKTIF";
+            // Check if all needed submissions are approved for their level
+            const hasPending = updatedSubmissions.some((s) => s.status === "PENDING");
+            const hasRejected = updatedSubmissions.some((s) => s.status === "REJECTED");
+            const totalReq = cadre.level === "MAPABA" ? 3 : cadre.level === "PKD" ? 3 : 4;
+            const currentApproved = updatedSubmissions.filter((s) => s.status === "APPROVED").length;
+
+            if (!hasPending && !hasRejected && currentApproved >= totalReq) {
+              newStatus = "SELESAI";
+            } else {
+              newStatus = "AKTIF";
+            }
           }
+
+          return {
+            ...cadre,
+            submissions: updatedSubmissions,
+            status: newStatus
+          };
         }
+        return cadre;
+      });
 
-        return {
-          ...cadre,
-          submissions: updatedSubmissions,
-          status: newStatus
-        };
-      }
-      return cadre;
-    });
-
-    setCadres(updatedCadres);
-    await db.saveCadres(updatedCadres);
-    setReviewingSubmission(null);
-    setReviewingCadreId("");
-    setReviewFeedback("");
-    setSuccessMessage("Status pengajuan berhasil diperbarui secara real-time!");
-    setTimeout(() => setSuccessMessage(""), 3000);
+      setCadres(updatedCadres);
+      await db.saveCadres(updatedCadres);
+      setIsReviewModalOpen(false);
+      setReviewingSubmission(null);
+      setReviewingCadreId("");
+      setReviewFeedback("");
+      showToast(
+        reviewStatus === "APPROVED"
+          ? `Laporan "${reviewingSubmission.title}" berhasil disetujui!`
+          : `Laporan "${reviewingSubmission.title}" dikembalikan untuk revisi.`
+      );
+    } catch (error) {
+      console.error("Failed to save review:", error);
+      showToast("Gagal menyimpan hasil verifikasi. Silakan coba lagi.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   return (
-    <div className="space-y-6 select-none pb-12">
-      {/* HEADER SECTION */}
-      <div>
-        <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-zinc-900 to-zinc-650 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
-          Verifikasi RKTL
-        </h1>
-        <p className="text-xs text-zinc-550 dark:text-zinc-400 font-bold uppercase tracking-wider mt-0.5">
-          Tinjau & berikan umpan balik (feedback) pengajuan laporan follow-up kader {activeCampus}
-        </p>
-      </div>
+    <div className="space-y-6 relative z-10 font-sans text-zinc-900 dark:text-zinc-100 pb-12">
+      {/* TOAST NOTIFICATION */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-20 right-6 z-50 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 border border-zinc-700 dark:border-zinc-300"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
+            <span className="text-xs font-semibold">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* TOAST SUCCESS NOTIFICATION */}
-      {successMessage && (
-        <div className="fixed bottom-6 right-6 p-4 bg-emerald-500 text-white text-xs font-bold rounded-2xl shadow-xl flex items-center gap-2.5 z-50 animate-bounce">
-          <CheckCircle2 className="w-5 h-5 text-white" />
-          <span>{successMessage}</span>
+      {/* 1. HERO HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 rounded-xl shadow-none">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-lg bg-blue-600 dark:bg-blue-700 flex items-center justify-center text-white shadow-sm shrink-0">
+            <FileCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Verifikasi RKTL
+              </h1>
+              <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
+                Follow-up Kader
+              </Badge>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-xl leading-relaxed">
+              Tinjau, validasi berkas, dan berikan catatan umpan balik atas laporan tindak lanjut kader {activeCampus}.
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* FILTER TABS */}
-      <div className="flex gap-2 p-1 bg-zinc-150 dark:bg-zinc-950/60 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl w-fit">
-        <button
-          onClick={() => setActiveTab("PENDING")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-            activeTab === "PENDING"
-              ? "bg-amber-500 text-white shadow-sm"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <Clock className="w-4 h-4" /> Antrean ({flatSubmissions.filter((s) => s.status === "PENDING").length})
-        </button>
-        <button
-          onClick={() => setActiveTab("APPROVED")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-            activeTab === "APPROVED"
-              ? "bg-emerald-500 text-white shadow-sm"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <CheckCircle2 className="w-4 h-4" /> Disetujui ({flatSubmissions.filter((s) => s.status === "APPROVED").length})
-        </button>
-        <button
-          onClick={() => setActiveTab("REJECTED")}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-            activeTab === "REJECTED"
-              ? "bg-rose-500 text-white shadow-sm"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <XCircle className="w-4 h-4" /> Perlu Revisi ({flatSubmissions.filter((s) => s.status === "REJECTED").length})
-        </button>
+        {pendingCount > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-400 text-xs font-medium self-start sm:self-center">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span>{pendingCount} laporan menunggu verifikasi</span>
+          </div>
+        )}
       </div>
 
-      {/* SUBMISSIONS STACK */}
-      <div className="space-y-4">
+
+
+      {/* 3. TABS SELECTOR */}
+      <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-6 text-xs font-medium">
+        {[
+          {
+            id: "PENDING" as const,
+            label: "Antrean Verifikasi",
+            icon: Clock,
+            count: pendingCount,
+            badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+          },
+          {
+            id: "APPROVED" as const,
+            label: "Laporan Disetujui",
+            icon: CheckCircle2,
+            count: approvedCount,
+            badgeColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+          },
+          {
+            id: "REJECTED" as const,
+            label: "Perlu Revisi",
+            icon: XCircle,
+            count: rejectedCount,
+            badgeColor: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+          }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-3 cursor-pointer border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+                isActive
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
+                  : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${tab.badgeColor}`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 4. SEARCH & FILTER TOOLBAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3.5 rounded-xl">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            type="text"
+            placeholder="Cari nama kader atau judul laporan..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+          />
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <Filter className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Jenjang:</span>
+          </div>
+          <select
+            value={selectedLevel}
+            onChange={(e) => setSelectedLevel(e.target.value)}
+            className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          >
+            <option value="ALL">Semua Jenjang</option>
+            <option value="MAPABA">MAPABA</option>
+            <option value="PKD">PKD</option>
+            <option value="PKL">PKL</option>
+          </select>
+        </div>
+      </div>
+
+      {/* 5. SUBMISSIONS LIST */}
+      <div className="space-y-3.5">
         {filteredSubmissions.length === 0 ? (
-          <Card className="p-10 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg text-center flex flex-col items-center justify-center space-y-3 bg-white dark:bg-zinc-900 shadow-none">
-            <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5 text-zinc-400" />
+          <Card className="p-12 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl text-center flex flex-col items-center justify-center space-y-3 bg-white dark:bg-zinc-900 shadow-none">
+            <div className="w-11 h-11 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+              <ClipboardList className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wide">
-                Tidak Ada Pengajuan
+              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                Tidak Ada Laporan
               </span>
-              <p className="text-[10.5px] text-zinc-500 font-medium max-w-xs mx-auto">
-                Kategori status ini bersih. Tidak ada pengajuan laporan yang masuk dalam filter ini.
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                {searchQuery || selectedLevel !== "ALL"
+                  ? "Tidak ada pengajuan yang sesuai dengan kriteria pencarian atau filter yang dipilih."
+                  : activeTab === "PENDING"
+                  ? "Semua laporan follow-up kader telah selesai ditinjau. Antrean saat ini bersih!"
+                  : activeTab === "APPROVED"
+                  ? "Belum ada laporan follow-up yang berstatus disetujui."
+                  : "Tidak ada laporan yang berstatus perlu revisi."}
               </p>
             </div>
           </Card>
@@ -260,72 +415,104 @@ export default function KomisariatVerifikasiPage() {
           filteredSubmissions.map((sub) => (
             <Card
               key={sub.id}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 sm:p-5 shadow-none space-y-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors relative overflow-hidden"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-5 shadow-none space-y-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
             >
-              {/* Card status background overlay line */}
-              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-                sub.status === "APPROVED" 
-                  ? "bg-emerald-500" 
-                  : sub.status === "REJECTED" 
-                  ? "bg-rose-500" 
-                  : "bg-amber-500"
-              }`} />
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                {/* Cadre & Submission info */}
+                <div className="flex items-start gap-3.5 min-w-0">
+                  {sub.cadreAvatar ? (
+                    <img
+                      src={sub.cadreAvatar}
+                      alt={sub.cadreName}
+                      className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-800 shrink-0 mt-0.5"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60 shrink-0 mt-0.5">
+                      {getInitials(sub.cadreName)}
+                    </div>
+                  )}
 
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pl-2">
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-black text-zinc-900 dark:text-white">
-                      {sub.cadreName}
-                    </span>
-                    <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[8.5px] font-black uppercase py-0.5 px-2 rounded-lg">
-                      {sub.cadreLevel}
-                    </Badge>
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        {sub.cadreName}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] font-semibold h-5 px-1.5 bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                      >
+                        {sub.cadreLevel}
+                      </Badge>
+                      <span className="text-[10px] text-zinc-400">•</span>
+                      <span className="text-[10px] text-zinc-400">Diajukan: {sub.date}</span>
+                    </div>
+
+                    <h3 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {sub.title}
+                    </h3>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                      {sub.description}
+                    </p>
                   </div>
-                  <h3 className="text-sm font-black text-zinc-850 dark:text-zinc-100">
-                    {sub.title}
-                  </h3>
-                  <p className="text-xs text-zinc-550 dark:text-zinc-400 leading-relaxed font-medium">
-                    {sub.description}
-                  </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                  <span className="text-[9px] text-zinc-400 dark:text-zinc-550 font-mono">
-                    Diajukan: {sub.date}
-                  </span>
+                {/* Document Link */}
+                <div className="flex items-center gap-2 shrink-0 md:self-start">
                   {sub.fileLink && (
                     <a
                       href={sub.fileLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-[10px] font-bold text-pmii-blue dark:text-pmii-gold hover:underline flex items-center gap-1 mt-1 bg-pmii-blue/5 dark:bg-pmii-gold/5 border border-pmii-blue/10 dark:border-pmii-gold/10 px-2 py-1 rounded-lg"
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" /> Buka Laporan / Dokumen
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Buka Berkas</span>
                     </a>
                   )}
                 </div>
               </div>
 
-              {/* Feedback Show */}
+              {/* Feedback Note (if exists) */}
               {sub.feedback && (
-                <div className="pl-2">
-                  <div className="p-3.5 bg-zinc-50/50 dark:bg-zinc-950/40 border-l-2 border-zinc-400 dark:border-zinc-700 rounded-r-2xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-350 space-y-1">
-                    <span className="text-[9px] text-zinc-500 dark:text-zinc-550 font-bold uppercase tracking-widest flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3 text-amber-500" /> Catatan Komisariat
-                    </span>
-                    <p>{sub.feedback}</p>
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Catatan Review Pengurus</span>
                   </div>
+                  <p className="text-zinc-700 dark:text-zinc-300 text-xs leading-relaxed pl-5">
+                    {sub.feedback}
+                  </p>
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="pl-2 border-t border-zinc-150 dark:border-zinc-850 pt-4 flex justify-end gap-2.5">
+              {/* Action Bar */}
+              <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-zinc-400">Status Laporan:</span>
+                  <Badge
+                    className={`text-[10px] font-semibold uppercase py-0.5 px-2 ${
+                      sub.status === "APPROVED"
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900"
+                        : sub.status === "REJECTED"
+                        ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900"
+                        : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900"
+                    }`}
+                  >
+                    {sub.status === "APPROVED"
+                      ? "Disetujui"
+                      : sub.status === "REJECTED"
+                      ? "Perlu Revisi"
+                      : "Menunggu Review"}
+                  </Badge>
+                </div>
+
                 <Button
-                  size="xs"
+                  size="sm"
                   onClick={() => handleOpenReview(sub)}
-                  className="bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[10.5px] px-3.5 py-1.5 rounded-xl border-none cursor-pointer flex items-center gap-1"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-8 px-3.5 rounded-lg cursor-pointer flex items-center gap-1.5 transition-colors"
                 >
-                  <FileCheck className="w-3.5 h-3.5" /> Tinjau / Ubah Status
+                  <FileCheck className="w-3.5 h-3.5" />
+                  <span>Tinjau Laporan</span>
                 </Button>
               </div>
             </Card>
@@ -333,131 +520,137 @@ export default function KomisariatVerifikasiPage() {
         )}
       </div>
 
-      {/* REVIEW DIALOG MODAL */}
-      {reviewingSubmission && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden relative">
-            
-            {/* Top decorative gradient bar */}
-            <div className="h-1.5 bg-gradient-to-r from-amber-500 to-pmii-blue w-full" />
-            
-            <form onSubmit={handleSaveReview} className="space-y-5">
-              
-              {/* Header */}
-              <div className="p-6 border-b border-zinc-150 dark:border-zinc-800 flex justify-between items-start gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center border border-white/10 shadow-md">
-                    <Compass className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-zinc-900 dark:text-white">
-                      Tinjau RKTL: {reviewingCadreName}
-                    </h3>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-550 font-bold uppercase tracking-wider mt-0.5">
-                      Berikan status persetujuan laporan
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setReviewingSubmission(null)}
-                  className="w-7 h-7 rounded-lg border border-zinc-200 dark:border-zinc-800 flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 cursor-pointer"
-                >
-                  <X className="w-4.5 h-4.5" />
-                </button>
+      {/* 6. REVIEW DIALOG MODAL */}
+      <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <FileCheck className="w-4 h-4" />
               </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Tinjau Laporan RKTL
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Validasi laporan {reviewingCadreName} ({reviewingCadreLevel})
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
 
-              {/* Body */}
-              <div className="p-6 space-y-4">
-                
-                {/* Details box */}
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-150 dark:border-zinc-800 rounded-2xl text-xs space-y-1">
-                  <div className="font-bold text-zinc-850 dark:text-zinc-200">
-                    {reviewingSubmission.title}
+          {reviewingSubmission && (
+            <form onSubmit={handleSaveReview}>
+              <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+                {/* Submission Details Card */}
+                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                      {reviewingSubmission.title}
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      {reviewingSubmission.date}
+                    </span>
                   </div>
-                  <p className="text-zinc-500 dark:text-zinc-450 leading-relaxed font-semibold">
+                  <p className="text-zinc-600 dark:text-zinc-400 text-[11px] leading-relaxed">
                     {reviewingSubmission.description}
                   </p>
+                  {reviewingSubmission.fileLink && (
+                    <div className="pt-1.5">
+                      <a
+                        href={reviewingSubmission.fileLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Buka Tautan Berkas / Dokumen</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
 
-                {/* Status Toggle Grid */}
+                {/* Decision Toggle */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-zinc-450 dark:text-zinc-500 tracking-wider">
-                    Keputusan Peninjauan
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Keputusan Peninjauan <span className="text-rose-500">*</span>
                   </label>
-                  <div className="grid grid-cols-2 gap-3.5">
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setReviewStatus("APPROVED")}
-                      className={`p-3 rounded-2xl border text-xs font-black cursor-pointer transition-all flex flex-col items-center gap-1.5 ${
+                      className={`p-3 rounded-lg border text-xs font-semibold cursor-pointer transition-all flex items-center justify-center gap-2 ${
                         reviewStatus === "APPROVED"
-                          ? "bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-md shadow-emerald-500/5"
-                          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 text-zinc-500"
+                          ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-600 dark:text-zinc-400"
                       }`}
                     >
-                      <Check className="w-4.5 h-4.5" />
-                      <span>Setujui Laporan (Approved)</span>
+                      <Check className="w-4 h-4" />
+                      <span>Setujui (Approved)</span>
                     </button>
-                    
+
                     <button
                       type="button"
                       onClick={() => setReviewStatus("REJECTED")}
-                      className={`p-3 rounded-2xl border text-xs font-black cursor-pointer transition-all flex flex-col items-center gap-1.5 ${
+                      className={`p-3 rounded-lg border text-xs font-semibold cursor-pointer transition-all flex items-center justify-center gap-2 ${
                         reviewStatus === "REJECTED"
-                          ? "bg-rose-500/10 border-rose-500 text-rose-600 dark:text-rose-450 shadow-md shadow-rose-500/5"
-                          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 text-zinc-500"
+                          ? "bg-rose-50 dark:bg-rose-950/40 border-rose-500 text-rose-700 dark:text-rose-400 shadow-xs"
+                          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-600 dark:text-zinc-400"
                       }`}
                     >
-                      <X className="w-4.5 h-4.5" />
-                      <span>Tolak / Perlu Revisi</span>
+                      <X className="w-4 h-4" />
+                      <span>Minta Revisi</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Feedback Input */}
+                {/* Feedback Note Input */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-zinc-450 dark:text-zinc-500 tracking-wider">
-                    Umpan Balik (Feedback Catatan)
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Catatan Evaluasi / Umpan Balik (Feedback)
                   </label>
-                  <Input
-                    type="text"
-                    required
+                  <textarea
+                    rows={3}
                     value={reviewFeedback}
                     onChange={(e) => setReviewFeedback(e.target.value)}
-                    placeholder="Contoh: Analisis yang tajam! Pertahankan gagasan NDP..."
-                    className="h-10 text-xs bg-zinc-50/50 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800 rounded-xl"
+                    placeholder="Tuliskan apresiasi, masukan, atau hal yang perlu diperbaiki oleh kader..."
+                    className="w-full text-xs p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[90px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 font-medium resize-y"
                   />
+                  <p className="text-[10px] text-zinc-400">
+                    Catatan ini akan dapat dilihat langsung oleh kader pada status laporan mereka.
+                  </p>
                 </div>
-
               </div>
 
-              {/* Footer */}
-              <div className="p-4 bg-zinc-50 dark:bg-black/20 border-t border-zinc-150 dark:border-zinc-800 flex justify-end gap-2.5">
+              <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setReviewingSubmission(null)}
-                  className="text-xs font-bold px-4 h-9 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  onClick={() => setIsReviewModalOpen(false)}
+                  className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
                 >
                   Batal
                 </Button>
-                
                 <Button
                   type="submit"
-                  className={`text-xs font-extrabold px-4 h-9 rounded-xl text-white border-none cursor-pointer ${
-                    reviewStatus === "APPROVED" 
-                      ? "bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/10" 
-                      : "bg-rose-500 hover:bg-rose-600 shadow-lg shadow-rose-500/10"
+                  disabled={isSubmittingReview}
+                  className={`h-9 text-xs font-medium rounded-lg text-white cursor-pointer ${
+                    reviewStatus === "APPROVED"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-rose-600 hover:bg-rose-700"
                   }`}
                 >
-                  Simpan Keputusan Review
+                  {isSubmittingReview
+                    ? "Menyimpan..."
+                    : reviewStatus === "APPROVED"
+                    ? "Simpan & Setujui"
+                    : "Simpan & Minta Revisi"}
                 </Button>
-              </div>
-
+              </DialogFooter>
             </form>
-          </Card>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

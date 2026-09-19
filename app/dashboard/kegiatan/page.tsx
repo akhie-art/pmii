@@ -420,12 +420,14 @@ export default function KomisariatKegiatanPage() {
             isGraduated: true,
             status: "SELESAI",
             nta: c.nta || generatedNTA,
-            startDate: c.startDate || new Date().toISOString().split("T")[0]
+            startDate: c.startDate || new Date().toISOString().split("T")[0],
+            angkatan: c.angkatan || (c.startDate ? c.startDate.split("-")[0] : new Date().getFullYear().toString())
           };
         }
         return c;
       });
     } else {
+      const gradYear = new Date().getFullYear().toString();
       const newCadre = {
         id: `cadre-${Date.now()}`,
         name: reg.cadreName,
@@ -440,7 +442,8 @@ export default function KomisariatKegiatanPage() {
         submissions: [],
         isGraduated: true,
         nta: generatedNTA,
-        registrationNumber: reg.registrationNumber
+        registrationNumber: reg.registrationNumber,
+        angkatan: gradYear
       };
       updatedCadresList = [...cadresList, newCadre];
     }
@@ -510,12 +513,14 @@ export default function KomisariatKegiatanPage() {
               ...c,
               isGraduated: true,
               status: "SELESAI",
-              nta: c.nta || generatedNTA
+              nta: c.nta || generatedNTA,
+              angkatan: c.angkatan || (c.startDate ? c.startDate.split("-")[0] : new Date().getFullYear().toString())
             };
           }
           return c;
         });
       } else {
+        const gradYear = new Date().getFullYear().toString();
         const newCadre = {
           id: `cadre-${Date.now()}-${Math.random()}`,
           name: reg.cadreName,
@@ -530,7 +535,8 @@ export default function KomisariatKegiatanPage() {
           submissions: [],
           isGraduated: true,
           nta: generatedNTA,
-          registrationNumber: reg.registrationNumber
+          registrationNumber: reg.registrationNumber,
+          angkatan: gradYear
         };
         workingCadres.push(newCadre);
       }

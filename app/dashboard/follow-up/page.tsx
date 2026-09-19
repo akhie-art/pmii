@@ -14,10 +14,18 @@ import {
   Trash2,
   ExternalLink,
   User,
-  Sparkles,
   FolderOpen,
   MessageSquare,
-  CheckCircle2
+  CheckCircle2,
+  FileCheck,
+  Check,
+  X,
+  Clock,
+  Sparkles,
+  ShieldCheck,
+  AlertTriangle,
+  Layers,
+  ArrowUpRight
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,8 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-  DialogClose
+  DialogFooter
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -49,14 +56,14 @@ import {
   TableRow
 } from "@/components/ui/table";
 
-// Define TypeScript interfaces
+// TypeScript interfaces
 interface FollowUpRequirement {
   id: string;
   title: string;
   category: "Makalah" | "Membaca Buku" | "Diskusi Forum" | "Bakti Sosial" | "Keorganisasian" | "Lainnya";
   level: "MAPABA" | "PKD" | "PKL";
   description: string;
-  minSubmissions: number; // Target quantity (e.g. read 3 books, attend 4 discussions)
+  minSubmissions: number;
 }
 
 interface CadreSubmission {
@@ -79,9 +86,8 @@ interface CadreFollowUp {
   startDate: string;
   status: "AKTIF" | "SELESAI" | "REVISI";
   submissions: CadreSubmission[];
+  avatar?: string;
 }
-
-// PMII Follow-up Requirements and Cadres are now fetched dynamically from the shared database.
 
 export default function FollowUpPage() {
   const [mounted, setMounted] = useState(false);
@@ -99,6 +105,9 @@ export default function FollowUpPage() {
 
   // Sub-tabs in Mentor Mode
   const [mentorActiveTab, setMentorActiveTab] = useState<"QUEUE" | "CADRES" | "REQUIREMENTS">("QUEUE");
+
+  // Toast notification
+  const [toastMessage, setToastMessage] = useState<string>("");
 
   // --- CRUD Modals States ---
   // 1. Cadre Dialogs
@@ -127,13 +136,37 @@ export default function FollowUpPage() {
   const [submitFormTitle, setSubmitFormTitle] = useState("");
   const [submitFormDesc, setSubmitFormDesc] = useState("");
   const [submitFormLink, setSubmitFormLink] = useState("");
+  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null);
 
-  // 4. Feedback Review Dialog
+  // 4. Review Dialog
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewingSubmissionId, setReviewingSubmissionId] = useState("");
   const [reviewingCadreId, setReviewingCadreId] = useState("");
   const [reviewFeedback, setReviewFeedback] = useState("");
   const [reviewStatus, setReviewStatus] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // 5. Queue Level Filter
+  const [queueLevelFilter, setQueueLevelFilter] = useState<string>("ALL");
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage("");
+    }, 3000);
+  };
+
+  const getInitials = (name: string): string => {
+    return (
+      name
+        .split(" ")
+        .filter((w) => w.toLowerCase() !== "sahabat" && w.toLowerCase() !== "sahabati")
+        .slice(0, 2)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase() || "KD"
+    );
+  };
 
   // Hydration safety & Initial load
   useEffect(() => {
@@ -180,15 +213,15 @@ export default function FollowUpPage() {
     await db.saveCadres(newCadres as any);
   };
 
-  // Helper function to calculate a cadre's follow up progress mathematically
+  // Progress calculation
   const calculateCadreProgress = (cadre: CadreFollowUp, reqsList: FollowUpRequirement[]): number => {
-    const levelReqs = reqsList.filter(r => r.level === cadre.level);
+    const levelReqs = reqsList.filter((r) => r.level === cadre.level);
     if (levelReqs.length === 0) return 0;
 
     let totalPercentage = 0;
-    levelReqs.forEach(req => {
+    levelReqs.forEach((req) => {
       const approvedSubmissionsCount = cadre.submissions.filter(
-        sub => sub.requirementId === req.id && sub.status === "APPROVED"
+        (sub) => sub.requirementId === req.id && sub.status === "APPROVED"
       ).length;
       const progressRatio = Math.min(1, approvedSubmissionsCount / req.minSubmissions);
       totalPercentage += progressRatio * 100;
@@ -203,8 +236,7 @@ export default function FollowUpPage() {
     localStorage.setItem("PMII_FOLLOWUP_ROLE", role);
 
     if (role === "MEMBER") {
-      // Find a cadre matching current tier filter or pick the first
-      const levelMatches = cadres.filter(c => c.level === selectedLevel);
+      const levelMatches = cadres.filter((c) => c.level === selectedLevel);
       if (levelMatches.length > 0) {
         setSelectedCadreId(levelMatches[0].id);
       } else if (cadres.length > 0) {
@@ -218,7 +250,7 @@ export default function FollowUpPage() {
     localStorage.setItem("PMII_FOLLOWUP_LEVEL", level);
 
     if (roleMode === "MEMBER") {
-      const levelMatches = cadres.filter(c => c.level === level);
+      const levelMatches = cadres.filter((c) => c.level === level);
       if (levelMatches.length > 0) {
         setSelectedCadreId(levelMatches[0].id);
       }
@@ -254,6 +286,7 @@ export default function FollowUpPage() {
     if (roleMode === "MEMBER") {
       setSelectedCadreId(newCadre.id);
     }
+    showToast(`Kader "${newCadre.name}" berhasil didaftarkan.`);
   };
 
   const handleOpenEditCadre = (cadre: CadreFollowUp) => {
@@ -269,7 +302,7 @@ export default function FollowUpPage() {
   const handleEditCadre = async () => {
     if (!editingCadre || !cadreFormName.trim() || !cadreFormComm.trim()) return;
 
-    const updated = cadres.map(c => {
+    const updated = cadres.map((c) => {
       if (c.id === editingCadre.id) {
         return {
           ...c,
@@ -286,15 +319,18 @@ export default function FollowUpPage() {
     await saveCadreData(updated);
     setIsEditCadreOpen(false);
     setEditingCadre(null);
+    showToast(`Data kader "${cadreFormName.trim()}" berhasil diperbarui.`);
   };
 
   const handleDeleteCadre = async (id: string) => {
+    const targetCadre = cadres.find((c) => c.id === id);
     if (confirm("Apakah anda yakin ingin menghapus data progres kader ini secara permanen?")) {
-      const updated = cadres.filter(c => c.id !== id);
+      const updated = cadres.filter((c) => c.id !== id);
       await saveCadreData(updated);
       if (selectedCadreId === id && updated.length > 0) {
         setSelectedCadreId(updated[0].id);
       }
+      showToast(`Data kader ${targetCadre ? `"${targetCadre.name}"` : ""} berhasil dihapus.`);
     }
   };
 
@@ -323,6 +359,7 @@ export default function FollowUpPage() {
     const updated = [...requirements, newReq];
     await saveReqData(updated);
     setIsAddReqOpen(false);
+    showToast(`Indikator "${newReq.title}" berhasil ditambahkan.`);
   };
 
   const handleOpenEditReq = (req: FollowUpRequirement) => {
@@ -338,7 +375,7 @@ export default function FollowUpPage() {
   const handleEditRequirement = async () => {
     if (!editingReq || !reqFormTitle.trim() || !reqFormDescription.trim()) return;
 
-    const updated = requirements.map(r => {
+    const updated = requirements.map((r) => {
       if (r.id === editingReq.id) {
         return {
           ...r,
@@ -355,12 +392,14 @@ export default function FollowUpPage() {
     await saveReqData(updated);
     setIsEditReqOpen(false);
     setEditingReq(null);
+    showToast(`Indikator "${reqFormTitle.trim()}" berhasil diperbarui.`);
   };
 
   const handleDeleteRequirement = async (id: string) => {
     if (confirm("Hapus persyaratan ini? Kader yang sudah melapor pada poin ini akan kehilangan progresnya.")) {
-      const updated = requirements.filter(r => r.id !== id);
+      const updated = requirements.filter((r) => r.id !== id);
       await saveReqData(updated);
+      showToast("Indikator berhasil dihapus.");
     }
   };
 
@@ -370,96 +409,148 @@ export default function FollowUpPage() {
     setSubmitFormTitle("");
     setSubmitFormDesc("");
     setSubmitFormLink("");
+    setEditingSubmissionId(null);
+    setIsSubmitOpen(true);
+  };
+
+  const handleOpenEditSubmission = (reqId: string, sub: CadreSubmission) => {
+    setSubmitReqId(reqId);
+    setSubmitFormTitle(sub.title);
+    setSubmitFormDesc(sub.description);
+    setSubmitFormLink(sub.fileLink === "Catatan deskripsi progres" ? "" : sub.fileLink);
+    setEditingSubmissionId(sub.id);
     setIsSubmitOpen(true);
   };
 
   const handleSubmitProgress = async () => {
     if (!selectedCadreId || !submitFormTitle.trim() || !submitFormDesc.trim()) return;
 
-    const newSubmission: CadreSubmission = {
-      id: `sub-${Date.now()}`,
-      requirementId: submitReqId,
-      title: submitFormTitle.trim(),
-      description: submitFormDesc.trim(),
-      fileLink: submitFormLink.trim() || "Catatan deskripsi progres",
-      date: new Date().toISOString().split("T")[0],
-      status: "PENDING",
-      feedback: ""
-    };
-
-    const updated = cadres.map(c => {
+    const updated = cadres.map((c) => {
       if (c.id === selectedCadreId) {
-        return {
-          ...c,
-          submissions: [newSubmission, ...c.submissions]
-        };
+        if (editingSubmissionId) {
+          return {
+            ...c,
+            submissions: c.submissions.map((s) =>
+              s.id === editingSubmissionId
+                ? {
+                    ...s,
+                    title: submitFormTitle.trim(),
+                    description: submitFormDesc.trim(),
+                    fileLink: submitFormLink.trim() || "Catatan deskripsi progres"
+                  }
+                : s
+            )
+          };
+        } else {
+          const newSubmission: CadreSubmission = {
+            id: `sub-${Date.now()}`,
+            requirementId: submitReqId,
+            title: submitFormTitle.trim(),
+            description: submitFormDesc.trim(),
+            fileLink: submitFormLink.trim() || "Catatan deskripsi progres",
+            date: new Date().toISOString().split("T")[0],
+            status: "PENDING",
+            feedback: ""
+          };
+          return { ...c, submissions: [newSubmission, ...c.submissions] };
+        }
       }
       return c;
     });
 
     await saveCadreData(updated);
     setIsSubmitOpen(false);
+    showToast(
+      editingSubmissionId
+        ? `Laporan "${submitFormTitle.trim()}" berhasil diperbarui.`
+        : `Laporan "${submitFormTitle.trim()}" berhasil dikirim untuk ditinjau.`
+    );
+    setEditingSubmissionId(null);
   };
 
   const handleOpenReview = (cadreId: string, submissionId: string) => {
-    const cadre = cadres.find(c => c.id === cadreId);
-    const sub = cadre?.submissions.find(s => s.id === submissionId);
+    const cadre = cadres.find((c) => c.id === cadreId);
+    const sub = cadre?.submissions.find((s) => s.id === submissionId);
     if (!sub) return;
 
     setReviewingCadreId(cadreId);
     setReviewingSubmissionId(submissionId);
     setReviewFeedback(sub.feedback || "");
-    setReviewStatus(sub.status === "APPROVED" ? "APPROVED" : "APPROVED");
+    // FIX PRESERVED: properly default to actual submission status
+    setReviewStatus(sub.status === "REJECTED" ? "REJECTED" : "APPROVED");
     setIsReviewOpen(true);
   };
 
-  const handleReviewSubmission = async () => {
-    const updated = cadres.map(c => {
-      if (c.id === reviewingCadreId) {
-        const updatedSubs = c.submissions.map(s => {
-          if (s.id === reviewingSubmissionId) {
-            return {
-              ...s,
-              status: reviewStatus,
-              feedback: reviewFeedback.trim()
-            };
-          }
-          return s;
-        });
+  const handleReviewSubmission = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!reviewingCadreId || !reviewingSubmissionId) return;
 
-        // Determine automatically if all requirements met, we could update status
-        const calculatedProgress = calculateCadreProgress({ ...c, submissions: updatedSubs }, requirements);
-        const overallStatus = calculatedProgress >= 100 ? "SELESAI" as const : (reviewStatus === "REJECTED" ? "REVISI" as const : c.status);
+    setIsSubmittingReview(true);
+    try {
+      const updated = cadres.map((c) => {
+        if (c.id === reviewingCadreId) {
+          const updatedSubs = c.submissions.map((s) => {
+            if (s.id === reviewingSubmissionId) {
+              return {
+                ...s,
+                status: reviewStatus,
+                feedback: reviewFeedback.trim()
+              };
+            }
+            return s;
+          });
 
-        return {
-          ...c,
-          status: overallStatus,
-          submissions: updatedSubs
-        };
-      }
-      return c;
-    });
+          const calculatedProgress = calculateCadreProgress({ ...c, submissions: updatedSubs }, requirements);
+          const overallStatus =
+            calculatedProgress >= 100
+              ? ("SELESAI" as const)
+              : reviewStatus === "REJECTED"
+              ? ("REVISI" as const)
+              : c.status;
 
-    await saveCadreData(updated);
-    setIsReviewOpen(false);
+          return {
+            ...c,
+            status: overallStatus,
+            submissions: updatedSubs
+          };
+        }
+        return c;
+      });
+
+      await saveCadreData(updated);
+      setIsReviewOpen(false);
+      showToast(
+        reviewStatus === "APPROVED"
+          ? "Laporan berhasil disetujui!"
+          : "Laporan dikembalikan untuk revisi."
+      );
+    } catch (err) {
+      console.error("Failed to save review:", err);
+      showToast("Gagal menyimpan hasil verifikasi.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   const handleQuickApprove = async (cadreId: string, submissionId: string) => {
-    const updated = cadres.map(c => {
+    const targetCadre = cadres.find((c) => c.id === cadreId);
+    const targetSub = targetCadre?.submissions.find((s) => s.id === submissionId);
+
+    const updated = cadres.map((c) => {
       if (c.id === cadreId) {
-        const updatedSubs = c.submissions.map(s => {
+        const updatedSubs = c.submissions.map((s) => {
           if (s.id === submissionId) {
             return {
               ...s,
               status: "APPROVED" as const,
-              feedback: "Disetujui secara cepat oleh Pengurus."
+              feedback: "Disetujui secara cepat oleh Instruktur / Pengurus."
             };
           }
           return s;
         });
 
         const calculatedProgress = calculateCadreProgress({ ...c, submissions: updatedSubs }, requirements);
-        const overallStatus = calculatedProgress >= 100 ? "SELESAI" as const : c.status;
+        const overallStatus = calculatedProgress >= 100 ? ("SELESAI" as const) : c.status;
 
         return {
           ...c,
@@ -469,35 +560,37 @@ export default function FollowUpPage() {
       }
       return c;
     });
+
     await saveCadreData(updated);
+    showToast(`Laporan "${targetSub?.title || ""}" berhasil disetujui.`);
   };
 
   const handleDeleteSubmission = async (cadreId: string, subId: string) => {
     if (confirm("Apakah anda yakin ingin menarik laporan progres ini?")) {
-      const updated = cadres.map(c => {
+      const updated = cadres.map((c) => {
         if (c.id === cadreId) {
           return {
             ...c,
-            submissions: c.submissions.filter(s => s.id !== subId)
+            submissions: c.submissions.filter((s) => s.id !== subId)
           };
         }
         return c;
       });
       await saveCadreData(updated);
+      showToast("Laporan progres berhasil ditarik.");
     }
   };
 
   // --- STATS COMPUTATIONS ---
-  const levelCadres = cadres.filter(c => c.level === selectedLevel);
+  const levelCadres = cadres.filter((c) => c.level === selectedLevel);
   const totalLevelCadres = levelCadres.length;
-  const activeLevelCadres = levelCadres.filter(c => c.status === "AKTIF" || c.status === "REVISI").length;
-  const completedLevelCadres = levelCadres.filter(c => c.status === "SELESAI").length;
+  const activeLevelCadres = levelCadres.filter((c) => c.status === "AKTIF" || c.status === "REVISI").length;
+  const completedLevelCadres = levelCadres.filter((c) => c.status === "SELESAI").length;
 
-  // Gathering all pending reviews across all tiers (or chosen tier)
-  const pendingSubmissionsQueue = cadres.flatMap(c =>
+  const pendingSubmissionsQueue = cadres.flatMap((c) =>
     c.submissions
-      .filter(s => s.status === "PENDING")
-      .map(s => ({
+      .filter((s) => s.status === "PENDING")
+      .map((s) => ({
         cadreId: c.id,
         cadreName: c.name,
         cadreLevel: c.level,
@@ -507,109 +600,142 @@ export default function FollowUpPage() {
       }))
   );
 
+  // FIX PRESERVED: Queue tab filter by level
+  const filteredQueue =
+    queueLevelFilter === "ALL"
+      ? pendingSubmissionsQueue
+      : pendingSubmissionsQueue.filter((item) => item.cadreLevel === queueLevelFilter);
+
   // Active user selection inside Member Mode
-  const activeCadre = cadres.find(c => c.id === selectedCadreId);
-  const activeCadreReqs = activeCadre ? requirements.filter(r => r.level === activeCadre.level) : [];
+  const activeCadre = cadres.find((c) => c.id === selectedCadreId);
+  const activeCadreReqs = activeCadre ? requirements.filter((r) => r.level === activeCadre.level) : [];
   const activeCadreProgress = activeCadre ? calculateCadreProgress(activeCadre, requirements) : 0;
+
+  // Active reviewing submission & cadre data
+  const reviewingCadre = cadres.find((c) => c.id === reviewingCadreId);
+  const reviewingSubmission = reviewingCadre?.submissions.find((s) => s.id === reviewingSubmissionId);
 
   if (!mounted) {
     return (
-      <div className="w-full min-h-[400px] flex flex-col items-center justify-center space-y-4">
-        <div className="w-8 h-8 rounded-full border-2 border-pmii-gold border-t-transparent animate-spin" />
-        <span className="text-xs font-bold text-zinc-400">Menyiapkan Dashboard Follow Up...</span>
+      <div className="space-y-6 animate-pulse">
+        <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-xl w-full" />
+        <div className="h-10 bg-zinc-200 dark:bg-zinc-800 rounded-lg w-1/3" />
+        <div className="h-96 bg-zinc-200 dark:bg-zinc-800 rounded-xl w-full" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 relative pb-12">
-      {/* 1. HEADER BANNER */}
-      <div className="relative overflow-hidden rounded-lg bg-blue-600 dark:bg-blue-700 p-6 md:p-7 text-white border border-blue-500/80 shadow-none">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <Badge className="bg-white/15 border border-white/20 text-[10px] font-extrabold uppercase tracking-wider text-white hover:bg-white/20">
-              <Sparkles className="w-3.5 h-3.5 mr-1" /> RKTL (Rencana Kerja Tindak Lanjut)
-            </Badge>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
-              Sistem Pemantauan & Sertifikasi Follow Up
-            </h1>
-            <p className="text-xs md:text-sm text-blue-100 leading-relaxed">
-              Pantau progres wajib pasca-pelatihan formal MAPABA, PKD, dan PKL secara terintegrasi. Instruktur dapat menetapkan indikator capaian, meninjau kiriman naskah kader, dan merilis sertifikat kelulusan pergerakan.
+    <div className="space-y-6 relative z-10 font-sans text-zinc-900 dark:text-zinc-100 pb-12">
+      {/* TOAST NOTIFICATION */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-20 right-6 z-50 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 border border-zinc-700 dark:border-zinc-300"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
+            <span className="text-xs font-semibold">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 1. HERO HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 rounded-xl shadow-none">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-lg bg-blue-600 dark:bg-blue-700 flex items-center justify-center text-white shadow-sm shrink-0">
+            <FileCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Follow Up & Sertifikasi RKTL
+              </h1>
+              <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
+                Kaderisasi Formal
+              </Badge>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-xl leading-relaxed">
+              Pantau progres wajib pasca-pelatihan formal MAPABA, PKD, dan PKL secara terintegrasi serta validasi kelulusan pergerakan.
             </p>
           </div>
+        </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 gap-3 flex-shrink-0">
-            <div className="p-3 bg-white/10 border border-white/20 rounded-lg flex flex-col">
-              <span className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">Total Kader</span>
-              <span className="text-xl font-bold text-white">{cadres.length}</span>
-            </div>
-            <div className="p-3 bg-white/10 border border-white/20 rounded-lg flex flex-col">
-              <span className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">Butuh Review</span>
-              <span className={`text-xl font-bold ${pendingSubmissionsQueue.length > 0 ? "text-amber-300" : "text-white"}`}>
-                {pendingSubmissionsQueue.length}
+        <div className="flex flex-wrap items-center gap-2">
+          {pendingSubmissionsQueue.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-400 text-xs font-medium">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
               </span>
+              <span>{pendingSubmissionsQueue.length} laporan menunggu review</span>
             </div>
+          )}
+          <div className="px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium">
+            Total: <span className="font-semibold text-zinc-900 dark:text-white">{cadres.length}</span> Kader
           </div>
         </div>
       </div>
 
-      {/* 2. CONTROL BAR (Symmetric Tabs and Role Switcher) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none">
-        {/* Tier Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg w-full md:w-auto">
-          {(["MAPABA", "PKD", "PKL"] as const).map((lvl) => (
-            <button
-              key={lvl}
-              onClick={() => handleLevelChange(lvl)}
-              className={`flex-1 md:flex-none px-4 py-2 text-xs font-black rounded-lg transition-all duration-200 cursor-pointer ${
-                selectedLevel === lvl
-                  ? "bg-white dark:bg-zinc-900 text-pmii-blue dark:text-pmii-gold shadow-sm border border-zinc-200 dark:border-zinc-800/60"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Jenjang {lvl}
-            </button>
-          ))}
+      {/* 2. CONTROL BAR (Level Tabs & Role Switcher) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800">
+        {/* Tier Tabs (Underline pattern) */}
+        <div className="flex gap-6 text-xs font-medium">
+          {(["MAPABA", "PKD", "PKL"] as const).map((lvl) => {
+            const isActive = selectedLevel === lvl;
+            const count = cadres.filter((c) => c.level === lvl).length;
+            return (
+              <button
+                key={lvl}
+                onClick={() => handleLevelChange(lvl)}
+                className={`pb-3 cursor-pointer border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+                  isActive
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
+                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+                }`}
+              >
+                <span>Jenjang {lvl}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                    isActive
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Role Toggle & Search */}
-        <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
-          {roleMode === "MENTOR" && mentorActiveTab === "CADRES" && (
-            <div className="relative max-w-xs w-full">
-              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-zinc-400" />
-              <input
-                type="text"
-                placeholder="Cari kader..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold focus:outline-none placeholder-zinc-400 dark:text-white"
-              />
-            </div>
-          )}
-
-          <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/60 rounded-xl">
+        {/* Role Toggle Switch */}
+        <div className="flex items-center gap-2 pb-3 sm:pb-2">
+          <div className="flex items-center p-0.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-lg border border-zinc-200 dark:border-zinc-700/60 text-xs">
             <button
               onClick={() => handleRoleChange("MENTOR")}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 roleMode === "MENTOR"
-                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-pmii-gold shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-semibold"
+                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
               }`}
             >
               <Award className="w-3.5 h-3.5" />
-              Mentor Mode
+              <span>Mentor Mode</span>
             </button>
             <button
               onClick={() => handleRoleChange("MEMBER")}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 roleMode === "MEMBER"
-                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-pmii-gold shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-semibold"
+                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
               }`}
             >
               <User className="w-3.5 h-3.5" />
-              Kader Mode
+              <span>Kader Mode</span>
             </button>
           </div>
         </div>
@@ -623,125 +749,131 @@ export default function FollowUpPage() {
              ======================================================== */
           <motion.div
             key="member-view"
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
+            exit={{ opacity: 0, y: -10 }}
             className="grid grid-cols-1 lg:grid-cols-3 gap-6"
           >
-            {/* Sidebar Column: Cadre Profile and overall progression */}
+            {/* Sidebar Column: Cadre Profile & Progression */}
             <div className="space-y-6">
-              <Card className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg relative overflow-hidden shadow-none">
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">
-                      PILIH PROFIL KADER SIMULASI
-                    </label>
-                    <Select
-                      value={selectedCadreId}
-                      onValueChange={(val) => { if (val) setSelectedCadreId(val); }}
-                    >
-                      <SelectTrigger className="w-full text-xs font-bold bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                        <SelectValue placeholder="Pilih Profil Kader" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                        {cadres.map(c => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name} ({c.level})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <Card className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                    Pilih Profil Kader Simulasi
+                  </label>
+                  <Select
+                    value={selectedCadreId}
+                    onValueChange={(val) => {
+                      if (val) setSelectedCadreId(val);
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-xs font-medium bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg h-9">
+                      <SelectValue placeholder="Pilih Profil Kader" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      {cadres.map((c) => (
+                        <SelectItem key={c.id} value={c.id} className="text-xs">
+                          {c.name} ({c.level})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {activeCadre ? (
-                    <div className="space-y-5 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                      {/* Member Info */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-pmii-blue dark:text-pmii-gold flex items-center justify-center font-bold text-lg border border-blue-500/20">
-                          {activeCadre.name.charAt(0) || "S"}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-black text-zinc-800 dark:text-white leading-tight">
-                            {activeCadre.name}
-                          </h3>
-                          <p className="text-[10px] text-zinc-400 font-bold">
-                            {activeCadre.commissariat}
-                          </p>
-                        </div>
+                {activeCadre ? (
+                  <div className="space-y-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    {/* Cadre Info */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60 shrink-0">
+                        {getInitials(activeCadre.name)}
                       </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-tight truncate">
+                          {activeCadre.name}
+                        </h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                          {activeCadre.commissariat}
+                        </p>
+                      </div>
+                    </div>
 
-                      {/* Training Tier Badge */}
-                      <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-100 dark:border-zinc-800">
-                        <span className="font-semibold text-zinc-400">Jenjang Formal:</span>
-                        <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 font-black border-none rounded-md px-2 py-0.5">
+                    {/* Metadata Items */}
+                    <div className="space-y-2 text-xs pt-1">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-100 dark:border-zinc-800">
+                        <span className="text-zinc-500 dark:text-zinc-400">Jenjang Formal:</span>
+                        <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold">
                           {activeCadre.level}
                         </Badge>
                       </div>
 
-                      {/* Status Badge */}
-                      <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-100 dark:border-zinc-800">
-                        <span className="font-semibold text-zinc-400">Status Tindak Lanjut:</span>
-                        <Badge className={`font-black border-none rounded-md px-2 py-0.5 ${
-                          activeCadre.status === "SELESAI"
-                            ? "bg-emerald-500/15 text-emerald-600"
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-100 dark:border-zinc-800">
+                        <span className="text-zinc-500 dark:text-zinc-400">Status Tindak Lanjut:</span>
+                        <Badge
+                          className={`text-[10px] font-semibold border ${
+                            activeCadre.status === "SELESAI"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+                              : activeCadre.status === "REVISI"
+                              ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-900"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900"
+                          }`}
+                        >
+                          {activeCadre.status === "SELESAI"
+                            ? "Lulus / Certified"
                             : activeCadre.status === "REVISI"
-                            ? "bg-rose-500/15 text-rose-600"
-                            : "bg-amber-500/15 text-amber-600"
-                        }`}>
-                          {activeCadre.status === "SELESAI" ? "LULUS / CERTIFIED" : activeCadre.status === "REVISI" ? "PERLU REVISI" : "PROSES / AKTIF"}
+                            ? "Perlu Revisi"
+                            : "Aktif / Proses"}
                         </Badge>
                       </div>
 
-                      {/* Date Started */}
-                      <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-100 dark:border-zinc-800">
-                        <span className="font-semibold text-zinc-400">Tanggal Mulai:</span>
-                        <span className="font-bold text-zinc-600 dark:text-zinc-300 font-mono text-[11px]">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-100 dark:border-zinc-800">
+                        <span className="text-zinc-500 dark:text-zinc-400">Tanggal Mulai:</span>
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300 text-[11px]">
                           {activeCadre.startDate}
                         </span>
                       </div>
+                    </div>
 
-                      {/* Overall Progress Gauge */}
-                      <div className="space-y-2 pt-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wide">
-                            Progres Kelulusan
-                          </span>
-                          <span className="text-sm font-black text-pmii-blue dark:text-pmii-gold">
-                            {activeCadreProgress}%
-                          </span>
-                        </div>
-                        <div className="w-full h-3 bg-zinc-100 dark:bg-zinc-950 rounded-full overflow-hidden p-[2px] border border-zinc-200 dark:border-zinc-900">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-pmii-gold rounded-full transition-all duration-500"
-                            style={{ width: `${activeCadreProgress}%` }}
-                          />
-                        </div>
-                        {activeCadreProgress >= 100 && (
-                          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 rounded-xl text-[10px] font-bold flex gap-1.5 items-start mt-2">
-                            <Sparkles className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                            <span>
-                              Selamat! Anda telah memenuhi seluruh indikator tindak lanjut kaderisasi {activeCadre.level}. Silakan minta Pengurus Cabang menerbitkan sertifikat kelulusan formal Anda!
-                            </span>
-                          </div>
-                        )}
+                    {/* Progress Gauge */}
+                    <div className="space-y-2 pt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                          Progres Kelulusan
+                        </span>
+                        <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                          {activeCadreProgress}%
+                        </span>
                       </div>
+                      <div className="w-full h-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                          style={{ width: `${activeCadreProgress}%` }}
+                        />
+                      </div>
+                      {activeCadreProgress >= 100 && (
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 rounded-lg text-xs font-medium flex gap-2 items-start mt-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                          <span>
+                            Selamat! Seluruh indikator tindak lanjut kaderisasi {activeCadre.level} telah terpenuhi.
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-center py-6 text-xs text-zinc-400">
-                      Silakan daftarkan kader terlebih dahulu di Mode Mentor.
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-zinc-500">
+                    Silakan daftarkan kader terlebih dahulu di Mode Mentor.
+                  </div>
+                )}
               </Card>
 
-              {/* Submissions History */}
+              {/* Submissions History Card */}
               {activeCadre && (
-                <Card className="p-5 bg-white/80 dark:bg-[#090d16]/80 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl">
+                <Card className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none">
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800 mb-4">
-                    <h3 className="text-xs font-black uppercase text-zinc-400 tracking-wider">
+                    <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
                       Riwayat Kiriman Anda
                     </h3>
-                    <Badge className="bg-zinc-100 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 font-bold border-none text-[9px]">
+                    <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium text-[10px] border-none">
                       {activeCadre.submissions.length} Laporan
                     </Badge>
                   </div>
@@ -749,52 +881,69 @@ export default function FollowUpPage() {
                   {activeCadre.submissions.length === 0 ? (
                     <div className="text-center py-8 text-xs text-zinc-400 flex flex-col items-center gap-2">
                       <FolderOpen className="w-6 h-6 text-zinc-400" />
-                      <span>Belum ada kiriman. Silakan ajukan progres pada panel kanan.</span>
+                      <span>Belum ada kiriman. Silakan ajukan progres pada panel sebelah kanan.</span>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                      {activeCadre.submissions.map(sub => {
-                        const associatedReq = requirements.find(r => r.id === sub.requirementId);
+                    <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                      {activeCadre.submissions.map((sub) => {
+                        const associatedReq = requirements.find((r) => r.id === sub.requirementId);
                         return (
                           <div
                             key={sub.id}
-                            className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 rounded-xl space-y-1.5 relative group"
+                            className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-1.5 relative group"
                           >
                             <div className="flex items-start justify-between gap-1">
-                              <span className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 tracking-wide uppercase truncate block max-w-[130px]">
+                              <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase truncate block max-w-[140px]">
                                 {associatedReq?.title || "Laporan Lain"}
                               </span>
-                              <Badge className={`text-[8px] font-extrabold border-none px-1 rounded-sm uppercase ${
-                                sub.status === "APPROVED"
-                                  ? "bg-emerald-500/10 text-emerald-600"
+                              <Badge
+                                className={`text-[10px] font-semibold border ${
+                                  sub.status === "APPROVED"
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+                                    : sub.status === "REJECTED"
+                                    ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-900"
+                                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900"
+                                }`}
+                              >
+                                {sub.status === "APPROVED"
+                                  ? "Disetujui"
                                   : sub.status === "REJECTED"
-                                  ? "bg-rose-500/10 text-rose-600"
-                                  : "bg-amber-500/10 text-amber-600"
-                              }`}>
-                                {sub.status}
+                                  ? "Revisi"
+                                  : "Pending"}
                               </Badge>
                             </div>
-                            <h4 className="text-xs font-extrabold leading-tight text-zinc-700 dark:text-zinc-200">
+                            <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 leading-tight">
                               {sub.title}
                             </h4>
-                            <span className="text-[8px] font-bold text-zinc-400 block font-mono">
+                            <span className="text-[10px] text-zinc-400 block font-mono">
                               Tanggal: {sub.date}
                             </span>
                             {sub.feedback && (
-                              <div className="mt-2 p-2 bg-amber-500/5 border-l-2 border-amber-500/30 text-[9px] text-zinc-600 dark:text-zinc-400 rounded-r-md">
-                                <span className="font-bold text-amber-600 dark:text-amber-500">Komentar Mentor: </span>
+                              <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 border-l-2 border-amber-500 text-[11px] text-zinc-600 dark:text-zinc-400 rounded-r">
+                                <span className="font-semibold text-amber-700 dark:text-amber-400">
+                                  Catatan Mentor:{" "}
+                                </span>
                                 &ldquo;{sub.feedback}&rdquo;
                               </div>
                             )}
 
                             {sub.status === "PENDING" && (
-                              <button
-                                onClick={() => handleDeleteSubmission(activeCadre.id, sub.id)}
-                                className="absolute right-2 bottom-2 p-1 text-zinc-400 hover:text-rose-600 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                                title="Batalkan laporan"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex justify-end gap-1.5 pt-1 mt-1 border-t border-zinc-200/60 dark:border-zinc-800">
+                                <button
+                                  onClick={() => handleOpenEditSubmission(sub.requirementId, sub)}
+                                  className="p-1 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors cursor-pointer"
+                                  title="Edit laporan"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSubmission(activeCadre.id, sub.id)}
+                                  className="p-1 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded transition-colors cursor-pointer"
+                                  title="Batalkan laporan"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             )}
                           </div>
                         );
@@ -805,35 +954,33 @@ export default function FollowUpPage() {
               )}
             </div>
 
-            {/* Checklist items panel */}
+            {/* Checklist Items Panel */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-black text-zinc-800 dark:text-white tracking-wide">
-                    Indikator Kewajiban Follow Up
-                  </h2>
-                  <p className="text-xs text-zinc-400 font-semibold">
-                    Setiap indikator di bawah wajib dipenuhi untuk menyelesaikan program.
-                  </p>
-                </div>
+              <div>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Indikator Kewajiban Follow Up
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Penuhi seluruh indikator di bawah untuk menyelesaikan proses kaderisasi formal.
+                </p>
               </div>
 
               {!activeCadre ? (
-                <div className="p-12 text-center bg-white dark:bg-[#090d16]/80 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-400 text-xs font-semibold">
-                  Silakan tambahkan data kader di Mode Mentor untuk menguji visualisasi checklist.
+                <div className="p-12 text-center bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-400 text-xs">
+                  Silakan pilih atau daftarkan kader terlebih dahulu.
                 </div>
               ) : activeCadreReqs.length === 0 ? (
-                <div className="p-12 text-center bg-white dark:bg-[#090d16]/80 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-400 text-xs font-semibold">
+                <div className="p-12 text-center bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-400 text-xs">
                   Belum ada persyaratan kurikulum yang ditetapkan untuk jenjang {activeCadre.level}.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
-                  {activeCadreReqs.map(req => {
+                  {activeCadreReqs.map((req) => {
                     const approvedCount = activeCadre.submissions.filter(
-                      s => s.requirementId === req.id && s.status === "APPROVED"
+                      (s) => s.requirementId === req.id && s.status === "APPROVED"
                     ).length;
                     const pendingCount = activeCadre.submissions.filter(
-                      s => s.requirementId === req.id && s.status === "PENDING"
+                      (s) => s.requirementId === req.id && s.status === "PENDING"
                     ).length;
                     const completionRatio = Math.min(req.minSubmissions, approvedCount);
                     const isCompleted = approvedCount >= req.minSubmissions;
@@ -841,79 +988,83 @@ export default function FollowUpPage() {
                     return (
                       <Card
                         key={req.id}
-                        className={`p-5 bg-white dark:bg-[#090d16]/80 border transition-all relative overflow-hidden group ${
+                        className={`p-5 bg-white dark:bg-zinc-900 border rounded-xl shadow-none transition-all ${
                           isCompleted
-                            ? "border-emerald-500/30 dark:border-emerald-500/20 shadow-xs ring-1 ring-emerald-500/5 bg-gradient-to-br from-white to-emerald-500/2 dark:to-emerald-500/1"
-                            : "border-zinc-200 dark:border-zinc-800/80"
+                            ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50/20 dark:bg-emerald-950/10"
+                            : "border-zinc-200 dark:border-zinc-800"
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                           <div className="space-y-2 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <Badge className="bg-zinc-100 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 border-none font-bold text-[9px] uppercase tracking-wide">
+                              <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 text-[10px] font-medium">
                                 {req.category}
                               </Badge>
-                              <Badge className={`text-[9px] border-none font-black ${
-                                isCompleted
-                                  ? "bg-emerald-500/10 text-emerald-600"
-                                  : approvedCount > 0
-                                  ? "bg-amber-500/10 text-amber-600"
-                                  : "bg-zinc-100 dark:bg-zinc-950 text-zinc-400"
-                              }`}>
+                              <Badge
+                                className={`text-[10px] font-semibold border ${
+                                  isCompleted
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+                                    : approvedCount > 0
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900"
+                                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700"
+                                }`}
+                              >
                                 {isCompleted ? "Selesai" : approvedCount > 0 ? "Dicicil" : "Belum Mulai"}
                               </Badge>
                             </div>
 
-                            <h3 className="text-sm font-black text-zinc-800 dark:text-white leading-tight">
+                            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
                               {req.title}
                             </h3>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed font-medium">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                               {req.description}
                             </p>
 
-                            {/* Approved submissions list on this specific task */}
-                            {activeCadre.submissions.filter(s => s.requirementId === req.id).length > 0 && (
+                            {/* Kiriman dokumen pada indikator ini */}
+                            {activeCadre.submissions.filter((s) => s.requirementId === req.id).length > 0 && (
                               <div className="pt-2.5 mt-2.5 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                                <span className="text-[9px] font-black text-zinc-400 block uppercase tracking-wide">
-                                  KIRIMAN DOKUMEN ANDA PADA INDIKATOR INI:
+                                <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 block uppercase tracking-wider">
+                                  Kiriman Dokumen Anda:
                                 </span>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {activeCadre.submissions
-                                    .filter(s => s.requirementId === req.id)
-                                    .map(s => (
+                                    .filter((s) => s.requirementId === req.id)
+                                    .map((s) => (
                                       <div
                                         key={s.id}
-                                        className="p-2.5 bg-zinc-50 dark:bg-zinc-950/60 rounded-xl border border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-xs group/item"
+                                        className="p-2.5 bg-zinc-50 dark:bg-zinc-950 rounded-lg border border-zinc-200 dark:border-zinc-800 flex items-center justify-between text-xs"
                                       >
                                         <div className="flex-1 min-w-0 pr-2">
-                                          <div className="font-bold text-zinc-700 dark:text-zinc-200 truncate leading-none mb-1">
+                                          <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate leading-none mb-1">
                                             {s.title}
                                           </div>
-                                          <div className="text-[9px] font-bold text-zinc-400 font-mono leading-none">
+                                          <div className="text-[10px] text-zinc-400 font-mono leading-none">
                                             {s.date}
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                                          {s.fileLink.startsWith("http") ? (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {s.fileLink.startsWith("http") && (
                                             <a
                                               href={s.fileLink}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="p-1 text-zinc-400 hover:text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-md"
-                                              title="Lihat Tautan"
+                                              className="p-1 text-blue-600 dark:text-blue-400 hover:underline"
+                                              title="Lihat Tautan Berkas"
                                             >
                                               <ExternalLink className="w-3.5 h-3.5" />
                                             </a>
-                                          ) : null}
-                                          <span className={`text-[9px] font-extrabold px-1 py-0.5 rounded-sm ${
-                                            s.status === "APPROVED"
-                                              ? "bg-emerald-500/10 text-emerald-600"
-                                              : s.status === "REJECTED"
-                                              ? "bg-rose-500/10 text-rose-600"
-                                              : "bg-amber-500/10 text-amber-600"
-                                          }`}>
-                                            {s.status === "APPROVED" ? "√" : s.status === "REJECTED" ? "X" : "⏳"}
-                                          </span>
+                                          )}
+                                          <Badge
+                                            className={`text-[9px] font-semibold px-1.5 py-0.5 border ${
+                                              s.status === "APPROVED"
+                                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200"
+                                                : s.status === "REJECTED"
+                                                ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200"
+                                                : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200"
+                                            }`}
+                                          >
+                                            {s.status === "APPROVED" ? "Disetujui" : s.status === "REJECTED" ? "Revisi" : "Pending"}
+                                          </Badge>
                                         </div>
                                       </div>
                                     ))}
@@ -922,30 +1073,29 @@ export default function FollowUpPage() {
                             )}
                           </div>
 
-                          <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-4 flex-shrink-0">
-                            {/* Visual Progress Fraction */}
-                            <div className="flex flex-col items-end">
-                              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none mb-1">
+                          <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3 shrink-0">
+                            <div className="flex flex-col sm:items-end">
+                              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
                                 Target Capaian
                               </span>
-                              <div className="text-xl font-black text-zinc-800 dark:text-zinc-200 font-mono">
-                                {completionRatio} <span className="text-xs text-zinc-400 font-semibold">/ {req.minSubmissions}</span>
+                              <div className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-mono">
+                                {completionRatio} <span className="text-xs text-zinc-400 font-normal">/ {req.minSubmissions}</span>
                               </div>
                               {pendingCount > 0 && (
-                                <span className="text-[8px] font-bold text-amber-600 dark:text-amber-500 mt-1">
-                                  (+{pendingCount} Menunggu Review)
+                                <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                  ({pendingCount} menunggu review)
                                 </span>
                               )}
                             </div>
 
-                            {/* Submit action */}
                             {!isCompleted && (
                               <Button
                                 onClick={() => handleOpenSubmitProgress(req.id)}
                                 size="sm"
-                                className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-3.5 py-1.5 rounded-xl border-none shadow-md shadow-pmii-blue/10 dark:shadow-pmii-gold/10 hover:shadow-lg transition-all duration-200 cursor-pointer flex-shrink-0"
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-8 px-3 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5 shrink-0"
                               >
-                                <Plus className="w-3.5 h-3.5 mr-1" /> Kirim Progres
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Kirim Progres</span>
                               </Button>
                             )}
                           </div>
@@ -963,140 +1113,197 @@ export default function FollowUpPage() {
              ======================================================== */
           <motion.div
             key="mentor-view"
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
+            exit={{ opacity: 0, y: -10 }}
             className="space-y-6"
           >
-            {/* Inner Tabs Navigation */}
-            <div className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800/80">
-              <button
-                onClick={() => setMentorActiveTab("QUEUE")}
-                className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer relative ${
-                  mentorActiveTab === "QUEUE"
-                    ? "border-pmii-blue dark:border-pmii-gold text-pmii-blue dark:text-pmii-gold"
-                    : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                }`}
-              >
-                Antrean Persetujuan
-                {pendingSubmissionsQueue.length > 0 && (
-                  <span className="ml-1.5 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                    {pendingSubmissionsQueue.length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setMentorActiveTab("CADRES")}
-                className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
-                  mentorActiveTab === "CADRES"
-                    ? "border-pmii-blue dark:border-pmii-gold text-pmii-blue dark:text-pmii-gold"
-                    : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                }`}
-              >
-                Tabel Progres Kader
-              </button>
-              <button
-                onClick={() => setMentorActiveTab("REQUIREMENTS")}
-                className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
-                  mentorActiveTab === "REQUIREMENTS"
-                    ? "border-pmii-blue dark:border-pmii-gold text-pmii-blue dark:text-pmii-gold"
-                    : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                }`}
-              >
-                Persyaratan Kurikulum
-              </button>
+            {/* Inner Sub-tabs Navigation */}
+            <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-6 text-xs font-medium">
+              {[
+                {
+                  id: "QUEUE" as const,
+                  label: "Antrean Persetujuan",
+                  icon: Clock,
+                  count: pendingSubmissionsQueue.length
+                },
+                {
+                  id: "CADRES" as const,
+                  label: "Tabel Progres Kader",
+                  icon: Users,
+                  count: totalLevelCadres
+                },
+                {
+                  id: "REQUIREMENTS" as const,
+                  label: "Persyaratan Kurikulum",
+                  icon: BookOpen,
+                  count: requirements.filter((r) => r.level === selectedLevel).length
+                }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = mentorActiveTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setMentorActiveTab(tab.id)}
+                    className={`pb-3 cursor-pointer border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
+                        : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                    {tab.count > 0 && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          tab.id === "QUEUE"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                            : isActive
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Content for Queue Tab */}
+            {/* TAB 1: QUEUE */}
             {mentorActiveTab === "QUEUE" && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3.5 rounded-xl">
                   <div>
-                    <h3 className="text-sm font-black text-zinc-800 dark:text-white tracking-wide">
+                    <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
                       Verifikasi Pengumpulan Laporan
                     </h3>
-                    <p className="text-xs text-zinc-400 font-semibold">
-                      Tinjau hasil kerja tindak lanjut kader, baca dokumen, dan berikan feedback kelulusan.
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Tinjau berkas naskah kader, periksa pemenuhan target, dan beri umpan balik.
                     </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={queueLevelFilter}
+                      onValueChange={(val) => {
+                        if (val) setQueueLevelFilter(val);
+                      }}
+                    >
+                      <SelectTrigger className="w-[140px] text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9 font-medium">
+                        <SelectValue placeholder="Filter Jenjang" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                        <SelectItem value="ALL" className="text-xs">Semua Jenjang</SelectItem>
+                        <SelectItem value="MAPABA" className="text-xs">MAPABA</SelectItem>
+                        <SelectItem value="PKD" className="text-xs">PKD</SelectItem>
+                        <SelectItem value="PKL" className="text-xs">PKL</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                {pendingSubmissionsQueue.length === 0 ? (
-                  <Card className="p-12 text-center bg-white dark:bg-[#090d16]/80 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center space-y-2">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                    <h4 className="text-xs font-black text-zinc-800 dark:text-white">Antrean Bersih!</h4>
-                    <p className="text-[10px] text-zinc-400 font-medium">
-                      Semua laporan progres tindak lanjut dari seluruh kader telah selesai diverifikasi.
+                {filteredQueue.length === 0 ? (
+                  <Card className="p-12 text-center bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center space-y-2 shadow-none">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mb-1">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {queueLevelFilter === "ALL"
+                        ? "Antrean Bersih!"
+                        : `Tidak Ada Antrean untuk Jenjang ${queueLevelFilter}`}
+                    </h4>
+                    <p className="text-xs text-zinc-500 max-w-sm">
+                      {queueLevelFilter === "ALL"
+                        ? "Semua kiriman tugas tindak lanjut dari seluruh kader telah selesai diverifikasi."
+                        : "Tidak ada laporan pending untuk jenjang yang dipilih."}
                     </p>
                   </Card>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {pendingSubmissionsQueue.map(item => {
-                      const req = requirements.find(r => r.id === item.submission.requirementId);
+                    {filteredQueue.map((item) => {
+                      const req = requirements.find((r) => r.id === item.submission.requirementId);
                       return (
                         <Card
                           key={item.submission.id}
-                          className="p-5 bg-white dark:bg-[#090d16]/80 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl space-y-4 relative flex flex-col justify-between"
+                          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-5 shadow-none flex flex-col justify-between space-y-4"
                         >
                           <div className="space-y-3">
                             <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <h4 className="text-xs font-black text-zinc-800 dark:text-white leading-tight">
-                                  {item.cadreName}
-                                </h4>
-                                <div className="text-[10px] font-semibold text-zinc-400 mt-0.5">
-                                  Jenjang {item.cadreLevel}
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60 shrink-0">
+                                  {getInitials(item.cadreName)}
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
+                                    {item.cadreName}
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[9px] font-semibold px-1.5 py-0">
+                                      {item.cadreLevel}
+                                    </Badge>
+                                    <span className="text-[10px] text-zinc-400 truncate max-w-[150px]">
+                                      {item.commissariat}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                              <Badge className="bg-amber-500/10 text-amber-600 border-none font-bold text-[9px] uppercase tracking-wider">
+                              <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900 text-[10px] font-semibold">
                                 {req?.category || "Laporan"}
                               </Badge>
                             </div>
 
-                            <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-100 dark:border-zinc-900 space-y-1.5">
-                              <span className="text-[9px] font-black text-zinc-400 block uppercase tracking-wide">
-                                INDIKATOR: {req?.title || "Persyaratan Umum"}
-                              </span>
-                              <h5 className="text-xs font-black text-zinc-700 dark:text-zinc-200">
-                                &ldquo;{item.submission.title}&rdquo;
-                              </h5>
-                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold">
+                            {/* Details container */}
+                            <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-lg border border-zinc-200 dark:border-zinc-800 space-y-1.5 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                  {item.submission.title}
+                                </span>
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  {item.submission.date}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
                                 {item.submission.description}
                               </p>
                               {item.submission.fileLink.startsWith("http") ? (
-                                <a
-                                  href={item.submission.fileLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:underline font-bold mt-1.5"
-                                >
-                                  Buka Dokumen Penunjang <ExternalLink className="w-3 h-3" />
-                                </a>
+                                <div className="pt-1">
+                                  <a
+                                    href={item.submission.fileLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    <span>Buka Tautan Berkas / Dokumen</span>
+                                  </a>
+                                </div>
                               ) : (
-                                <span className="text-[9px] font-bold text-zinc-400 block mt-1.5 italic">
+                                <div className="pt-1 text-[10px] text-zinc-400 italic">
                                   Catatan: {item.submission.fileLink}
-                                </span>
+                                </div>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-900">
-                            <span className="text-[9px] font-bold text-zinc-400 font-mono">
-                              Masuk: {item.submission.date}
+                          <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                            <span className="text-[10px] text-zinc-400">
+                              Indikator: <span className="font-semibold text-zinc-600 dark:text-zinc-300">{req?.title || "Umum"}</span>
                             </span>
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => handleOpenReview(item.cadreId, item.submission.id)}
                                 size="sm"
                                 variant="outline"
-                                className="border border-zinc-200 dark:border-zinc-800 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 text-xs font-bold px-3 py-1.5 h-8 rounded-xl cursor-pointer"
+                                className="h-8 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
                               >
                                 Tinjau Detil
                               </Button>
                               <Button
                                 onClick={() => handleQuickApprove(item.cadreId, item.submission.id)}
                                 size="sm"
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-3 py-1.5 h-8 rounded-xl border-none cursor-pointer"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium h-8 px-3 rounded-lg cursor-pointer"
                               >
                                 Setujui Cepat
                               </Button>
@@ -1110,134 +1317,189 @@ export default function FollowUpPage() {
               </div>
             )}
 
-            {/* Content for Cadre Directory Tab */}
+            {/* TAB 2: CADRES DIRECTORY */}
             {mentorActiveTab === "CADRES" && (
               <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-black text-zinc-800 dark:text-white tracking-wide">
-                      Direktori Progress Follow Up Kader
-                    </h3>
-                    <p className="text-xs text-zinc-400 font-semibold">
-                      Kelola kader pasca-kaderisasi formal, tinjau progres lengkap, dan edit status administrasi.
+                {/* Level Statistics Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-400 tracking-wider">
+                      Total Kader {selectedLevel}
+                    </span>
+                    <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
+                      {totalLevelCadres} <span className="text-xs font-normal text-zinc-500">Kader</span>
                     </p>
                   </div>
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-400 tracking-wider">
+                      Kader Aktif / Proses
+                    </span>
+                    <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                      {activeLevelCadres} <span className="text-xs font-normal text-zinc-500">Kader</span>
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-400 tracking-wider">
+                      Lulus Tindak Lanjut
+                    </span>
+                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                      {completedLevelCadres} <span className="text-xs font-normal text-zinc-500">Kader</span>
+                    </p>
+                  </div>
+                </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-center">
+                {/* Search & Actions Bar */}
+                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3.5 rounded-xl shadow-none">
+                  <div className="relative w-full sm:w-80">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Input
+                      type="text"
+                      placeholder="Cari kader atau komisariat..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center w-full sm:w-auto justify-end">
                     <Select
                       value={statusFilter}
-                      onValueChange={(val) => { if (val) setStatusFilter(val); }}
+                      onValueChange={(val) => {
+                        if (val) setStatusFilter(val);
+                      }}
                     >
-                      <SelectTrigger className="w-[130px] text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold">
+                      <SelectTrigger className="w-[140px] text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9 font-medium">
                         <SelectValue placeholder="Filter Status" />
                       </SelectTrigger>
-                      <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                        <SelectItem value="ALL">Semua Status</SelectItem>
-                        <SelectItem value="AKTIF">Aktif / Proses</SelectItem>
-                        <SelectItem value="SELESAI">Lulus RKTL</SelectItem>
-                        <SelectItem value="REVISI">Butuh Revisi</SelectItem>
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                        <SelectItem value="ALL" className="text-xs">Semua Status</SelectItem>
+                        <SelectItem value="AKTIF" className="text-xs">Aktif / Proses</SelectItem>
+                        <SelectItem value="SELESAI" className="text-xs">Lulus RKTL</SelectItem>
+                        <SelectItem value="REVISI" className="text-xs">Butuh Revisi</SelectItem>
                       </SelectContent>
                     </Select>
 
                     <Button
                       onClick={handleOpenAddCadre}
-                      className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 rounded-xl border-none shadow-xs cursor-pointer h-9"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-3.5 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Tambah Kader
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Kader</span>
                     </Button>
                   </div>
                 </div>
 
-                {/* Level Statistics Widget */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
-                  <Card className="p-4 bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex flex-col justify-center relative overflow-hidden group">
-                    <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Total Kader {selectedLevel}</span>
-                    <span className="text-base font-black text-zinc-800 dark:text-zinc-100 mt-1">{totalLevelCadres} Orang</span>
-                  </Card>
-                  <Card className="p-4 bg-zinc-50 dark:bg-[#090d16]/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex flex-col justify-center relative overflow-hidden group">
-                    <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Kader Aktif / Proses</span>
-                    <span className="text-base font-black text-amber-600 dark:text-amber-500 mt-1">{activeLevelCadres} Orang</span>
-                  </Card>
-                  <Card className="p-4 bg-zinc-50 dark:bg-[#090d16]/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex flex-col justify-center relative overflow-hidden group">
-                    <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Lulus Tindak Lanjut</span>
-                    <span className="text-base font-black text-emerald-600 dark:text-emerald-500 mt-1">{completedLevelCadres} Orang</span>
-                  </Card>
-                </div>
-
-                {/* Filter and search execution */}
+                {/* Table */}
                 {(() => {
-                  const filtered = cadres.filter(c => {
-                    const matchSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  const filtered = cadres.filter((c) => {
+                    const matchSearch =
+                      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                       c.commissariat.toLowerCase().includes(searchQuery.toLowerCase());
                     const matchStatus = statusFilter === "ALL" ? true : c.status === statusFilter;
-                    return matchSearch && matchStatus;
+                    // FIX PRESERVED: match selected Level
+                    const matchLevel = c.level === selectedLevel;
+                    return matchSearch && matchStatus && matchLevel;
                   });
 
                   if (filtered.length === 0) {
                     return (
-                      <Card className="p-12 text-center text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800">
-                        Tidak ada kader yang sesuai dengan pencarian atau filter status.
+                      <Card className="p-12 text-center text-xs text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none">
+                        Tidak ada kader yang cocok dengan kriteria pencarian atau filter jenjang {selectedLevel}.
                       </Card>
                     );
                   }
 
                   return (
-                    <Card className="overflow-hidden border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900 shadow-none">
+                    <Card className="overflow-hidden border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 shadow-none">
                       <div className="overflow-x-auto">
                         <Table>
-                          <TableHeader className="bg-zinc-50 dark:bg-zinc-950/60">
-                            <TableRow className="border-b border-zinc-200 dark:border-zinc-800/80">
-                              <TableHead className="text-[10px] font-black uppercase tracking-wider text-zinc-400 py-3 pl-5">Nama Kader</TableHead>
-                              <TableHead className="text-[10px] font-black uppercase tracking-wider text-zinc-400 py-3">Tingkat</TableHead>
-                              <TableHead className="text-[10px] font-black uppercase tracking-wider text-zinc-400 py-3">Komisariat</TableHead>
-                              <TableHead className="text-[10px] font-black uppercase tracking-wider text-zinc-400 py-3">Progres Capaian</TableHead>
-                              <TableHead className="text-[10px] font-black uppercase tracking-wider text-zinc-400 py-3">Status</TableHead>
-                              <TableHead className="text-[10px] font-black uppercase tracking-wider text-zinc-400 py-3 text-right pr-5">Aksi</TableHead>
+                          <TableHeader className="bg-zinc-50/70 dark:bg-zinc-950/60">
+                            <TableRow className="border-b border-zinc-200 dark:border-zinc-800">
+                              <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 pl-5">
+                                Nama Kader
+                              </TableHead>
+                              <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3">
+                                Tingkat
+                              </TableHead>
+                              <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3">
+                                Komisariat
+                              </TableHead>
+                              <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3">
+                                Progres Capaian
+                              </TableHead>
+                              <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3">
+                                Status
+                              </TableHead>
+                              <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 text-right pr-5">
+                                Aksi
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {filtered.map(c => {
+                            {filtered.map((c) => {
                               const progress = calculateCadreProgress(c, requirements);
                               return (
-                                <TableRow key={c.id} className="border-b border-zinc-200 dark:border-zinc-800/60 hover:bg-zinc-50/40 dark:hover:bg-zinc-900/20 transition-all">
-                                  <TableCell className="py-4 pl-5">
-                                    <div className="font-extrabold text-xs text-zinc-800 dark:text-zinc-200">{c.name}</div>
-                                    <div className="text-[9px] font-semibold text-zinc-400 font-mono">Mulai: {c.startDate}</div>
+                                <TableRow
+                                  key={c.id}
+                                  className="border-b border-zinc-100 dark:border-zinc-800/60 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors"
+                                >
+                                  <TableCell className="py-3.5 pl-5">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold text-[10px] flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60 shrink-0">
+                                        {getInitials(c.name)}
+                                      </div>
+                                      <div>
+                                        <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                                          {c.name}
+                                        </div>
+                                        <div className="text-[10px] text-zinc-400 font-mono">
+                                          Mulai: {c.startDate}
+                                        </div>
+                                      </div>
+                                    </div>
                                   </TableCell>
-                                  <TableCell className="py-4">
-                                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none font-bold text-[9px] px-1.5 py-0.5 rounded-sm">
+                                  <TableCell className="py-3.5">
+                                    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold">
                                       {c.level}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell className="py-4">
-                                    <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{c.commissariat}</div>
+                                  <TableCell className="py-3.5">
+                                    <div className="text-xs text-zinc-700 dark:text-zinc-300">
+                                      {c.commissariat}
+                                    </div>
                                   </TableCell>
-                                  <TableCell className="py-4">
-                                    <div className="flex items-center gap-2 max-w-[150px]">
-                                      <div className="w-full h-2 bg-zinc-100 dark:bg-zinc-950 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-900">
+                                  <TableCell className="py-3.5">
+                                    <div className="flex items-center gap-2 max-w-[140px]">
+                                      <div className="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                                         <div
-                                          className="h-full bg-gradient-to-r from-blue-500 to-pmii-gold rounded-full"
+                                          className="h-full bg-blue-600 rounded-full"
                                           style={{ width: `${progress}%` }}
                                         />
                                       </div>
-                                      <span className="text-[10px] font-black text-zinc-600 dark:text-zinc-300 font-mono w-8">
+                                      <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 font-mono w-8">
                                         {progress}%
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-4">
-                                    <Badge className={`text-[9px] font-extrabold border-none px-2 py-0.5 rounded-md ${
-                                      c.status === "SELESAI"
-                                        ? "bg-emerald-500/10 text-emerald-600"
+                                  <TableCell className="py-3.5">
+                                    <Badge
+                                      className={`text-[10px] font-semibold border ${
+                                        c.status === "SELESAI"
+                                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+                                          : c.status === "REVISI"
+                                          ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-900"
+                                          : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900"
+                                      }`}
+                                    >
+                                      {c.status === "SELESAI"
+                                        ? "Lulus"
                                         : c.status === "REVISI"
-                                        ? "bg-rose-500/10 text-rose-600"
-                                        : "bg-amber-500/10 text-amber-600"
-                                    }`}>
-                                      {c.status}
+                                        ? "Revisi"
+                                        : "Aktif"}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell className="py-4 text-right pr-5">
-                                    <div className="flex justify-end gap-1.5">
+                                  <TableCell className="py-3.5 text-right pr-5">
+                                    <div className="flex justify-end gap-1">
                                       <Button
                                         onClick={() => {
                                           setSelectedCadreId(c.id);
@@ -1245,7 +1507,7 @@ export default function FollowUpPage() {
                                         }}
                                         size="sm"
                                         variant="ghost"
-                                        className="h-8 w-8 p-0 rounded-lg text-zinc-400 hover:text-blue-500 cursor-pointer"
+                                        className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg cursor-pointer"
                                         title="Simulasi Tampilan Kader"
                                       >
                                         <User className="w-3.5 h-3.5" />
@@ -1254,7 +1516,7 @@ export default function FollowUpPage() {
                                         onClick={() => handleOpenEditCadre(c)}
                                         size="sm"
                                         variant="ghost"
-                                        className="h-8 w-8 p-0 rounded-lg text-zinc-400 hover:text-amber-500 cursor-pointer"
+                                        className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg cursor-pointer"
                                         title="Edit Kader"
                                       >
                                         <Pencil className="w-3.5 h-3.5" />
@@ -1263,7 +1525,7 @@ export default function FollowUpPage() {
                                         onClick={() => handleDeleteCadre(c.id)}
                                         size="sm"
                                         variant="ghost"
-                                        className="h-8 w-8 p-0 rounded-lg text-zinc-400 hover:text-rose-600 cursor-pointer"
+                                        className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg cursor-pointer"
                                         title="Hapus Kader"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -1282,69 +1544,69 @@ export default function FollowUpPage() {
               </div>
             )}
 
-            {/* Content for Curriculum Requirements Settings */}
+            {/* TAB 3: REQUIREMENTS SETTINGS */}
             {mentorActiveTab === "REQUIREMENTS" && (
               <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl">
                   <div>
-                    <h3 className="text-sm font-black text-zinc-800 dark:text-white tracking-wide">
+                    <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
                       Kelola Indikator Wajib Follow Up ({selectedLevel})
                     </h3>
-                    <p className="text-xs text-zinc-400 font-semibold">
-                      Tetapkan indikator kelulusan pasca-formal, sesuaikan dengan kurikulum resmi PMII.
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Tetapkan indikator kelulusan pasca-formal sesuai kurikulum resmi PMII.
                     </p>
                   </div>
 
                   <Button
                     onClick={handleOpenAddReq}
-                    className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 rounded-xl border-none shadow-xs cursor-pointer h-9 self-end sm:self-center"
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-3.5 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5 self-end sm:self-center"
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Indikator Baru
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Indikator Baru</span>
                   </Button>
                 </div>
 
-                {/* Requirements display for the currently selected level */}
                 {(() => {
-                  const reqs = requirements.filter(r => r.level === selectedLevel);
+                  const reqs = requirements.filter((r) => r.level === selectedLevel);
                   if (reqs.length === 0) {
                     return (
-                      <Card className="p-12 text-center text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800">
-                        Belum ada persyaratan khusus untuk jenjang {selectedLevel}. Silakan buat indikator baru!
+                      <Card className="p-12 text-center text-xs text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none">
+                        Belum ada persyaratan kurikulum khusus untuk jenjang {selectedLevel}. Silakan buat indikator baru!
                       </Card>
                     );
                   }
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {reqs.map(req => (
+                      {reqs.map((req) => (
                         <Card
                           key={req.id}
-                          className="p-5 bg-white dark:bg-[#090d16]/80 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl relative flex flex-col justify-between"
+                          className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none flex flex-col justify-between space-y-4"
                         >
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <Badge className="bg-zinc-100 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 border-none font-bold text-[9px] uppercase tracking-wide">
+                              <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 text-[10px] font-medium">
                                 {req.category}
                               </Badge>
-                              <span className="text-[10px] font-black text-zinc-400 font-mono">
-                                Target: {req.minSubmissions} Kiriman
+                              <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 font-mono">
+                                Target: {req.minSubmissions} Laporan
                               </span>
                             </div>
 
-                            <h4 className="text-xs font-black text-zinc-800 dark:text-white leading-tight">
+                            <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
                               {req.title}
                             </h4>
-                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                               {req.description}
                             </p>
                           </div>
 
-                          <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-zinc-100 dark:border-zinc-900">
+                          <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                             <Button
                               onClick={() => handleOpenEditReq(req)}
                               size="sm"
                               variant="outline"
-                              className="border border-zinc-200 dark:border-zinc-800 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 text-xs font-bold px-3 py-1 h-8 rounded-xl cursor-pointer"
+                              className="border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium px-3 h-8 rounded-lg cursor-pointer"
                             >
                               Edit Indikator
                             </Button>
@@ -1352,7 +1614,7 @@ export default function FollowUpPage() {
                               onClick={() => handleDeleteRequirement(req.id)}
                               size="sm"
                               variant="ghost"
-                              className="h-8 w-8 p-0 rounded-xl text-zinc-400 hover:text-rose-600 cursor-pointer"
+                              className="h-8 w-8 p-0 rounded-lg text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
                               title="Hapus Indikator"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1370,80 +1632,102 @@ export default function FollowUpPage() {
       </AnimatePresence>
 
       {/* ========================================================
-         MODALS AND DIALOGS
+         MODALS AND DIALOGS (VERIFIKASI STYLE)
          ======================================================== */}
 
       {/* DIALOG 1: ADD CADRE */}
       <Dialog open={isAddCadreOpen} onOpenChange={setIsAddCadreOpen}>
-        <DialogContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-black text-zinc-800 dark:text-white uppercase tracking-wider flex items-center gap-1">
-              <Users className="w-4 h-4 text-pmii-gold" /> Daftarkan Progres Kader Baru
-            </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-400">
-              Masukkan informasi kader yang baru saja lulus jenjang formal dan memulai masa tindak lanjut (RKTL).
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Daftarkan Progres Kader Baru
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Masukkan informasi kader yang baru saja lulus jenjang formal dan memulai masa tindak lanjut (RKTL).
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Nama Lengkap Kader</label>
+          <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Nama Lengkap Kader <span className="text-rose-500">*</span>
+              </label>
               <Input
                 placeholder="cth. Sahabat Ahmad Fudholi"
                 value={cadreFormName}
                 onChange={(e) => setCadreFormName(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold focus:outline-none dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Tingkat Follow Up</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Tingkat Follow Up <span className="text-rose-500">*</span>
+                </label>
                 <Select
                   value={cadreFormLevel}
-                  onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => { if (val) setCadreFormLevel(val); }}
+                  onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => {
+                    if (val) setCadreFormLevel(val);
+                  }}
                 >
-                  <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-semibold bg-zinc-50 dark:bg-zinc-950">
+                  <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                     <SelectValue placeholder="Pilih Tingkat" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                    <SelectItem value="MAPABA">MAPABA</SelectItem>
-                    <SelectItem value="PKD">PKD</SelectItem>
-                    <SelectItem value="PKL">PKL</SelectItem>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="MAPABA" className="text-xs">MAPABA</SelectItem>
+                    <SelectItem value="PKD" className="text-xs">PKD</SelectItem>
+                    <SelectItem value="PKL" className="text-xs">PKL</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Tanggal Mulai</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Tanggal Mulai
+                </label>
                 <Input
                   type="date"
                   value={cadreFormDate}
                   onChange={(e) => setCadreFormDate(e.target.value)}
-                  className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Komisariat</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Komisariat / Rayon <span className="text-rose-500">*</span>
+              </label>
               <Input
                 placeholder="cth. PK PMII Ki Ageng Getas Pendawa"
                 value={cadreFormComm}
                 onChange={(e) => setCadreFormComm(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
           </div>
 
-          <DialogFooter className="-mx-6 -mb-6 flex gap-2 justify-end border-t border-zinc-100 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-b-2xl">
-            <DialogClose render={<Button variant="outline" className="text-xs font-bold rounded-xl cursor-pointer" />}>
+          <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddCadreOpen(false)}
+              className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+            >
               Batal
-            </DialogClose>
+            </Button>
             <Button
               onClick={handleAddCadre}
               disabled={!cadreFormName.trim() || !cadreFormComm.trim()}
-              className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 h-9 rounded-xl border-none cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
             >
               Simpan Kader
             </Button>
@@ -1453,92 +1737,118 @@ export default function FollowUpPage() {
 
       {/* DIALOG 2: EDIT CADRE */}
       <Dialog open={isEditCadreOpen} onOpenChange={setIsEditCadreOpen}>
-        <DialogContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-black text-zinc-800 dark:text-white uppercase tracking-wider flex items-center gap-1">
-              <Pencil className="w-4 h-4 text-pmii-gold" /> Ubah Data Progres Kader
-            </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-400">
-              Perbarui status kelulusan atau data fakultas/komisariat dari kader bersangkutan.
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <Pencil className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Ubah Data Progres Kader
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Perbarui status kelulusan atau data komisariat dari kader bersangkutan.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Nama Lengkap Kader</label>
+          <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Nama Lengkap Kader <span className="text-rose-500">*</span>
+              </label>
               <Input
                 placeholder="cth. Sahabat Ahmad Fudholi"
                 value={cadreFormName}
                 onChange={(e) => setCadreFormName(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Status Administrasi</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Status Administrasi
+                </label>
                 <Select
                   value={cadreFormStatus}
-                  onValueChange={(val: "AKTIF" | "SELESAI" | "REVISI" | null) => { if (val) setCadreFormStatus(val); }}
+                  onValueChange={(val: "AKTIF" | "SELESAI" | "REVISI" | null) => {
+                    if (val) setCadreFormStatus(val);
+                  }}
                 >
-                  <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold bg-zinc-50 dark:bg-zinc-950">
+                  <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                     <SelectValue placeholder="Pilih Status" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                    <SelectItem value="AKTIF">Aktif / Proses</SelectItem>
-                    <SelectItem value="SELESAI">Lulus RKTL</SelectItem>
-                    <SelectItem value="REVISI">Perlu Revisi</SelectItem>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="AKTIF" className="text-xs">Aktif / Proses</SelectItem>
+                    <SelectItem value="SELESAI" className="text-xs">Lulus RKTL</SelectItem>
+                    <SelectItem value="REVISI" className="text-xs">Perlu Revisi</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Tingkat Follow Up</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Tingkat Follow Up
+                </label>
                 <Select
                   value={cadreFormLevel}
-                  onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => { if (val) setCadreFormLevel(val); }}
+                  onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => {
+                    if (val) setCadreFormLevel(val);
+                  }}
                 >
-                  <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-semibold bg-zinc-50 dark:bg-zinc-950">
+                  <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                     <SelectValue placeholder="Pilih Tingkat" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                    <SelectItem value="MAPABA">MAPABA</SelectItem>
-                    <SelectItem value="PKD">PKD</SelectItem>
-                    <SelectItem value="PKL">PKL</SelectItem>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="MAPABA" className="text-xs">MAPABA</SelectItem>
+                    <SelectItem value="PKD" className="text-xs">PKD</SelectItem>
+                    <SelectItem value="PKL" className="text-xs">PKL</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Komisariat</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Komisariat
+              </label>
               <Input
                 placeholder="cth. PK PMII Ki Ageng Getas Pendawa"
                 value={cadreFormComm}
                 onChange={(e) => setCadreFormComm(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Tanggal Mulai Tindak Lanjut</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Tanggal Mulai Tindak Lanjut
+              </label>
               <Input
                 type="date"
                 value={cadreFormDate}
                 onChange={(e) => setCadreFormDate(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
           </div>
 
-          <DialogFooter className="-mx-6 -mb-6 flex gap-2 justify-end border-t border-zinc-100 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-b-2xl">
-            <DialogClose render={<Button variant="outline" className="text-xs font-bold rounded-xl cursor-pointer" />}>
+          <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsEditCadreOpen(false)}
+              className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+            >
               Batal
-            </DialogClose>
+            </Button>
             <Button
               onClick={handleEditCadre}
               disabled={!cadreFormName.trim() || !cadreFormComm.trim()}
-              className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 h-9 rounded-xl border-none cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
             >
               Simpan Perubahan
             </Button>
@@ -1548,98 +1858,124 @@ export default function FollowUpPage() {
 
       {/* DIALOG 3: ADD REQUIREMENT */}
       <Dialog open={isAddReqOpen} onOpenChange={setIsAddReqOpen}>
-        <DialogContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-black text-zinc-800 dark:text-white uppercase tracking-wider flex items-center gap-1">
-              <BookOpen className="w-4 h-4 text-pmii-gold" /> Tambah Indikator Kurikulum
-            </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-400">
-              Buat persyaratan tindak lanjut baru yang harus dipenuhi oleh para lulusan formal.
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Tambah Indikator Kurikulum
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Buat persyaratan tindak lanjut baru yang harus dipenuhi oleh para kader.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Judul Persyaratan</label>
+          <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Judul Persyaratan <span className="text-rose-500">*</span>
+              </label>
               <Input
                 placeholder="cth. Resume Buku Ideologi Negara"
                 value={reqFormTitle}
                 onChange={(e) => setReqFormTitle(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Kategori Kegiatan</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Kategori Kegiatan
+                </label>
                 <Select
                   value={reqFormCategory}
-                  onValueChange={(val: FollowUpRequirement["category"] | null) => { if (val) setReqFormCategory(val); }}
+                  onValueChange={(val: FollowUpRequirement["category"] | null) => {
+                    if (val) setReqFormCategory(val);
+                  }}
                 >
-                  <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold bg-zinc-50 dark:bg-zinc-950">
+                  <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                     <SelectValue placeholder="Pilih Kategori" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                    <SelectItem value="Makalah">Makalah</SelectItem>
-                    <SelectItem value="Membaca Buku">Membaca Buku</SelectItem>
-                    <SelectItem value="Diskusi Forum">Diskusi Forum</SelectItem>
-                    <SelectItem value="Bakti Sosial">Bakti Sosial</SelectItem>
-                    <SelectItem value="Keorganisasian">Keorganisasian</SelectItem>
-                    <SelectItem value="Lainnya">Lainnya</SelectItem>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="Makalah" className="text-xs">Makalah</SelectItem>
+                    <SelectItem value="Membaca Buku" className="text-xs">Membaca Buku</SelectItem>
+                    <SelectItem value="Diskusi Forum" className="text-xs">Diskusi Forum</SelectItem>
+                    <SelectItem value="Bakti Sosial" className="text-xs">Bakti Sosial</SelectItem>
+                    <SelectItem value="Keorganisasian" className="text-xs">Keorganisasian</SelectItem>
+                    <SelectItem value="Lainnya" className="text-xs">Lainnya</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Min. Pengumpulan</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Min. Pengumpulan
+                </label>
                 <Input
                   type="number"
                   min={1}
                   max={20}
                   value={reqFormMinSub}
                   onChange={(e) => setReqFormMinSub(Number(e.target.value) || 1)}
-                  className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Jenjang Pelatihan Formal</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Jenjang Pelatihan Formal
+              </label>
               <Select
                 value={reqFormLevel}
-                onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => { if (val) setReqFormLevel(val); }}
+                onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => {
+                  if (val) setReqFormLevel(val);
+                }}
               >
-                <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold bg-zinc-50 dark:bg-zinc-950">
+                <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                   <SelectValue placeholder="Pilih Jenjang" />
                 </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                  <SelectItem value="MAPABA">MAPABA</SelectItem>
-                  <SelectItem value="PKD">PKD</SelectItem>
-                  <SelectItem value="PKL">PKL</SelectItem>
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <SelectItem value="MAPABA" className="text-xs">MAPABA</SelectItem>
+                  <SelectItem value="PKD" className="text-xs">PKD</SelectItem>
+                  <SelectItem value="PKL" className="text-xs">PKL</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Deskripsi & Panduan Tugas</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Deskripsi & Panduan Tugas <span className="text-rose-500">*</span>
+              </label>
               <textarea
-                placeholder="Rincikan petunjuk penulisan, daftar buku, atau durasi diskusi wajib..."
+                placeholder="Rincikan petunjuk penulisan, daftar buku, atau format laporan..."
                 value={reqFormDescription}
                 onChange={(e) => setReqFormDescription(e.target.value)}
                 rows={3}
-                className="w-full text-xs p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold focus:outline-none placeholder-zinc-400 dark:text-white"
+                className="w-full text-xs p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[90px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 font-medium resize-y"
               />
             </div>
           </div>
 
-          <DialogFooter className="-mx-6 -mb-6 flex gap-2 justify-end border-t border-zinc-100 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-b-2xl">
-            <DialogClose render={<Button variant="outline" className="text-xs font-bold rounded-xl cursor-pointer" />}>
+          <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddReqOpen(false)}
+              className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+            >
               Batal
-            </DialogClose>
+            </Button>
             <Button
               onClick={handleAddRequirement}
               disabled={!reqFormTitle.trim() || !reqFormDescription.trim()}
-              className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 h-9 rounded-xl border-none cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
             >
               Simpan Indikator
             </Button>
@@ -1649,98 +1985,124 @@ export default function FollowUpPage() {
 
       {/* DIALOG 4: EDIT REQUIREMENT */}
       <Dialog open={isEditReqOpen} onOpenChange={setIsEditReqOpen}>
-        <DialogContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-black text-zinc-800 dark:text-white uppercase tracking-wider flex items-center gap-1">
-              <Pencil className="w-4 h-4 text-pmii-gold" /> Ubah Indikator Kurikulum
-            </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-400">
-              Perbarui sasaran jumlah pengumpulan atau materi pendukung pada indikator kelulusan.
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <Pencil className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Ubah Indikator Kurikulum
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Perbarui sasaran jumlah pengumpulan atau materi pendukung pada indikator kelulusan.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Judul Persyaratan</label>
+          <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Judul Persyaratan <span className="text-rose-500">*</span>
+              </label>
               <Input
                 placeholder="cth. Resume Buku Ideologi Negara"
                 value={reqFormTitle}
                 onChange={(e) => setReqFormTitle(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Kategori Kegiatan</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Kategori Kegiatan
+                </label>
                 <Select
                   value={reqFormCategory}
-                  onValueChange={(val: FollowUpRequirement["category"] | null) => { if (val) setReqFormCategory(val); }}
+                  onValueChange={(val: FollowUpRequirement["category"] | null) => {
+                    if (val) setReqFormCategory(val);
+                  }}
                 >
-                  <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold bg-zinc-50 dark:bg-zinc-950">
+                  <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                     <SelectValue placeholder="Pilih Kategori" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                    <SelectItem value="Makalah">Makalah</SelectItem>
-                    <SelectItem value="Membaca Buku">Membaca Buku</SelectItem>
-                    <SelectItem value="Diskusi Forum">Diskusi Forum</SelectItem>
-                    <SelectItem value="Bakti Sosial">Bakti Sosial</SelectItem>
-                    <SelectItem value="Keorganisasian">Keorganisasian</SelectItem>
-                    <SelectItem value="Lainnya">Lainnya</SelectItem>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="Makalah" className="text-xs">Makalah</SelectItem>
+                    <SelectItem value="Membaca Buku" className="text-xs">Membaca Buku</SelectItem>
+                    <SelectItem value="Diskusi Forum" className="text-xs">Diskusi Forum</SelectItem>
+                    <SelectItem value="Bakti Sosial" className="text-xs">Bakti Sosial</SelectItem>
+                    <SelectItem value="Keorganisasian" className="text-xs">Keorganisasian</SelectItem>
+                    <SelectItem value="Lainnya" className="text-xs">Lainnya</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Min. Pengumpulan</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Min. Pengumpulan
+                </label>
                 <Input
                   type="number"
                   min={1}
                   max={20}
                   value={reqFormMinSub}
                   onChange={(e) => setReqFormMinSub(Number(e.target.value) || 1)}
-                  className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Jenjang Pelatihan Formal</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Jenjang Pelatihan Formal
+              </label>
               <Select
                 value={reqFormLevel}
-                onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => { if (val) setReqFormLevel(val); }}
+                onValueChange={(val: "MAPABA" | "PKD" | "PKL" | null) => {
+                  if (val) setReqFormLevel(val);
+                }}
               >
-                <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold bg-zinc-50 dark:bg-zinc-950">
+                <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
                   <SelectValue placeholder="Pilih Jenjang" />
                 </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                  <SelectItem value="MAPABA">MAPABA</SelectItem>
-                  <SelectItem value="PKD">PKD</SelectItem>
-                  <SelectItem value="PKL">PKL</SelectItem>
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <SelectItem value="MAPABA" className="text-xs">MAPABA</SelectItem>
+                  <SelectItem value="PKD" className="text-xs">PKD</SelectItem>
+                  <SelectItem value="PKL" className="text-xs">PKL</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Deskripsi & Panduan Tugas</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Deskripsi & Panduan Tugas <span className="text-rose-500">*</span>
+              </label>
               <textarea
-                placeholder="Rincikan petunjuk penulisan, daftar buku, atau durasi diskusi wajib..."
+                placeholder="Rincikan petunjuk penulisan, daftar buku, atau format laporan..."
                 value={reqFormDescription}
                 onChange={(e) => setReqFormDescription(e.target.value)}
                 rows={3}
-                className="w-full text-xs p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold focus:outline-none placeholder-zinc-400 dark:text-white"
+                className="w-full text-xs p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[90px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 font-medium resize-y"
               />
             </div>
           </div>
 
-          <DialogFooter className="-mx-6 -mb-6 flex gap-2 justify-end border-t border-zinc-100 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-b-2xl">
-            <DialogClose render={<Button variant="outline" className="text-xs font-bold rounded-xl cursor-pointer" />}>
+          <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsEditReqOpen(false)}
+              className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+            >
               Batal
-            </DialogClose>
+            </Button>
             <Button
               onClick={handleEditRequirement}
               disabled={!reqFormTitle.trim() || !reqFormDescription.trim()}
-              className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 h-9 rounded-xl border-none cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
             >
               Simpan Perubahan
             </Button>
@@ -1748,118 +2110,222 @@ export default function FollowUpPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG 5: SUBMIT PROGRESS REPORT */}
-      <Dialog open={isSubmitOpen} onOpenChange={setIsSubmitOpen}>
-        <DialogContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-[#1e2a38] rounded-2xl max-w-sm sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-black text-zinc-800 dark:text-white uppercase tracking-wider flex items-center gap-1">
-              <ClipboardList className="w-4 h-4 text-pmii-gold" /> Kirim Kiriman Tindak Lanjut
-            </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-400">
-              Kirimkan hasil kerja, naskah makalah, resume membaca, atau data forum Anda ke database pengurus.
-            </DialogDescription>
+      {/* DIALOG 5: SUBMIT / EDIT PROGRESS REPORT */}
+      <Dialog
+        open={isSubmitOpen}
+        onOpenChange={(open) => {
+          setIsSubmitOpen(open);
+          if (!open) setEditingSubmissionId(null);
+        }}
+      >
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <ClipboardList className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  {editingSubmissionId ? "Edit Laporan Tindak Lanjut" : "Kirim Laporan Tindak Lanjut"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Kirimkan hasil kerja, naskah makalah, atau resume membaca Anda ke database evaluasi.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Judul Kiriman / Progres</label>
+          <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Judul Laporan / Progres <span className="text-rose-500">*</span>
+              </label>
               <Input
                 placeholder="cth. Resume Buku Teologi Pembebasan - Asghar Ali"
                 value={submitFormTitle}
                 onChange={(e) => setSubmitFormTitle(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Tautan Pendukung (Google Drive / Link Jurnal)</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Tautan Berkas Pendukung (Google Drive / Dokumen Cloud)
+              </label>
               <Input
                 placeholder="cth. https://drive.google.com/file/..."
                 value={submitFormLink}
                 onChange={(e) => setSubmitFormLink(e.target.value)}
-                className="text-xs rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold dark:text-white"
+                className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Catatan Tambahan & Rincian</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Catatan & Rincian Progres <span className="text-rose-500">*</span>
+              </label>
               <textarea
                 placeholder="Deskripsikan secara ringkas substansi kiriman Anda..."
                 value={submitFormDesc}
                 onChange={(e) => setSubmitFormDesc(e.target.value)}
                 rows={3}
-                className="w-full text-xs p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold focus:outline-none placeholder-zinc-400 dark:text-white"
+                className="w-full text-xs p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[90px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 font-medium resize-y"
               />
             </div>
           </div>
 
-          <DialogFooter className="-mx-6 -mb-6 flex gap-2 justify-end border-t border-zinc-100 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-b-2xl">
-            <DialogClose render={<Button variant="outline" className="text-xs font-bold rounded-xl cursor-pointer" />}>
+          <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsSubmitOpen(false);
+                setEditingSubmissionId(null);
+              }}
+              className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+            >
               Batal
-            </DialogClose>
+            </Button>
             <Button
               onClick={handleSubmitProgress}
               disabled={!submitFormTitle.trim() || !submitFormDesc.trim()}
-              className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 h-9 rounded-xl border-none cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
             >
-              Kirim Laporan
+              {editingSubmissionId ? "Simpan Perubahan" : "Kirim Laporan"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG 6: REVIEW AND FEEDBACK SUBMISSION */}
+      {/* DIALOG 6: REVIEW DIALOG (VERIFIKASI STYLE - TWO BUTTON TOGGLE) */}
       <Dialog open={isReviewOpen} onOpenChange={setIsReviewOpen}>
-        <DialogContent className="bg-white dark:bg-[#090d16] border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm sm:max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-black text-zinc-800 dark:text-white uppercase tracking-wider flex items-center gap-1">
-              <MessageSquare className="w-4 h-4 text-pmii-gold" /> Verifikasi Laporan & Beri Umpan Balik
-            </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-400">
-              Evaluasi kiriman tugas kader secara substantif. Tentukan status kelayakan kiriman tugas.
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <FileCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Tinjau Laporan RKTL
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Validasi laporan {reviewingCadre?.name || ""} ({reviewingCadre?.level || ""})
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Status Kelayakan</label>
-              <Select
-                value={reviewStatus}
-                onValueChange={(val: "APPROVED" | "REJECTED" | null) => { if (val) setReviewStatus(val); }}
-              >
-                <SelectTrigger className="text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold bg-zinc-50 dark:bg-zinc-950">
-                  <SelectValue placeholder="Pilih Kelayakan" />
-                </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-[#080d16] border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                  <SelectItem value="APPROVED">Setujui (Memenuhi Syarat)</SelectItem>
-                  <SelectItem value="REJECTED">Tolak / Butuh Revisi</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {reviewingSubmission && (
+            <form onSubmit={handleReviewSubmission}>
+              <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+                {/* Submission Details Card */}
+                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                      {reviewingSubmission.title}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {reviewingSubmission.date}
+                    </span>
+                  </div>
+                  <p className="text-zinc-600 dark:text-zinc-400 text-[11px] leading-relaxed">
+                    {reviewingSubmission.description}
+                  </p>
+                  {reviewingSubmission.fileLink && reviewingSubmission.fileLink.startsWith("http") && (
+                    <div className="pt-1.5">
+                      <a
+                        href={reviewingSubmission.fileLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Buka Tautan Berkas / Dokumen</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Komentar & Catatan Instruktur</label>
-              <textarea
-                placeholder="Berikan saran kritis membangun atau koreksi penulisan untuk sahabat kader..."
-                value={reviewFeedback}
-                onChange={(e) => setReviewFeedback(e.target.value)}
-                rows={4}
-                className="w-full text-xs p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:border-pmii-blue dark:focus:border-pmii-gold focus:outline-none placeholder-zinc-400 dark:text-white"
-              />
-            </div>
-          </div>
+                {/* Decision Toggle (Approved vs Minta Revisi) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Keputusan Peninjauan <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setReviewStatus("APPROVED")}
+                      className={`p-3 rounded-lg border text-xs font-semibold cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                        reviewStatus === "APPROVED"
+                          ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-600 dark:text-zinc-400"
+                      }`}
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Setujui (Approved)</span>
+                    </button>
 
-          <DialogFooter className="-mx-6 -mb-6 flex gap-2 justify-end border-t border-zinc-100 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-b-2xl">
-            <DialogClose render={<Button variant="outline" className="text-xs font-bold rounded-xl cursor-pointer" />}>
-              Batal
-            </DialogClose>
-            <Button
-              onClick={handleReviewSubmission}
-              className="bg-pmii-blue hover:bg-blue-700 text-white dark:bg-pmii-gold dark:hover:bg-amber-500 dark:text-[#090d16] font-black text-xs px-4 py-2 h-9 rounded-xl border-none cursor-pointer"
-            >
-              Simpan Hasil Evaluasi
-            </Button>
-          </DialogFooter>
+                    <button
+                      type="button"
+                      onClick={() => setReviewStatus("REJECTED")}
+                      className={`p-3 rounded-lg border text-xs font-semibold cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                        reviewStatus === "REJECTED"
+                          ? "bg-rose-50 dark:bg-rose-950/40 border-rose-500 text-rose-700 dark:text-rose-400 shadow-xs"
+                          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-600 dark:text-zinc-400"
+                      }`}
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Minta Revisi</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Feedback Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Catatan Evaluasi / Umpan Balik (Feedback)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={reviewFeedback}
+                    onChange={(e) => setReviewFeedback(e.target.value)}
+                    placeholder="Tuliskan apresiasi, masukan, atau hal yang perlu diperbaiki oleh kader..."
+                    className="w-full text-xs p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[90px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 font-medium resize-y"
+                  />
+                  <p className="text-[10px] text-zinc-400">
+                    Catatan ini akan dapat dilihat langsung oleh kader pada riwayat laporan mereka.
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsReviewOpen(false)}
+                  className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmittingReview}
+                  className={`h-9 text-xs font-medium rounded-lg text-white cursor-pointer ${
+                    reviewStatus === "APPROVED"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-rose-600 hover:bg-rose-700"
+                  }`}
+                >
+                  {isSubmittingReview
+                    ? "Menyimpan..."
+                    : reviewStatus === "APPROVED"
+                    ? "Simpan & Setujui"
+                    : "Simpan & Minta Revisi"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -16,20 +16,15 @@ import {
   Building,
   Activity,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
+  Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle,
-  CardDescription 
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableHeader,
@@ -44,9 +39,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-  DialogClose
+  DialogFooter
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem
+} from "@/components/ui/select";
 import { db } from "@/lib/db";
 import type { UserAccount, UserRole } from "@/lib/db";
 
@@ -79,6 +80,10 @@ export default function UserManagementPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
 
+  // Delete Confirmation Dialog state
+  const [userToDelete, setUserToDelete] = useState<UserAccount | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
   // Form States
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
@@ -88,7 +93,36 @@ export default function UserManagementPage() {
   const [formStatus, setFormStatus] = useState<"AKTIF" | "NONAKTIF">("AKTIF");
   const [formAllowedMenus, setFormAllowedMenus] = useState<string[]>([]);
 
-  const [notification, setNotification] = useState<{ type: "success" | "error", message: string } | null>(null);
+  // Toast Notification state
+  const [toastMessage, setToastMessage] = useState<string>("");
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage("");
+    }, 3000);
+  };
+
+  const getInitials = (name: string): string => {
+    return (
+      name
+        .split(" ")
+        .filter((w) => w.toLowerCase() !== "sahabat" && w.toLowerCase() !== "sahabati")
+        .slice(0, 2)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase() || "US"
+    );
+  };
+
+  const isMasterAdmin = (user?: UserAccount | null): boolean => {
+    if (!user) return false;
+    return (
+      user.id === "user-1" ||
+      user.id === "user-admin" ||
+      user.email?.toLowerCase() === "admin@pmii.org"
+    );
+  };
 
   const getAvailableKomisariats = (): string[] => {
     return commissariats.map((c) => c.name);
@@ -127,13 +161,6 @@ export default function UserManagementPage() {
     init();
   }, []);
 
-  const showNotification = (type: "success" | "error", message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => {
-      setNotification(null);
-    }, 3000);
-  };
-
   const handleOpenCreate = () => {
     setFormName("");
     setFormEmail("");
@@ -142,7 +169,9 @@ export default function UserManagementPage() {
     const initialComms = getAvailableKomisariats();
     setFormComm(initialComms[0] || "");
     setFormStatus("AKTIF");
-    const defaultMenus = AVAILABLE_MENUS.filter(m => m.defaultRoles.map(r => r.toLowerCase()).includes("pengurus")).map(m => m.href);
+    const defaultMenus = AVAILABLE_MENUS.filter((m) =>
+      m.defaultRoles.map((r) => r.toLowerCase()).includes("pengurus")
+    ).map((m) => m.href);
     setFormAllowedMenus(defaultMenus);
     setIsCreateOpen(true);
   };
@@ -151,32 +180,34 @@ export default function UserManagementPage() {
     setSelectedUser(user);
     setFormName(user.name);
     setFormEmail(user.email);
-    setFormPassword(user.password || "");
+    setFormPassword("");
     setFormRole(user.role);
     setFormComm(user.commissariat || getAvailableKomisariats()[0] || "");
     setFormStatus(user.status);
     setFormAllowedMenus(
       Array.isArray(user.allowedMenus)
         ? user.allowedMenus
-        : AVAILABLE_MENUS.filter(m => m.defaultRoles.map(r => r.toLowerCase()).includes((user.role || "").toLowerCase())).map(m => m.href)
+        : AVAILABLE_MENUS.filter((m) =>
+            m.defaultRoles.map((r) => r.toLowerCase()).includes((user.role || "").toLowerCase())
+          ).map((m) => m.href)
     );
     setIsEditOpen(true);
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName || !formEmail || !formPassword) {
-      showNotification("error", "Harap isi semua kolom wajib!");
+    if (!formName.trim() || !formEmail.trim() || !formPassword.trim()) {
+      showToast("Harap lengkapi semua kolom wajib!");
       return;
     }
 
     const newUser: UserAccount = {
       id: `user-${Date.now()}`,
-      name: formName,
-      email: formEmail.toLowerCase(),
-      password: formPassword,
+      name: formName.trim(),
+      email: formEmail.trim().toLowerCase(),
+      password: formPassword.trim(),
       role: formRole,
-      commissariat: formRole !== "ADMIN" ? formComm : undefined,
+      commissariat: formRole.toUpperCase() !== "ADMIN" ? formComm : undefined,
       status: formStatus,
       allowedMenus: formAllowedMenus,
       createdAt: new Date().toISOString().split("T")[0]
@@ -187,29 +218,29 @@ export default function UserManagementPage() {
     if (success) {
       setUsers(updatedList);
       setIsCreateOpen(false);
-      showNotification("success", `Akun pengurus ${formName} berhasil dibuat!`);
+      showToast(`Akun "${formName.trim()}" berhasil dibuat.`);
     } else {
-      showNotification("error", "Gagal menyimpan akun ke database.");
+      showToast("Gagal menyimpan akun ke database.");
     }
   };
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-    if (!formName || !formEmail) {
-      showNotification("error", "Nama dan Email wajib diisi!");
+    if (!formName.trim() || !formEmail.trim()) {
+      showToast("Nama dan Email wajib diisi!");
       return;
     }
 
-    const updatedList = users.map(u => {
+    const updatedList = users.map((u) => {
       if (u.id === selectedUser.id) {
         return {
           ...u,
-          name: formName,
-          email: formEmail.toLowerCase(),
-          password: formPassword || u.password,
+          name: formName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          password: formPassword.trim() || u.password,
           role: formRole,
-          commissariat: formRole !== "ADMIN" ? formComm : undefined,
+          commissariat: formRole.toUpperCase() !== "ADMIN" ? formComm : undefined,
           status: formStatus,
           allowedMenus: formAllowedMenus
         };
@@ -227,7 +258,7 @@ export default function UserManagementPage() {
         if (stored) {
           try {
             const curr = JSON.parse(stored);
-            const foundUpdated = updatedList.find(u => u.id === curr.id);
+            const foundUpdated = updatedList.find((u) => u.id === curr.id);
             if (foundUpdated) {
               localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(foundUpdated));
             }
@@ -237,42 +268,60 @@ export default function UserManagementPage() {
         }
       }
 
-      showNotification("success", `Akun pengurus ${formName} berhasil diperbarui!`);
+      showToast(`Akun "${formName.trim()}" berhasil diperbarui.`);
     } else {
-      showNotification("error", "Gagal memperbarui akun.");
+      showToast("Gagal memperbarui akun.");
     }
   };
 
-  const handleDeleteUser = async (id: string, name: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus akun pengurus ${name}?`)) {
-      const updatedList = users.filter(u => u.id !== id);
-      const success = await db.saveUsers(updatedList);
-      if (success) {
-        setUsers(updatedList);
-        showNotification("success", `Akun ${name} telah berhasil dihapus.`);
-      } else {
-        showNotification("error", "Gagal menghapus akun dari database.");
-      }
+  const handleOpenDeleteConfirm = (user: UserAccount) => {
+    if (isMasterAdmin(user)) {
+      showToast("Akun Master Admin Cabang tidak dapat dihapus!");
+      return;
+    }
+    setUserToDelete(user);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    const updatedList = users.filter((u) => u.id !== userToDelete.id);
+    const success = await db.saveUsers(updatedList);
+    if (success) {
+      setUsers(updatedList);
+      setIsDeleteConfirmOpen(false);
+      showToast(`Akun "${userToDelete.name}" telah berhasil dihapus.`);
+      setUserToDelete(null);
+    } else {
+      showToast("Gagal menghapus akun dari database.");
     }
   };
 
-  const filteredUsers = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                        u.email.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredUsers = users.filter((u) => {
+    const matchSearch =
+      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (u.commissariat || "").toLowerCase().includes(searchQuery.toLowerCase());
     const roleNorm = (u.role || "").toLowerCase();
     const filterNorm = roleFilter.toLowerCase();
-    const matchRole = 
-      roleFilter === "ALL" || 
-      roleNorm === filterNorm || 
+    const matchRole =
+      roleFilter === "ALL" ||
+      roleNorm === filterNorm ||
       (filterNorm === "pengurus" && roleNorm === "komisariat");
     const matchStatus = statusFilter === "ALL" || u.status === statusFilter;
     return matchSearch && matchRole && matchStatus;
   });
 
+  const activeCount = users.filter((u) => u.status === "AKTIF").length;
+  const nonActiveCount = users.filter((u) => u.status !== "AKTIF").length;
+
   if (!mounted) {
     return (
-      <div className="p-8 flex justify-center items-center h-[50vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pmii-gold" />
+      <div className="space-y-6 animate-pulse">
+        <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-xl w-full" />
+        <div className="h-10 bg-zinc-200 dark:bg-zinc-800 rounded-lg w-1/3" />
+        <div className="h-96 bg-zinc-200 dark:bg-zinc-800 rounded-xl w-full" />
       </div>
     );
   }
@@ -280,141 +329,168 @@ export default function UserManagementPage() {
   if (!authorized) {
     return (
       <div className="p-8 max-w-lg mx-auto text-center space-y-4 h-[60vh] flex flex-col justify-center items-center">
-        <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/25">
-          <AlertCircle className="w-8 h-8 text-rose-500" />
+        <div className="w-14 h-14 rounded-full bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center border border-rose-200 dark:border-rose-900">
+          <AlertCircle className="w-7 h-7 text-rose-600 dark:text-rose-400" />
         </div>
-        <h2 className="text-lg font-black text-rose-500 uppercase tracking-wide">Akses Ditolak</h2>
-        <p className="text-xs text-zinc-500 leading-relaxed font-semibold">
-          Maaf, halaman Manajemen Pengguna ini hanya dapat diakses oleh administrator tingkat **Cabang (PC PMII)**.
-          Silakan masuk menggunakan kredensial Cabang untuk melanjutkan.
+        <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+          Akses Ditolak
+        </h2>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-md">
+          Halaman Manajemen Pengguna ini memiliki hak akses istimewa dan hanya dapat dikelola oleh administrator tingkat <strong>Cabang (PC PMII)</strong>.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 relative select-none">
-      
-      {/* Dynamic Toast Notification */}
+    <div className="space-y-6 relative z-10 font-sans text-zinc-900 dark:text-zinc-100 pb-12">
+      {/* TOAST NOTIFICATION (STANDAR VERIFIKASI) */}
       <AnimatePresence>
-        {notification && (
+        {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -20, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: -20, x: "-50%" }}
-            className={`fixed top-4 left-1/2 z-55 px-4 py-2.5 rounded-lg border text-xs font-semibold shadow-lg flex items-center gap-2.5 ${
-              notification.type === "success" 
-                ? "bg-emerald-950 text-emerald-300 border-emerald-500/40"
-                : "bg-rose-950 text-rose-300 border-rose-500/40"
-            }`}
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-20 right-6 z-50 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 border border-zinc-700 dark:border-zinc-300"
           >
-            <ShieldCheck className="w-4 h-4" />
-            {notification.message}
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
+            <span className="text-xs font-semibold">{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-pmii-blue dark:text-pmii-gold" />
-            Manajemen Pengguna
-          </h2>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">
-            Atur hak akses login pengurus dan anggota PK PMII Ki Ageng Getas Pendawa secara terpusat
-          </p>
+      {/* 1. HERO HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 rounded-xl shadow-none">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-lg bg-blue-600 dark:bg-blue-700 flex items-center justify-center text-white shadow-sm shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Manajemen Pengguna
+              </h1>
+              <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
+                Cabang (PC PMII)
+              </Badge>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-xl leading-relaxed">
+              Atur akun login, peran, lingkup wilayah, dan hak akses menu navigasi pengurus secara terpusat.
+            </p>
+          </div>
         </div>
-        
-        <Button 
-          onClick={handleOpenCreate}
-          className="bg-pmii-blue hover:bg-pmii-blue-light text-white dark:bg-pmii-gold dark:hover:bg-pmii-gold-light dark:text-[#090d16] font-bold text-xs rounded-xl shadow-md border-none flex items-center gap-2 cursor-pointer h-9 px-4 transform hover:-translate-y-0.5 transition-all"
-        >
-          <UserPlus className="w-4 h-4" />
-          Tambah Pengguna
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+          <div className="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
+            <span className="font-bold">{activeCount}</span> Aktif
+          </div>
+          {nonActiveCount > 0 && (
+            <div className="px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-xs font-medium">
+              <span className="font-bold">{nonActiveCount}</span> Non-Aktif
+            </div>
+          )}
+          <Button 
+            onClick={handleOpenCreate}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-3.5 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Tambah Pengguna</span>
+          </Button>
+        </div>
       </div>
 
-      {/* SEARCH & FILTERS BAR */}
-      <Card className="bg-white dark:bg-[#090d16]/80 border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-sm">
-        <CardContent className="p-4 flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4.5 h-4.5 text-zinc-450 absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input
-              type="text"
-              placeholder="Cari nama pengurus atau email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800/80 text-foreground placeholder-zinc-500 focus:border-pmii-blue dark:focus:border-pmii-gold w-full h-9 focus:ring-1 focus:ring-pmii-blue"
-            />
-          </div>
+      {/* 2. SEARCH & FILTERS BAR */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3.5 rounded-xl shadow-none">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            type="text"
+            placeholder="Cari nama pengurus, surel, atau komisariat..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
 
-          <div className="flex flex-wrap gap-2.5">
-            {/* Filter Role */}
-            <div className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/80 rounded-xl px-3 py-1.5">
-              <span className="text-[10px] font-black uppercase text-zinc-500">Peran:</span>
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="text-[11px] font-bold bg-transparent border-none outline-none text-zinc-700 dark:text-zinc-300 pr-1 cursor-pointer"
-              >
-                <option value="ALL">Semua Peran</option>
-                <option value="admin">Admin</option>
-                <option value="pengurus">Pengurus</option>
-                <option value="anggota">Anggota</option>
-                <option value="peserta">Peserta</option>
-              </select>
-            </div>
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+          {/* Role Filter */}
+          <Select value={roleFilter} onValueChange={(val) => { if (val) setRoleFilter(val); }}>
+            <SelectTrigger className="w-[140px] text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9 font-medium">
+              <SelectValue placeholder="Filter Peran" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+              <SelectItem value="ALL" className="text-xs">Semua Peran</SelectItem>
+              <SelectItem value="admin" className="text-xs">Admin</SelectItem>
+              <SelectItem value="pengurus" className="text-xs">Pengurus</SelectItem>
+              <SelectItem value="anggota" className="text-xs">Anggota</SelectItem>
+              <SelectItem value="peserta" className="text-xs">Peserta</SelectItem>
+            </SelectContent>
+          </Select>
 
-            {/* Filter Status */}
-            <div className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/80 rounded-xl px-3 py-1.5">
-              <span className="text-[10px] font-black uppercase text-zinc-500">Status:</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="text-[11px] font-bold bg-transparent border-none outline-none text-zinc-700 dark:text-zinc-300 pr-1 cursor-pointer"
-              >
-                <option value="ALL">Semua Status</option>
-                <option value="AKTIF">Aktif</option>
-                <option value="NONAKTIF">Non-Aktif</option>
-              </select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Status Filter */}
+          <Select value={statusFilter} onValueChange={(val) => { if (val) setStatusFilter(val); }}>
+            <SelectTrigger className="w-[140px] text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9 font-medium">
+              <SelectValue placeholder="Filter Status" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+              <SelectItem value="ALL" className="text-xs">Semua Status</SelectItem>
+              <SelectItem value="AKTIF" className="text-xs">Aktif</SelectItem>
+              <SelectItem value="NONAKTIF" className="text-xs">Non-Aktif</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-      {/* USERS DATA TABLE */}
-      <Card className="bg-white dark:bg-[#090d16]/80 border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-zinc-50/50 dark:bg-zinc-950/20 border-b border-zinc-200 dark:border-zinc-800">
-                <TableRow>
-                  <TableHead className="text-[10px] font-extrabold uppercase text-zinc-400 dark:text-zinc-500 w-[240px]">Pengurus</TableHead>
-                  <TableHead className="text-[10px] font-extrabold uppercase text-zinc-400 dark:text-zinc-500 w-[140px]">Peran / Level</TableHead>
-                  <TableHead className="text-[10px] font-extrabold uppercase text-zinc-400 dark:text-zinc-500">Scope Wilayah / Lingkup</TableHead>
-                  <TableHead className="text-[10px] font-extrabold uppercase text-zinc-400 dark:text-zinc-500 w-[100px]">Tanggal Dibuat</TableHead>
-                  <TableHead className="text-[10px] font-extrabold uppercase text-zinc-400 dark:text-zinc-500 w-[100px]">Status</TableHead>
-                  <TableHead className="text-[10px] font-extrabold uppercase text-zinc-400 dark:text-zinc-500 w-[100px] text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => (
-                    <TableRow key={user.id} className="hover:bg-zinc-50/40 dark:hover:bg-zinc-800/10">
-                      
+      {/* 3. USERS DATA TABLE */}
+      <Card className="overflow-hidden border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 shadow-none">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-zinc-50/70 dark:bg-zinc-950/60">
+              <TableRow className="border-b border-zinc-200 dark:border-zinc-800">
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 pl-5 w-[260px]">
+                  Pengguna
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 w-[130px]">
+                  Peran / Level
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3">
+                  Scope Wilayah / Lingkup
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 w-[120px]">
+                  Tanggal Dibuat
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 w-[100px]">
+                  Status
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 py-3 text-right pr-5 w-[100px]">
+                  Aksi
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => {
+                  const r = (user.role || "").toLowerCase();
+                  const isMaster = isMasterAdmin(user);
+
+                  return (
+                    <TableRow 
+                      key={user.id} 
+                      className="border-b border-zinc-100 dark:border-zinc-800/60 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors"
+                    >
                       {/* Name & Email */}
-                      <TableCell className="py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-8 h-8 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                            <AvatarFallback className="text-[10px] font-extrabold bg-gradient-to-tr from-pmii-blue/20 to-pmii-gold/20 text-pmii-blue dark:text-pmii-gold">
-                              {user.name.split(" ").map(w => w[0]).join("").substring(0,2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                      <TableCell className="py-3 pl-5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold text-[10px] flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60 shrink-0">
+                            {getInitials(user.name)}
+                          </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-bold text-foreground truncate">{user.name}</span>
-                            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 flex items-center gap-1 font-mono">
-                              <Mail className="w-3 h-3 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                              {user.name}
+                            </span>
+                            <span className="text-[10px] text-zinc-400 flex items-center gap-1 font-mono">
+                              <Mail className="w-3 h-3 shrink-0" />
                               {user.email}
                             </span>
                           </div>
@@ -423,260 +499,306 @@ export default function UserManagementPage() {
 
                       {/* Role Level */}
                       <TableCell className="py-3">
-                        {(() => {
-                          const r = (user.role || "").toLowerCase();
-                          if (r === "admin") {
-                            return (
-                              <Badge className="text-[9px] font-bold tracking-wide rounded-lg border-none px-2 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                Admin
-                              </Badge>
-                            );
-                          }
-                          if (r === "pengurus" || r === "komisariat") {
-                            return (
-                              <Badge className="text-[9px] font-bold tracking-wide rounded-lg border-none px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                                Pengurus
-                              </Badge>
-                            );
-                          }
-                          if (r === "anggota") {
-                            return (
-                              <Badge className="text-[9px] font-bold tracking-wide rounded-lg border-none px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                                Anggota
-                              </Badge>
-                            );
-                          }
-                          return (
-                            <Badge className="text-[9px] font-bold tracking-wide rounded-lg border-none px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                              Peserta
-                            </Badge>
-                          );
-                        })()}
+                        {r === "admin" ? (
+                          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold">
+                            Admin
+                          </Badge>
+                        ) : r === "pengurus" || r === "komisariat" ? (
+                          <Badge className="bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-900/60 text-[10px] font-semibold">
+                            Pengurus
+                          </Badge>
+                        ) : r === "anggota" ? (
+                          <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60 text-[10px] font-semibold">
+                            Anggota
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/60 text-[10px] font-semibold">
+                            Peserta
+                          </Badge>
+                        )}
                       </TableCell>
 
                       {/* Scope Area */}
                       <TableCell className="py-3">
-                        {user.role === "ADMIN" ? (
-                          <span className="text-[11px] text-zinc-400 dark:text-zinc-500 italic font-semibold">Cakupan Seluruh Cabang (Global)</span>
+                        {r === "admin" ? (
+                          <span className="text-xs text-zinc-400 dark:text-zinc-500 italic font-medium">
+                            Cakupan Seluruh Cabang (Global)
+                          </span>
                         ) : (
-                          <div className="flex flex-col gap-0.5 text-[11px] font-bold text-foreground">
-                            <span className="flex items-center gap-1">
-                              <Building className="w-3.5 h-3.5 text-zinc-450 dark:text-zinc-500" />
-                              {user.commissariat}
-                            </span>
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-700 dark:text-zinc-300">
+                            <Building className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                            <span className="truncate">{user.commissariat || "Belum Ditentukan"}</span>
                           </div>
                         )}
                       </TableCell>
 
                       {/* Created Date */}
-                      <TableCell className="py-3 text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 font-mono">
-                        {user.createdAt}
+                      <TableCell className="py-3 text-[11px] text-zinc-400 font-mono">
+                        {user.createdAt || "-"}
                       </TableCell>
 
                       {/* Status */}
                       <TableCell className="py-3">
-                        <Badge className={`text-[9px] font-extrabold rounded-lg border-none px-2 py-0.5 ${
-                          user.status === "AKTIF" 
-                            ? "bg-emerald-500/15 text-emerald-500" 
-                            : "bg-zinc-500/15 text-zinc-500 dark:text-zinc-400"
-                        }`}>
-                          {user.status === "AKTIF" ? "AKTIF" : "NON-AKTIF"}
+                        <Badge
+                          className={`text-[10px] font-semibold border ${
+                            user.status === "AKTIF"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+                              : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                          }`}
+                        >
+                          {user.status === "AKTIF" ? "Aktif" : "Non-Aktif"}
                         </Badge>
                       </TableCell>
 
                       {/* Actions */}
-                      <TableCell className="py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <TableCell className="py-3 text-right pr-5">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="icon-sm"
+                            size="sm"
                             onClick={() => handleOpenEdit(user)}
-                            className="w-7 h-7 rounded-lg text-zinc-500 hover:text-pmii-blue hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer"
+                            className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg cursor-pointer"
+                            title="Edit Pengguna & Hak Akses"
                           >
                             <UserCheck className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon-sm"
-                            disabled={user.id === "user-1"} // Prevent deleting primary admin
-                            onClick={() => handleDeleteUser(user.id, user.name)}
-                            className={`w-7 h-7 rounded-lg text-zinc-550 hover:text-rose-500 hover:bg-rose-500/10 cursor-pointer ${
-                              user.id === "user-1" ? "opacity-30 cursor-not-allowed" : ""
+                            size="sm"
+                            disabled={isMaster}
+                            onClick={() => handleOpenDeleteConfirm(user)}
+                            className={`h-8 w-8 p-0 rounded-lg cursor-pointer ${
+                              isMaster
+                                ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed"
+                                : "text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400"
                             }`}
+                            title={isMaster ? "Akun Utama Dilindungi" : "Hapus Pengguna"}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </TableCell>
-
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center text-xs text-zinc-500 font-bold uppercase tracking-wider">
-                      Tidak ada data pengurus ditemukan
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-12 text-center text-xs text-zinc-500">
+                    Tidak ada data pengguna yang cocok dengan kriteria pencarian atau filter.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
 
-      {/* DIALOG 1: CREATE USER */}
+      {/* ========================================================
+         MODAL 1: CREATE USER (ADAPTIF LIGHT & DARK)
+         ======================================================== */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="bg-[#090d16] border border-zinc-800 text-white rounded-3xl p-6 max-w-md w-full">
-          <DialogHeader>
-            <DialogTitle className="text-base font-black flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-pmii-gold" />
-              Buat Akun Pengguna Baru
-            </DialogTitle>
-            <DialogDescription className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest pt-1">
-              Tambahkan akun pengguna atau admin pengurus baru
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <UserPlus className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Buat Akun Pengguna Baru
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Tambahkan akun pengurus cabang atau komisariat dengan hak akses kustom.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <form onSubmit={handleCreateUser} className="space-y-4 pt-3">
-            {/* Name */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Nama Lengkap</label>
-              <Input
-                type="text"
-                required
-                placeholder="Sahabat Ahmad..."
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                className="text-xs bg-zinc-950 border-zinc-800 rounded-xl h-9.5 text-white placeholder-zinc-700"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Alamat Surel (Email)</label>
-              <Input
-                type="email"
-                required
-                placeholder="pengurus@pmii.org"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                className="text-xs bg-zinc-950 border-zinc-800 rounded-xl h-9.5 text-white placeholder-zinc-700"
-              />
-            </div>
-
-            {/* Password */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Kata Sandi (Password)</label>
-              <Input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={formPassword}
-                onChange={(e) => setFormPassword(e.target.value)}
-                className="text-xs bg-zinc-950 border-zinc-800 rounded-xl h-9.5 text-white placeholder-zinc-700"
-              />
-            </div>
-
-            {/* Role Level select */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Level Peran (Role)</label>
-              <select
-                value={formRole.toLowerCase()}
-                onChange={(e) => {
-                  const newRole = e.target.value as any;
-                  setFormRole(newRole);
-                  const defaultMenus = AVAILABLE_MENUS.filter(m => m.defaultRoles.map(r => r.toLowerCase()).includes(newRole.toLowerCase())).map(m => m.href);
-                  setFormAllowedMenus(defaultMenus);
-                }}
-                className="text-xs w-full bg-zinc-950 border border-zinc-800 rounded-xl h-9.5 px-3 text-white focus:outline-none"
-              >
-                <option value="admin">Admin (Akses Penuh)</option>
-                <option value="pengurus">Pengurus</option>
-                <option value="anggota">Anggota (Kader Resmi)</option>
-                <option value="peserta">Peserta (Calon Anggota)</option>
-              </select>
-            </div>
-
-            {/* Commissariat select */}
-            {formRole !== "ADMIN" && (
-              <div className="space-y-1">
-                <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Komisariat Kampus</label>
-                <select
-                  value={formComm}
-                  onChange={(e) => setFormComm(e.target.value)}
-                  className="text-xs w-full bg-zinc-950 border border-zinc-800 rounded-xl h-9.5 px-3 text-white focus:outline-none"
-                >
-                  {getAvailableKomisariats().map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
+          <form onSubmit={handleCreateUser}>
+            <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Nama Lengkap <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="cth. Sahabat Ahmad Fudholi"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                />
               </div>
-            )}
 
-            {/* Status */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Status Akun</label>
-              <select
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as any)}
-                className="text-xs w-full bg-zinc-950 border border-zinc-800 rounded-xl h-9.5 px-3 text-white focus:outline-none"
-              >
-                <option value="AKTIF">Aktif</option>
-                <option value="NONAKTIF">Non-Aktif</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Alamat Surel (Email) <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  required
+                  placeholder="pengurus@pmii.or.id"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                />
+              </div>
 
-            {/* Menu Authorization Checklist */}
-            <div className="space-y-2 border-t border-zinc-800/80 pt-3">
-              <label className="text-[10px] font-black uppercase text-pmii-gold tracking-wider flex items-center justify-between">
-                <span>Hak Akses Menu Sidebar</span>
-                <span className="text-[8px] text-zinc-500 font-semibold lowercase">Pilih menu yang tampil di sidebar</span>
-              </label>
-              
-              <div className="max-h-48 overflow-y-auto border border-zinc-800 bg-zinc-950/60 rounded-xl p-3 space-y-3 custom-scrollbar text-xs">
-                {Object.entries(
-                  AVAILABLE_MENUS.reduce((acc, menu) => {
-                    if (!acc[menu.group]) acc[menu.group] = [];
-                    acc[menu.group].push(menu);
-                    return acc;
-                  }, {} as Record<string, typeof AVAILABLE_MENUS>)
-                ).map(([groupName, menus]) => (
-                  <div key={groupName} className="space-y-1.5">
-                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">{groupName}</span>
-                    <div className="grid grid-cols-1 gap-1.5 pl-1.5">
-                      {menus.map((menu) => {
-                        const isChecked = formAllowedMenus.includes(menu.href);
-                        return (
-                          <label key={menu.href} className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none py-0.5">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                if (isChecked) {
-                                  setFormAllowedMenus(formAllowedMenus.filter(h => h !== menu.href));
-                                } else {
-                                  setFormAllowedMenus([...formAllowedMenus, menu.href]);
-                                }
-                              }}
-                              className="rounded border-zinc-800 bg-zinc-900 text-pmii-gold focus:ring-pmii-gold focus:ring-opacity-25 w-4 h-4 cursor-pointer"
-                            />
-                            <span className="font-semibold text-[11px]">
-                              {menu.name === "Pengaturan Sistem" && formRole === "KOMISARIAT" ? "Pengaturan Komisariat" : menu.name}
-                            </span>
-                          </label>
-                        );
-                      })}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Kata Sandi (Password) <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="password"
+                  required
+                  placeholder="Minimal 6 karakter"
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Level Peran (Role)
+                  </label>
+                  <Select
+                    value={formRole.toLowerCase()}
+                    onValueChange={(val: any) => {
+                      if (!val) return;
+                      setFormRole(val);
+                      const defaultMenus = AVAILABLE_MENUS.filter((m) =>
+                        m.defaultRoles.map((r) => r.toLowerCase()).includes(val.toLowerCase())
+                      ).map((m) => m.href);
+                      setFormAllowedMenus(defaultMenus);
+                    }}
+                  >
+                    <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
+                      <SelectValue placeholder="Pilih Peran" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectItem value="admin" className="text-xs">Admin (Akses Penuh)</SelectItem>
+                      <SelectItem value="pengurus" className="text-xs">Pengurus</SelectItem>
+                      <SelectItem value="anggota" className="text-xs">Anggota (Kader Resmi)</SelectItem>
+                      <SelectItem value="peserta" className="text-xs">Peserta (Calon Anggota)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Status Akun
+                  </label>
+                  <Select
+                    value={formStatus}
+                    onValueChange={(val: any) => {
+                      if (val) setFormStatus(val);
+                    }}
+                  >
+                    <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
+                      <SelectValue placeholder="Pilih Status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectItem value="AKTIF" className="text-xs">Aktif</SelectItem>
+                      <SelectItem value="NONAKTIF" className="text-xs">Non-Aktif</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {formRole.toUpperCase() !== "ADMIN" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Komisariat Kampus
+                  </label>
+                  <Select
+                    value={formComm}
+                    onValueChange={(val) => {
+                      if (val) setFormComm(val);
+                    }}
+                  >
+                    <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
+                      <SelectValue placeholder="Pilih Komisariat" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      {getAvailableKomisariats().map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-xs">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Menu Authorization Checklist */}
+              <div className="space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Hak Akses Menu Sidebar
+                  </span>
+                  <span className="text-[10px] text-zinc-400">
+                    Pilih menu yang tampil di sidebar
+                  </span>
+                </div>
+
+                <div className="max-h-44 overflow-y-auto border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 rounded-lg p-3 space-y-3 text-xs">
+                  {Object.entries(
+                    AVAILABLE_MENUS.reduce((acc, menu) => {
+                      if (!acc[menu.group]) acc[menu.group] = [];
+                      acc[menu.group].push(menu);
+                      return acc;
+                    }, {} as Record<string, typeof AVAILABLE_MENUS>)
+                  ).map(([groupName, menus]) => (
+                    <div key={groupName} className="space-y-1.5">
+                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+                        {groupName}
+                      </span>
+                      <div className="grid grid-cols-1 gap-1.5 pl-1">
+                        {menus.map((menu) => {
+                          const isChecked = formAllowedMenus.includes(menu.href);
+                          return (
+                            <label
+                              key={menu.href}
+                              className="flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none py-0.5"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setFormAllowedMenus(formAllowedMenus.filter((h) => h !== menu.href));
+                                  } else {
+                                    setFormAllowedMenus([...formAllowedMenus, menu.href]);
+                                  }
+                                }}
+                                className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                              />
+                              <span className="text-xs font-medium">{menu.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 
-            <DialogFooter className="pt-2 gap-2">
-              <DialogClose render={<Button type="button" variant="outline" className="h-9 rounded-xl text-xs font-bold border-zinc-800 bg-transparent text-zinc-400 hover:text-white" />}>
+            <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateOpen(false)}
+                className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+              >
                 Batal
-              </DialogClose>
-              <Button type="submit" className="h-9 rounded-xl text-xs font-bold bg-pmii-gold hover:bg-pmii-gold-light text-[#090d16] border-none px-4">
+              </Button>
+              <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
+              >
                 Simpan Akun
               </Button>
             </DialogFooter>
@@ -684,160 +806,213 @@ export default function UserManagementPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG 2: EDIT USER */}
+      {/* ========================================================
+         MODAL 2: EDIT USER (ADAPTIF LIGHT & DARK)
+         ======================================================== */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="bg-[#090d16] border border-zinc-800 text-white rounded-3xl p-6 max-w-md w-full">
-          <DialogHeader>
-            <DialogTitle className="text-base font-black flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-pmii-gold" />
-              Edit Akun Pengurus
-            </DialogTitle>
-            <DialogDescription className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest pt-1">
-              Perbarui hak akses, status, atau kata sandi pengurus {selectedUser?.name}
-            </DialogDescription>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Edit Akun Pengguna
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Perbarui profil, kata sandi, peran, atau hak akses menu {selectedUser?.name}.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <form onSubmit={handleUpdateUser} className="space-y-4 pt-3">
-            {/* Name */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Nama Lengkap</label>
-              <Input
-                type="text"
-                required
-                placeholder="Sahabat Ahmad..."
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                className="text-xs bg-zinc-950 border-zinc-800 rounded-xl h-9.5 text-white placeholder-zinc-700"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Alamat Surel (Email)</label>
-              <Input
-                type="email"
-                required
-                placeholder="pengurus@pmii.org"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                className="text-xs bg-zinc-950 border-zinc-800 rounded-xl h-9.5 text-white placeholder-zinc-700"
-              />
-            </div>
-
-            {/* Password (Optional modification) */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Ubah Kata Sandi (Kosongkan jika tetap)</label>
-              <Input
-                type="password"
-                placeholder="•••••••• (Tetap)"
-                value={formPassword}
-                onChange={(e) => setFormPassword(e.target.value)}
-                className="text-xs bg-zinc-950 border-zinc-800 rounded-xl h-9.5 text-white placeholder-zinc-750"
-              />
-            </div>
-
-            {/* Role Level select */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Level Peran (Role)</label>
-              <select
-                value={formRole.toLowerCase()}
-                disabled={selectedUser?.id === "user-admin"} // Enforce Admin role for master admin
-                onChange={(e) => {
-                  const newRole = e.target.value as any;
-                  setFormRole(newRole);
-                  const defaultMenus = AVAILABLE_MENUS.filter(m => m.defaultRoles.map(r => r.toLowerCase()).includes(newRole.toLowerCase())).map(m => m.href);
-                  setFormAllowedMenus(defaultMenus);
-                }}
-                className="text-xs w-full bg-zinc-950 border border-zinc-800 rounded-xl h-9.5 px-3 text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="admin">Admin (Akses Penuh)</option>
-                <option value="pengurus">Pengurus</option>
-                <option value="anggota">Anggota (Kader Resmi)</option>
-                <option value="peserta">Peserta (Calon Anggota)</option>
-              </select>
-            </div>
-
-            {/* Commissariat select */}
-            {formRole !== "ADMIN" && (
-              <div className="space-y-1">
-                <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Komisariat Kampus</label>
-                <select
-                  value={formComm}
-                  onChange={(e) => setFormComm(e.target.value)}
-                  className="text-xs w-full bg-zinc-950 border border-zinc-800 rounded-xl h-9.5 px-3 text-white focus:outline-none"
-                >
-                  {getAvailableKomisariats().map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
+          <form onSubmit={handleUpdateUser}>
+            <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Nama Lengkap <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="Sahabat Ahmad..."
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                />
               </div>
-            )}
 
-            {/* Status */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-extrabold uppercase text-zinc-500 tracking-wider">Status Akun</label>
-              <select
-                value={formStatus}
-                disabled={selectedUser?.id === "user-1"} // Enforce active status for master admin
-                onChange={(e) => setFormStatus(e.target.value as any)}
-                className="text-xs w-full bg-zinc-950 border border-zinc-800 rounded-xl h-9.5 px-3 text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="AKTIF">Aktif</option>
-                <option value="NONAKTIF">Non-Aktif</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Alamat Surel (Email) <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  required
+                  placeholder="pengurus@pmii.or.id"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                />
+              </div>
 
-            {/* Menu Authorization Checklist */}
-            <div className="space-y-2 border-t border-zinc-800/80 pt-3">
-              <label className="text-[10px] font-black uppercase text-pmii-gold tracking-wider flex items-center justify-between">
-                <span>Hak Akses Menu Sidebar</span>
-                <span className="text-[8px] text-zinc-500 font-semibold lowercase">Pilih menu yang tampil di sidebar</span>
-              </label>
-              
-              <div className="max-h-48 overflow-y-auto border border-zinc-800 bg-zinc-950/60 rounded-xl p-3 space-y-3 custom-scrollbar text-xs">
-                {Object.entries(
-                  AVAILABLE_MENUS.reduce((acc, menu) => {
-                    if (!acc[menu.group]) acc[menu.group] = [];
-                    acc[menu.group].push(menu);
-                    return acc;
-                  }, {} as Record<string, typeof AVAILABLE_MENUS>)
-                ).map(([groupName, menus]) => (
-                  <div key={groupName} className="space-y-1.5">
-                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">{groupName}</span>
-                    <div className="grid grid-cols-1 gap-1.5 pl-1.5">
-                      {menus.map((menu) => {
-                        const isChecked = formAllowedMenus.includes(menu.href);
-                        return (
-                          <label key={menu.href} className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none py-0.5">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                if (isChecked) {
-                                  setFormAllowedMenus(formAllowedMenus.filter(h => h !== menu.href));
-                                } else {
-                                  setFormAllowedMenus([...formAllowedMenus, menu.href]);
-                                }
-                              }}
-                              className="rounded border-zinc-800 bg-zinc-900 text-pmii-gold focus:ring-pmii-gold focus:ring-opacity-25 w-4 h-4 cursor-pointer"
-                            />
-                            <span className="font-semibold text-[11px]">
-                              {menu.name === "Pengaturan Sistem" && formRole === "KOMISARIAT" ? "Pengaturan Komisariat" : menu.name}
-                            </span>
-                          </label>
-                        );
-                      })}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Ubah Kata Sandi <span className="text-zinc-400 font-normal">(kosongkan jika tetap)</span>
+                </label>
+                <Input
+                  type="password"
+                  placeholder="•••••••• (Tetap)"
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Level Peran (Role)
+                  </label>
+                  <Select
+                    value={formRole.toLowerCase()}
+                    disabled={isMasterAdmin(selectedUser)}
+                    onValueChange={(val: any) => {
+                      if (!val) return;
+                      setFormRole(val);
+                      const defaultMenus = AVAILABLE_MENUS.filter((m) =>
+                        m.defaultRoles.map((r) => r.toLowerCase()).includes(val.toLowerCase())
+                      ).map((m) => m.href);
+                      setFormAllowedMenus(defaultMenus);
+                    }}
+                  >
+                    <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium disabled:opacity-60 disabled:cursor-not-allowed">
+                      <SelectValue placeholder="Pilih Peran" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectItem value="admin" className="text-xs">Admin (Akses Penuh)</SelectItem>
+                      <SelectItem value="pengurus" className="text-xs">Pengurus</SelectItem>
+                      <SelectItem value="anggota" className="text-xs">Anggota (Kader Resmi)</SelectItem>
+                      <SelectItem value="peserta" className="text-xs">Peserta (Calon Anggota)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Status Akun
+                  </label>
+                  <Select
+                    value={formStatus}
+                    disabled={isMasterAdmin(selectedUser)}
+                    onValueChange={(val: any) => {
+                      if (val) setFormStatus(val);
+                    }}
+                  >
+                    <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium disabled:opacity-60 disabled:cursor-not-allowed">
+                      <SelectValue placeholder="Pilih Status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectItem value="AKTIF" className="text-xs">Aktif</SelectItem>
+                      <SelectItem value="NONAKTIF" className="text-xs">Non-Aktif</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {formRole.toUpperCase() !== "ADMIN" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Komisariat Kampus
+                  </label>
+                  <Select
+                    value={formComm}
+                    onValueChange={(val) => {
+                      if (val) setFormComm(val);
+                    }}
+                  >
+                    <SelectTrigger className="text-xs h-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg font-medium">
+                      <SelectValue placeholder="Pilih Komisariat" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      {getAvailableKomisariats().map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-xs">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Menu Authorization Checklist */}
+              <div className="space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Hak Akses Menu Sidebar
+                  </span>
+                  <span className="text-[10px] text-zinc-400">
+                    Pilih menu yang tampil di sidebar
+                  </span>
+                </div>
+
+                <div className="max-h-44 overflow-y-auto border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 rounded-lg p-3 space-y-3 text-xs">
+                  {Object.entries(
+                    AVAILABLE_MENUS.reduce((acc, menu) => {
+                      if (!acc[menu.group]) acc[menu.group] = [];
+                      acc[menu.group].push(menu);
+                      return acc;
+                    }, {} as Record<string, typeof AVAILABLE_MENUS>)
+                  ).map(([groupName, menus]) => (
+                    <div key={groupName} className="space-y-1.5">
+                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+                        {groupName}
+                      </span>
+                      <div className="grid grid-cols-1 gap-1.5 pl-1">
+                        {menus.map((menu) => {
+                          const isChecked = formAllowedMenus.includes(menu.href);
+                          return (
+                            <label
+                              key={menu.href}
+                              className="flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none py-0.5"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setFormAllowedMenus(formAllowedMenus.filter((h) => h !== menu.href));
+                                  } else {
+                                    setFormAllowedMenus([...formAllowedMenus, menu.href]);
+                                  }
+                                }}
+                                className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                              />
+                              <span className="text-xs font-medium">{menu.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 
-            <DialogFooter className="pt-2 gap-2">
-              <DialogClose render={<Button type="button" variant="outline" className="h-9 rounded-xl text-xs font-bold border-zinc-800 bg-transparent text-zinc-400 hover:text-white" />}>
+            <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+                className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+              >
                 Batal
-              </DialogClose>
-              <Button type="submit" className="h-9 rounded-xl text-xs font-bold bg-pmii-gold hover:bg-pmii-gold-light text-[#090d16] border-none px-4">
+              </Button>
+              <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
+              >
                 Simpan Perubahan
               </Button>
             </DialogFooter>
@@ -845,6 +1020,48 @@ export default function UserManagementPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ========================================================
+         MODAL 3: DELETE CONFIRMATION DIALOG
+         ======================================================== */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                Hapus Akun Pengguna?
+              </DialogTitle>
+              <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Tindakan ini tidak dapat dibatalkan.
+              </DialogDescription>
+            </div>
+          </div>
+
+          <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+            Apakah Anda yakin ingin menghapus akun pengurus <strong>{userToDelete?.name}</strong> ({userToDelete?.email})? Pengguna ini tidak akan dapat login lagi ke portal.
+          </p>
+
+          <DialogFooter className="pt-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmDeleteUser}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium h-9 px-4 rounded-lg cursor-pointer"
+            >
+              Ya, Hapus Akun
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

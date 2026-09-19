@@ -21,8 +21,24 @@ import {
   Download,
   BookOpen,
   Camera,
-  Trash2
+  Trash2,
+  Briefcase,
+  Compass,
+  Upload,
+  Trash,
+  Heart,
+  ChevronLeft,
+  ChevronRight,
+  Pencil
 } from "lucide-react";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem
+} from "@/components/ui/select";
+import NikInput from "@/app/dashboard/anggota/_components/NikInput";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,15 +64,47 @@ export default function ProfilPage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Edit form states
+  const [activeTab, setActiveTab] = useState<"diri" | "akademik" | "riwayat" | "karakter">("diri");
+
+  // Step 1: Data Diri & Medis
   const [name, setName] = useState("");
+  const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
+  const [nik, setNik] = useState("");
+  const [ktpName, setKtpName] = useState("");
+  const [tempatLahir, setTempatLahir] = useState("");
+  const [tanggalLahir, setTanggalLahir] = useState("");
+  const [alamatRumah, setAlamatRumah] = useState("");
+  const [address, setAddress] = useState("");
+  const [golonganDarah, setGolonganDarah] = useState("O");
+  const [riwayatPenyakit, setRiwayatPenyakit] = useState("");
+
+  // Step 2: Akademik & Kontak
+  const [perguruanTinggi, setPerguruanTinggi] = useState("");
+  const [fakultas, setFakultas] = useState("");
+  const [jurusan, setJurusan] = useState("");
+  const [ktmName, setKtmName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
   const [instagram, setInstagram] = useState("");
-  const [perguruanTinggi, setPerguruanTinggi] = useState("");
-  const [jurusan, setJurusan] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [facebook, setFacebook] = useState("");
+
+  // Step 3: Pendidikan & Organisasi
+  const [pendidikanSD, setPendidikanSD] = useState("");
+  const [pendidikanSMP, setPendidikanSMP] = useState("");
+  const [pendidikanSMA, setPendidikanSMA] = useState("");
+  const [organisasiSD, setOrganisasiSD] = useState("");
+  const [organisasiSMP, setOrganisasiSMP] = useState("");
+  const [organisasiSMA, setOrganisasiSMA] = useState("");
+  const [organisasiPT, setOrganisasiPT] = useState("");
+
+  // Step 4: Karakter & Minat
+  const [orientasiProfetik, setOrientasiProfetik] = useState("");
+  const [minatPassion, setMinatPassion] = useState("");
+  const [motivasiMapaba, setMotivasiMapaba] = useState("");
   const [angkatan, setAngkatan] = useState("");
+  const [jabatan, setJabatan] = useState("Anggota");
+  const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -122,13 +170,52 @@ export default function ProfilPage() {
       if (mine) {
         setName(mine.name || "");
         setAvatar(mine.avatar || loggedInUser?.avatar || "");
+        setGender((mine.gender as any) || "Laki-laki");
+        setNik(mine.nik || "");
+        setKtpName(mine.ktpName || "");
+        setTempatLahir(mine.tempatLahir || "");
+        setTanggalLahir(mine.tanggalLahir || "");
+        setAlamatRumah(mine.alamatRumah || "");
+        setAddress(mine.alamatDomisili || mine.address || "");
+        setGolonganDarah(mine.golonganDarah || "O");
+        setRiwayatPenyakit(mine.riwayatPenyakit || "");
+
+        setPerguruanTinggi(mine.perguruanTinggi || mine.commissariat || "");
+        setFakultas(mine.fakultas || "");
+        setJurusan(mine.jurusan || "");
+        setKtmName(mine.ktmName || "");
         setPhone(mine.phone || "");
         setEmail(mine.email || "");
-        setAddress(mine.address || "");
         setInstagram(mine.instagram || "");
-        setPerguruanTinggi(mine.perguruanTinggi || mine.commissariat || "");
-        setJurusan(mine.jurusan || "");
-        setAngkatan(mine.angkatan || "");
+        setTwitter(mine.twitter || "");
+        setFacebook(mine.facebook || "");
+
+        setPendidikanSD(mine.pendidikanSD || "");
+        setPendidikanSMP(mine.pendidikanSMP || "");
+        setPendidikanSMA(mine.pendidikanSMA || "");
+        setOrganisasiSD(mine.organisasiSD || "");
+        setOrganisasiSMP(mine.organisasiSMP || "");
+        setOrganisasiSMA(mine.organisasiSMA || "");
+        setOrganisasiPT(mine.organisasiPT || "");
+
+        // Auto-fill Tahun Angkatan PMII if already an anggota (isGraduated)
+        const graduationYear = mine.startDate
+          ? (mine.startDate.includes("-") ? mine.startDate.split("-")[0] : new Date(mine.startDate).getFullYear().toString())
+          : new Date().getFullYear().toString();
+
+        if (mine.isGraduated) {
+          const autoAngkatan = mine.angkatan || graduationYear;
+          setAngkatan(autoAngkatan);
+          if (!mine.angkatan) {
+            mine.angkatan = autoAngkatan;
+            db.saveCadres(allCadres);
+          }
+        } else {
+          // If still a peserta (not graduated), angkatan is not filled
+          setAngkatan("");
+        }
+
+        setJabatan(mine.jabatan || "Anggota");
 
         // Check MAPABA registration
         const matchedReg = allRegs.find(r => 
@@ -328,13 +415,39 @@ export default function ProfilPage() {
         ...currentCadre,
         name: name.trim(),
         avatar: avatar,
+        gender,
+        nik: nik.trim(),
+        ktpName,
+        tempatLahir: tempatLahir.trim(),
+        tanggalLahir,
+        alamatRumah: alamatRumah.trim(),
+        address: address.trim(),
+        alamatDomisili: address.trim(),
+        golonganDarah,
+        riwayatPenyakit: riwayatPenyakit.trim(),
+        perguruanTinggi: perguruanTinggi.trim(),
+        fakultas: fakultas.trim(),
+        jurusan: jurusan.trim(),
+        ktmName,
         phone: phone.trim(),
         email: email.trim(),
-        address: address.trim(),
         instagram: instagram.trim(),
-        perguruanTinggi: perguruanTinggi.trim(),
-        jurusan: jurusan.trim(),
-        angkatan: angkatan.trim()
+        twitter: twitter.trim(),
+        facebook: facebook.trim(),
+        pendidikanSD: pendidikanSD.trim(),
+        pendidikanSMP: pendidikanSMP.trim(),
+        pendidikanSMA: pendidikanSMA.trim(),
+        organisasiSD: organisasiSD.trim(),
+        organisasiSMP: organisasiSMP.trim(),
+        organisasiSMA: organisasiSMA.trim(),
+        organisasiPT: organisasiPT.trim(),
+        orientasiProfetik: orientasiProfetik.trim(),
+        minatPassion: minatPassion.trim(),
+        motivasiMapaba: motivasiMapaba.trim(),
+        angkatan: currentCadre.isGraduated 
+          ? (angkatan.trim() || currentCadre.startDate?.split("-")[0] || new Date().getFullYear().toString())
+          : "",
+        jabatan: jabatan.trim()
       };
 
       const updatedList = cadres.map(c => c.id === currentCadre.id ? updated : c);
@@ -356,7 +469,11 @@ export default function ProfilPage() {
             loggedInUser.instagram = instagram.trim();
             loggedInUser.perguruanTinggi = perguruanTinggi.trim();
             loggedInUser.jurusan = jurusan.trim();
-            loggedInUser.angkatan = angkatan.trim();
+            loggedInUser.angkatan = currentCadre.isGraduated 
+              ? (angkatan.trim() || currentCadre.startDate?.split("-")[0] || new Date().getFullYear().toString())
+              : "";
+            loggedInUser.gender = gender;
+            loggedInUser.nik = nik.trim();
             localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInUser));
 
             const users = await db.getUsers();
@@ -404,6 +521,7 @@ export default function ProfilPage() {
       }
 
       toast.success("Data profil dan nama berhasil diperbarui.");
+      setIsEditing(false);
       setIsSuccessOpen(true);
     } catch (err) {
       console.error("Error saving profile:", err);
@@ -411,6 +529,50 @@ export default function ProfilPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    if (!currentCadre) return;
+    setName(currentCadre.name || "");
+    setAvatar(currentCadre.avatar || "");
+    setGender((currentCadre.gender as any) || "Laki-laki");
+    setNik(currentCadre.nik || "");
+    setKtpName(currentCadre.ktpName || "");
+    setTempatLahir(currentCadre.tempatLahir || "");
+    setTanggalLahir(currentCadre.tanggalLahir || "");
+    setAlamatRumah(currentCadre.alamatRumah || "");
+    setAddress(currentCadre.alamatDomisili || currentCadre.address || "");
+    setGolonganDarah(currentCadre.golonganDarah || "O");
+    setRiwayatPenyakit(currentCadre.riwayatPenyakit || "");
+
+    setPerguruanTinggi(currentCadre.perguruanTinggi || currentCadre.commissariat || "");
+    setFakultas(currentCadre.fakultas || "");
+    setJurusan(currentCadre.jurusan || "");
+    setKtmName(currentCadre.ktmName || "");
+    setPhone(currentCadre.phone || "");
+    setEmail(currentCadre.email || "");
+    setInstagram(currentCadre.instagram || "");
+    setTwitter(currentCadre.twitter || "");
+    setFacebook(currentCadre.facebook || "");
+
+    setPendidikanSD(currentCadre.pendidikanSD || "");
+    setPendidikanSMP(currentCadre.pendidikanSMP || "");
+    setPendidikanSMA(currentCadre.pendidikanSMA || "");
+    setOrganisasiSD(currentCadre.organisasiSD || "");
+    setOrganisasiSMP(currentCadre.organisasiSMP || "");
+    setOrganisasiSMA(currentCadre.organisasiSMA || "");
+    setOrganisasiPT(currentCadre.organisasiPT || "");
+
+    setOrientasiProfetik(currentCadre.orientasiProfetik || "");
+    setMinatPassion(currentCadre.minatPassion || "");
+    setMotivasiMapaba(currentCadre.motivasiMapaba || "");
+    if (currentCadre.isGraduated) {
+      setAngkatan(currentCadre.angkatan || "");
+    } else {
+      setAngkatan("");
+    }
+    setJabatan(currentCadre.jabatan || "Anggota");
+    setIsEditing(false);
   };
 
   const handleDownloadCard = async (type: "kta" | "peserta") => {
@@ -506,7 +668,7 @@ export default function ProfilPage() {
                     }
                   }}
                   title="Klik untuk mengubah foto profil"
-                  className="w-22 h-22 sm:w-26 sm:h-26 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl border-4 border-white dark:border-zinc-900 shadow-md overflow-hidden cursor-pointer relative select-none transition-transform hover:scale-102"
+                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl border-4 border-white dark:border-zinc-900 shadow-md overflow-hidden cursor-pointer relative select-none transition-transform hover:scale-102"
                 >
                   {avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -533,10 +695,31 @@ export default function ProfilPage() {
                   )}
                 </div>
 
-                {/* Camera badge in corner */}
-                <div className="absolute bottom-0 right-0 p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full border-2 border-white dark:border-zinc-900 shadow-xs pointer-events-none">
+                {/* Camera button in bottom-right corner */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Ubah foto profil"
+                  className="absolute bottom-0 right-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full border-2 border-white dark:border-zinc-900 shadow-sm cursor-pointer transition-colors"
+                >
                   <Camera className="w-3.5 h-3.5" />
-                </div>
+                </button>
+
+                {/* Trash button in bottom-left corner (if avatar exists) */}
+                {avatar && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemovePhoto();
+                    }}
+                    disabled={isUploadingPhoto}
+                    title="Hapus foto profil"
+                    className="absolute bottom-0 left-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white hover:bg-rose-50 dark:bg-zinc-800 dark:hover:bg-rose-950/40 text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
 
                 {/* Hidden File Input */}
                 <input
@@ -548,44 +731,51 @@ export default function ProfilPage() {
                 />
               </div>
 
-              {/* Name & Basic Info */}
-              <div className="space-y-1 pt-1 sm:pt-0">
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              {/* Name, Status Badge & Basic Info */}
+              <div className="space-y-1.5 sm:space-y-1 pt-1 sm:pt-0">
+                <div className="flex flex-col sm:flex-row items-center sm:items-baseline justify-center sm:justify-start gap-1.5 sm:gap-2">
                   <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
                     {currentCadre.name}
                   </h1>
-                  {avatar && (
-                    <button
-                      type="button"
-                      onClick={handleRemovePhoto}
-                      disabled={isUploadingPhoto}
-                      className="text-[11px] text-zinc-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors font-medium cursor-pointer inline-flex items-center gap-1"
-                      title="Hapus foto profil"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span>Hapus</span>
-                    </button>
-                  )}
+
+                  {/* Status Badge on Mobile (under name) */}
+                  <div className="sm:hidden">
+                    <Badge className={`h-6 px-2.5 text-[11px] font-semibold rounded-full shadow-none ${
+                      currentCadre.isGraduated
+                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                        : hasMapabaRegistration
+                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                        : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20"
+                    }`}>
+                      <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                      {currentCadre.isGraduated 
+                        ? "Kader Resmi" 
+                        : hasMapabaRegistration 
+                        ? "Peserta MAPABA" 
+                        : "Calon Kader"}
+                    </Badge>
+                  </div>
                 </div>
                 
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {/* Email & Commissariat info chips */}
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                   {currentCadre.email && (
-                    <span className="inline-flex items-center gap-1">
-                      <Mail className="w-3.5 h-3.5 text-zinc-400" />
-                      {currentCadre.email}
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-full sm:rounded-none">
+                      <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <span className="truncate max-w-[210px] sm:max-w-none">{currentCadre.email}</span>
                     </span>
                   )}
                   <span className="hidden sm:inline text-zinc-300 dark:text-zinc-700">•</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Building className="w-3.5 h-3.5 text-zinc-400" />
-                    {currentCadre.commissariat}
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-full sm:rounded-none">
+                    <Building className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span>{currentCadre.commissariat}</span>
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Right Side: Status Badge */}
-            <div className="flex items-center justify-center sm:justify-end shrink-0">
+            {/* Right Side: Status Badge (Desktop Only) */}
+            <div className="hidden sm:flex items-center justify-end shrink-0">
               <Badge className={`h-7 px-3 text-[11px] font-semibold rounded-full shadow-none ${
                 currentCadre.isGraduated
                   ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
@@ -618,30 +808,35 @@ export default function ProfilPage() {
             <div className="space-y-3">
               <div 
                 id="digital-kta-card"
-                className="relative overflow-hidden bg-gradient-to-br from-zinc-950 via-[#0c101a] to-zinc-950 border border-amber-500/25 dark:border-amber-500/30 rounded-xl sm:rounded-2xl p-5 sm:p-6 text-white shadow-sm flex flex-col justify-between"
+                className="relative overflow-hidden bg-white dark:bg-gradient-to-br dark:from-zinc-950 dark:via-[#0c101a] dark:to-zinc-950 border border-amber-200 dark:border-amber-500/30 rounded-xl sm:rounded-2xl p-5 sm:p-6 text-zinc-900 dark:text-white shadow-sm flex flex-col justify-between"
               >
                 {/* Watermark */}
-                <div className="absolute right-4 bottom-3 text-[100px] font-black text-white/[0.02] tracking-tighter select-none pointer-events-none leading-none z-0">
+                <div className="absolute right-4 bottom-3 text-[100px] font-black text-amber-900/[0.04] dark:text-white/[0.02] tracking-tighter select-none pointer-events-none leading-none z-0">
                   {currentCadre.level || "KTA"}
                 </div>
 
                 <div className="space-y-4 relative z-10">
                   {/* Card Top */}
-                  <div className="flex items-center justify-between border-b border-white/[0.08] pb-3.5">
+                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/[0.08] pb-3.5">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center text-zinc-950 font-black text-sm tracking-tight shrink-0 shadow-xs">
-                        KGP
+                      <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shrink-0 border border-zinc-200/80 dark:border-white/10 shadow-xs p-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/image/logo_komsat.png"
+                          alt="Logo Komisariat"
+                          className="w-full h-full object-contain"
+                        />
                       </div>
                       <div className="text-left">
-                        <h4 className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                        <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white tracking-tight">
                           PMII {currentCadre.commissariat}
                         </h4>
-                        <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">
+                        <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
                           PK KI AGENG GETAS PENDAWA
                         </p>
                       </div>
                     </div>
-                    <span className="border border-amber-500/40 bg-amber-500/15 text-amber-400 font-bold text-[10px] px-2.5 py-1 rounded-md tracking-wider uppercase">
+                    <span className="border border-amber-200 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold text-[10px] px-2.5 py-1 rounded-md tracking-wider uppercase">
                       KADER
                     </span>
                   </div>
@@ -650,7 +845,7 @@ export default function ProfilPage() {
                   <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 text-center sm:text-left">
                     {/* QR Code Container */}
                     <div className="flex flex-col items-center shrink-0">
-                      <div className="w-32 h-32 bg-white rounded-xl p-2.5 flex items-center justify-center shadow-md">
+                      <div className="w-32 h-32 bg-white dark:bg-white border border-zinc-200 dark:border-transparent rounded-xl p-2.5 flex items-center justify-center shadow-xs">
                         {qrCodeDataUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img 
@@ -662,10 +857,10 @@ export default function ProfilPage() {
                           <div className="w-6 h-6 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
                         )}
                       </div>
-                      <p className="text-amber-400 font-mono font-bold text-xs sm:text-sm tracking-wider text-center mt-2">
+                      <p className="text-amber-600 dark:text-amber-400 font-mono font-bold text-xs sm:text-sm tracking-wider text-center mt-2">
                         {memberNTA}
                       </p>
-                      <p className="text-zinc-500 text-[9px] font-semibold uppercase tracking-wider text-center">
+                      <p className="text-zinc-400 dark:text-zinc-500 text-[9px] font-semibold uppercase tracking-wider text-center">
                         QR DIGITAL NTA
                       </p>
                     </div>
@@ -673,37 +868,37 @@ export default function ProfilPage() {
                     {/* Member Details */}
                     <div className="flex-1 min-w-0 space-y-2.5 pt-0.5">
                       <div>
-                        <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                        <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                           Nama Anggota
                         </span>
-                        <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                        <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white truncate">
                           {currentCadre.name.startsWith("Sahabat") ? currentCadre.name : `Sahabat ${currentCadre.name}`}
                         </h3>
                       </div>
 
                       <div>
-                        <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                        <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                           Komisariat
                         </span>
-                        <p className="text-xs text-zinc-200 truncate">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-200 truncate">
                           {currentCadre.commissariat}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.06]">
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-100 dark:border-white/[0.06]">
                         <div>
-                          <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                          <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                             Jenjang
                           </span>
-                          <p className="text-xs font-bold text-amber-400">
+                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400">
                             {currentCadre.level}
                           </p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                          <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                             Tanggal
                           </span>
-                          <p className="text-xs font-mono text-zinc-300">
+                          <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300">
                             {memberStartDate !== "-" ? memberStartDate : new Date().toISOString().slice(0, 10)}
                           </p>
                         </div>
@@ -712,8 +907,8 @@ export default function ProfilPage() {
                   </div>
 
                   {/* Card Bottom Notice */}
-                  <div className="border-t border-white/[0.08] pt-2.5">
-                    <p className="text-zinc-500 text-[9px] uppercase tracking-widest text-center">
+                  <div className="border-t border-zinc-100 dark:border-white/[0.08] pt-2.5">
+                    <p className="text-zinc-400 dark:text-zinc-500 text-[9px] uppercase tracking-widest text-center">
                       DILANTIK: {memberStartDate !== "-" ? memberStartDate : "2026-05-22"} &nbsp;|&nbsp; ANGGOTA RESMI PMII
                     </p>
                   </div>
@@ -726,12 +921,12 @@ export default function ProfilPage() {
                 size="sm"
                 disabled={isDownloading}
                 onClick={() => handleDownloadCard("kta")}
-                className="w-full h-9 text-xs font-semibold border border-amber-500/30 hover:border-amber-500/60 text-zinc-100 hover:text-white bg-zinc-900/90 hover:bg-amber-500/10 rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-colors"
+                className="w-full h-9 text-xs font-semibold border border-amber-200 dark:border-amber-500/30 hover:border-amber-300 dark:hover:border-amber-500/60 text-amber-700 dark:text-zinc-100 hover:text-amber-800 dark:hover:text-white bg-amber-50/60 dark:bg-zinc-900/90 hover:bg-amber-100/70 dark:hover:bg-amber-500/10 rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-colors"
               >
                 {isDownloading ? (
-                  <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-3.5 h-3.5 border-2 border-amber-600 dark:border-amber-400 border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <Download className="w-3.5 h-3.5 text-amber-400" />
+                  <Download className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                 )}
                 <span>Download KTA Digital (PNG)</span>
               </Button>
@@ -741,30 +936,35 @@ export default function ProfilPage() {
             <div className="space-y-3">
               <div 
                 id="kartu-peserta-card"
-                className="relative overflow-hidden bg-gradient-to-br from-zinc-950 via-[#0c101a] to-zinc-950 border border-blue-500/25 dark:border-blue-500/30 rounded-xl sm:rounded-2xl p-5 sm:p-6 text-white shadow-sm flex flex-col justify-between"
+                className="relative overflow-hidden bg-white dark:bg-gradient-to-br dark:from-zinc-950 dark:via-[#0c101a] dark:to-zinc-950 border border-blue-200 dark:border-blue-500/30 rounded-xl sm:rounded-2xl p-5 sm:p-6 text-zinc-900 dark:text-white shadow-sm flex flex-col justify-between"
               >
                 {/* Watermark */}
-                <div className="absolute right-4 bottom-3 text-[100px] font-black text-white/[0.02] tracking-tighter select-none pointer-events-none leading-none z-0">
+                <div className="absolute right-4 bottom-3 text-[100px] font-black text-blue-900/[0.04] dark:text-white/[0.02] tracking-tighter select-none pointer-events-none leading-none z-0">
                   MAPABA
                 </div>
 
                 <div className="space-y-4 relative z-10">
                   {/* Card Top */}
-                  <div className="flex items-center justify-between border-b border-white/[0.08] pb-3.5">
+                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/[0.08] pb-3.5">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-sm tracking-tight shrink-0 shadow-xs">
-                        KGP
+                      <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shrink-0 border border-zinc-200/80 dark:border-white/10 shadow-xs p-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/image/logo_komsat.png"
+                          alt="Logo Komisariat"
+                          className="w-full h-full object-contain"
+                        />
                       </div>
                       <div className="text-left">
-                        <h4 className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                        <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white tracking-tight">
                           PMII Ki Ageng Getas Pendawa
                         </h4>
-                        <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">
+                        <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
                           KARTU PESERTA RESMI
                         </p>
                       </div>
                     </div>
-                    <span className="border border-blue-500/40 bg-blue-500/15 text-blue-400 font-bold text-[10px] px-2.5 py-1 rounded-md tracking-wider uppercase">
+                    <span className="border border-blue-200 dark:border-blue-500/40 bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold text-[10px] px-2.5 py-1 rounded-md tracking-wider uppercase">
                       PESERTA
                     </span>
                   </div>
@@ -773,7 +973,7 @@ export default function ProfilPage() {
                   <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 text-center sm:text-left">
                     {/* QR Code Container */}
                     <div className="flex flex-col items-center shrink-0">
-                      <div className="w-32 h-32 bg-white rounded-xl p-2.5 flex items-center justify-center shadow-md">
+                      <div className="w-32 h-32 bg-white dark:bg-white border border-zinc-200 dark:border-transparent rounded-xl p-2.5 flex items-center justify-center shadow-xs">
                         {qrCodeDataUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img 
@@ -785,10 +985,10 @@ export default function ProfilPage() {
                           <div className="w-6 h-6 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
                         )}
                       </div>
-                      <p className="text-blue-400 font-mono font-bold text-xs sm:text-sm tracking-wider text-center mt-2">
+                      <p className="text-blue-600 dark:text-blue-400 font-mono font-bold text-xs sm:text-sm tracking-wider text-center mt-2">
                         {memberRegNumber}
                       </p>
-                      <p className="text-zinc-500 text-[9px] font-semibold uppercase tracking-wider text-center">
+                      <p className="text-zinc-400 dark:text-zinc-500 text-[9px] font-semibold uppercase tracking-wider text-center">
                         ABSENSI QR
                       </p>
                     </div>
@@ -796,37 +996,37 @@ export default function ProfilPage() {
                     {/* Participant Details */}
                     <div className="flex-1 min-w-0 space-y-2.5 pt-0.5">
                       <div>
-                        <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                        <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                           Nama Peserta
                         </span>
-                        <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                        <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white truncate">
                           {currentCadre.name.replace(/^Sahabat\s*/i, "")}
                         </h3>
                       </div>
 
                       <div>
-                        <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                        <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                           Kegiatan
                         </span>
-                        <p className="text-xs text-zinc-200 truncate">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-200 truncate">
                           Masa Penerimaan Anggota Baru (MAPABA)
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.06]">
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-100 dark:border-white/[0.06]">
                         <div>
-                          <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                          <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                             Jenjang
                           </span>
-                          <p className="text-xs font-bold text-blue-400">
+                          <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
                             MAPABA
                           </p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-[10px] uppercase font-semibold block">
+                          <span className="text-zinc-400 dark:text-zinc-500 text-[10px] uppercase font-semibold block">
                             Tanggal
                           </span>
-                          <p className="text-xs font-mono text-zinc-300">
+                          <p className="text-xs font-mono text-zinc-700 dark:text-zinc-300">
                             {memberStartDate !== "-" ? memberStartDate : new Date().toISOString().slice(0, 10)}
                           </p>
                         </div>
@@ -835,8 +1035,8 @@ export default function ProfilPage() {
                   </div>
 
                   {/* Card Bottom Notice */}
-                  <div className="border-t border-white/[0.08] pt-2.5">
-                    <p className="text-zinc-500 text-[9px] uppercase tracking-widest text-center">
+                  <div className="border-t border-zinc-100 dark:border-white/[0.08] pt-2.5">
+                    <p className="text-zinc-400 dark:text-zinc-500 text-[9px] uppercase tracking-widest text-center">
                       BAWA KARTU INI UNTUK BUKTI ABSENSI ACARA
                     </p>
                   </div>
@@ -849,12 +1049,12 @@ export default function ProfilPage() {
                 size="sm"
                 disabled={isDownloading}
                 onClick={() => handleDownloadCard("peserta")}
-                className="w-full h-9 text-xs font-semibold border border-blue-500/30 hover:border-blue-500/60 text-zinc-100 hover:text-white bg-zinc-900/90 hover:bg-blue-500/10 rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-colors"
+                className="w-full h-9 text-xs font-semibold border border-blue-200 dark:border-blue-500/30 hover:border-blue-300 dark:hover:border-blue-500/60 text-blue-700 dark:text-zinc-100 hover:text-blue-800 dark:hover:text-white bg-blue-50/60 dark:bg-zinc-900/90 hover:bg-blue-100/70 dark:hover:bg-blue-500/10 rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-colors"
               >
                 {isDownloading ? (
-                  <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-3.5 h-3.5 border-2 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                  <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 )}
                 <span>Download Kartu Peserta (PNG)</span>
               </Button>
@@ -878,241 +1078,637 @@ export default function ProfilPage() {
             </Card>
           )}
 
-          {/* INFORMASI KEANGGOTAAN */}
-          <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-5 space-y-3.5 shadow-none">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              Informasi Keanggotaan
-            </h3>
 
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <GraduationCap className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">Jenjang</span>
-                </div>
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100">{currentCadre.level}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Building className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">Komisariat</span>
-                </div>
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[180px] text-right">{currentCadre.commissariat}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
-                    {currentCadre.isGraduated ? "Pelantikan" : "Terdaftar"}
-                  </span>
-                </div>
-                <span className="font-semibold font-mono text-zinc-900 dark:text-zinc-100">{memberStartDate}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">Status</span>
-                </div>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Aktif
-                </span>
-              </div>
-            </div>
-          </Card>
         </div>
 
         {/* RIGHT COLUMN: EDITABLE PROFILE DETAILS (7 Cols) */}
         <div className="lg:col-span-7">
-          <form onSubmit={handleSaveProfile} className="space-y-6">
-            
-            {/* CARD 1: DATA PRIBADI & KONTAK */}
-            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 sm:p-6 shadow-none space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  Data Pribadi & Kontak
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Nama lengkap, kontak aktif, dan alamat domisili Anda untuk keperluan identitas dan koordinasi organisasi.
-                </p>
+          <form onSubmit={handleSaveProfile} className="space-y-4">
+            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-none">
+              {/* Clean Underline Tabs Header with Edit Button */}
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+                <div className="flex gap-4 text-xs font-medium overflow-x-auto no-scrollbar">
+                  {[
+                    { id: "diri", label: "1. Data Diri & Medis", icon: User },
+                    { id: "akademik", label: "2. Akademik & Kontak", icon: GraduationCap },
+                    { id: "riwayat", label: "3. Riwayat Pendidikan", icon: Briefcase },
+                    { id: "karakter", label: "4. Karakter & Minat", icon: Compass }
+                  ].map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`py-3 cursor-pointer border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                          isActive
+                            ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
+                            : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Edit Button / Mode Badge in Header */}
+                <div className="shrink-0 py-2 pl-2">
+                  {!isEditing ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                      className="h-7.5 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Edit Data</span>
+                      <span className="sm:hidden">Edit</span>
+                    </Button>
+                  ) : (
+                    <Badge variant="outline" className="h-6 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border-amber-500/20 bg-amber-500/5">
+                      Mode Edit
+                    </Badge>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* NAMA LENGKAP */}
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                    Nama Lengkap <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <Input
-                      required
-                      placeholder="Masukkan nama lengkap"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="text-xs pl-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                    />
+              {/* Form Content Body */}
+              <div className="p-5 sm:p-6 space-y-4">
+                {/* TAB 1: DATA DIRI & MEDIS */}
+                {activeTab === "diri" && (
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Nama Lengkap <span className="text-rose-500">*</span>
+                        </label>
+                        <Input
+                          required
+                          disabled={!isEditing}
+                          placeholder="Masukkan nama lengkap"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Jenis Kelamin
+                        </label>
+                        <Select disabled={!isEditing} value={gender} onValueChange={(val) => { if (val) setGender(val as any); }}>
+                          <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default">
+                            <SelectValue placeholder="Pilih Jenis Kelamin" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                            <SelectItem value="Laki-laki">Laki-laki (Sahabat)</SelectItem>
+                            <SelectItem value="Perempuan">Perempuan (Sahabati)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* NIK Input */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                        Nomor Induk Kependudukan (NIK 16 Digit)
+                      </label>
+                      <NikInput value={nik} onChange={setNik} disabled={!isEditing} />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Tempat Lahir
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Kota / Kabupaten kelahiran"
+                          value={tempatLahir}
+                          onChange={(e) => setTempatLahir(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Tanggal Lahir
+                        </label>
+                        <Input
+                          type="date"
+                          disabled={!isEditing}
+                          value={tanggalLahir}
+                          onChange={(e) => setTanggalLahir(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Alamat Asal Sesuai KTP
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Alamat lengkap asal KTP"
+                          value={alamatRumah}
+                          onChange={(e) => setAlamatRumah(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Alamat Domisili Sekarang <span className="text-rose-500">*</span>
+                        </label>
+                        <Input
+                          required
+                          disabled={!isEditing}
+                          placeholder="Alamat domisili / tempat tinggal saat ini"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Golongan Darah
+                        </label>
+                        <Select disabled={!isEditing} value={golonganDarah} onValueChange={(val) => { if (val) setGolonganDarah(val); }}>
+                          <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default">
+                            <SelectValue placeholder="Golongan Darah" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                            <SelectItem value="A">Golongan A</SelectItem>
+                            <SelectItem value="B">Golongan B</SelectItem>
+                            <SelectItem value="AB">Golongan AB</SelectItem>
+                            <SelectItem value="O">Golongan O</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Riwayat Penyakit (Opsional)
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: Asma, Alergi (jika ada)"
+                          value={riwayatPenyakit}
+                          onChange={(e) => setRiwayatPenyakit(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Lampiran KTP */}
+                    <div className="space-y-1 pt-1">
+                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                        Lampiran Berkas KTP
+                      </label>
+                      {ktpName ? (
+                        <div className="flex items-center justify-between p-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs">
+                          <span className="truncate max-w-[240px] text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                            {ktpName}
+                          </span>
+                          {isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => setKtpName("")}
+                              className="text-zinc-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ) : isEditing ? (
+                        <label className="flex items-center justify-center gap-2 p-2 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50 rounded-lg cursor-pointer bg-zinc-50/50 dark:bg-zinc-950/50 text-xs text-zinc-500">
+                          <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                          <span className="text-[11px]">Pilih File KTP (Gambar/PDF)</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) setKtpName(e.target.files[0].name);
+                            }}
+                          />
+                        </label>
+                      ) : (
+                        <div className="p-2 text-xs text-zinc-400 dark:text-zinc-500 italic bg-zinc-50/60 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-lg">
+                          Belum ada lampiran berkas KTP
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                {/* WHATSAPP */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                    Nomor WhatsApp / Telepon <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <Input
-                      required
-                      placeholder="08xxxxxxxxxx"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="text-xs pl-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                    />
-                  </div>
-                </div>
-
-                {/* EMAIL */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                    Alamat Surel (E-mail) <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <Input
-                      type="email"
-                      required
-                      placeholder="nama@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="text-xs pl-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* INSTAGRAM */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                  Akun Instagram
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">@</span>
-                  <Input
-                    placeholder="username"
-                    value={instagram.replace(/^@+/, "")}
-                    onChange={(e) => setInstagram(e.target.value ? `@${e.target.value.replace(/^@+/, "")}` : "")}
-                    className="text-xs pl-8 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                  />
-                </div>
-              </div>
-
-              {/* ALAMAT DOMISILI */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                  Alamat Domisili Sekarang <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 absolute left-3 top-3 text-zinc-400" />
-                  <textarea
-                    required
-                    placeholder="Masukkan alamat lengkap domisili tempat tinggal..."
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    rows={3}
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-blue-600 dark:focus:border-blue-500 outline-hidden transition-all text-zinc-900 dark:text-zinc-100 resize-none"
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* CARD 2: DATA AKADEMIK & KEMAHASISWAAN */}
-            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 sm:p-6 shadow-none space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  Data Akademik & Kemahasiswaan
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Data kampus, fakultas, dan jurusan tempat studi sahabat kader.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* PERGURUAN TINGGI */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                    Perguruan Tinggi / Kampus
-                  </label>
-                  <div className="relative">
-                    <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <Input
-                      placeholder="Nama Kampus / Universitas"
-                      value={perguruanTinggi}
-                      onChange={(e) => setPerguruanTinggi(e.target.value)}
-                      className="text-xs pl-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                    />
-                  </div>
-                </div>
-
-                {/* PROGRAM STUDI / JURUSAN */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                    Program Studi / Jurusan
-                  </label>
-                  <div className="relative">
-                    <BookOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <Input
-                      placeholder="Contoh: Pendidikan Agama Islam"
-                      value={jurusan}
-                      onChange={(e) => setJurusan(e.target.value)}
-                      className="text-xs pl-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ANGKATAN KULIAH */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                  Tahun Angkatan Kuliah
-                </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                  <Input
-                    placeholder="Contoh: 2024"
-                    value={angkatan}
-                    onChange={(e) => setAngkatan(e.target.value)}
-                    className="text-xs pl-9 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* SUBMIT ACTION BAR */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-none">
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 text-center sm:text-left">
-                Pastikan data yang dimasukkan sudah sesuai dan mutakhir.
-              </span>
-              <Button
-                type="submit"
-                disabled={isSaving}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-9 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-6 shrink-0 transition-colors"
-              >
-                {isSaving ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
                 )}
-                <span>Simpan Perubahan</span>
-              </Button>
-            </div>
 
+                {/* TAB 2: AKADEMIK & KONTAK */}
+                {activeTab === "akademik" && (
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Perguruan Tinggi
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Nama Kampus / Universitas"
+                          value={perguruanTinggi}
+                          onChange={(e) => setPerguruanTinggi(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Fakultas
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: FST, Tarbiyah"
+                          value={fakultas}
+                          onChange={(e) => setFakultas(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Jurusan / Prodi
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: Teknologi Informasi"
+                          value={jurusan}
+                          onChange={(e) => setJurusan(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Nomor WhatsApp / HP <span className="text-rose-500">*</span>
+                        </label>
+                        <Input
+                          required
+                          disabled={!isEditing}
+                          placeholder="08xxxxxxxxxx"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Alamat Surel (E-mail) <span className="text-rose-500">*</span>
+                        </label>
+                        <Input
+                          type="email"
+                          required
+                          disabled={!isEditing}
+                          placeholder="nama@email.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Instagram
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="@username"
+                          value={instagram.replace(/^@+/, "")}
+                          onChange={(e) => setInstagram(e.target.value ? `@${e.target.value.replace(/^@+/, "")}` : "")}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          X (Twitter)
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="@username"
+                          value={twitter}
+                          onChange={(e) => setTwitter(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Facebook
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Nama Akun"
+                          value={facebook}
+                          onChange={(e) => setFacebook(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Lampiran KTM */}
+                    <div className="space-y-1 pt-1">
+                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                        Unggah Kartu Tanda Mahasiswa (KTM)
+                      </label>
+                      {ktmName ? (
+                        <div className="flex items-center justify-between p-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs">
+                          <span className="truncate max-w-[240px] text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
+                            {ktmName}
+                          </span>
+                          {isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => setKtmName("")}
+                              className="text-zinc-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ) : isEditing ? (
+                        <label className="flex items-center justify-center gap-2 p-2 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50 rounded-lg cursor-pointer bg-zinc-50/50 dark:bg-zinc-950/50 text-xs text-zinc-500">
+                          <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                          <span className="text-[11px]">Pilih File KTM (Gambar/PDF)</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) setKtmName(e.target.files[0].name);
+                            }}
+                          />
+                        </label>
+                      ) : (
+                        <div className="p-2 text-xs text-zinc-400 dark:text-zinc-500 italic bg-zinc-50/60 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-lg">
+                          Belum ada lampiran berkas KTM
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: RIWAYAT PENDIDIKAN & ORGANISASI */}
+                {activeTab === "riwayat" && (
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Sekolah Dasar (SD/MI)
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Nama SD / MI"
+                          value={pendidikanSD}
+                          onChange={(e) => setPendidikanSD(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          SMP / MTs
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Nama SMP / MTs"
+                          value={pendidikanSMP}
+                          onChange={(e) => setPendidikanSMP(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          SMA / SMK / MA
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Nama SMA / SMK / MA"
+                          value={pendidikanSMA}
+                          onChange={(e) => setPendidikanSMA(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Organisasi Tingkat SMP / MTs
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: OSIS, Pramuka"
+                          value={organisasiSMP}
+                          onChange={(e) => setOrganisasiSMP(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Organisasi Tingkat SMA / SMK / MA
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: IPNU/IPPNU, OSIS"
+                          value={organisasiSMA}
+                          onChange={(e) => setOrganisasiSMA(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Organisasi di Kampus / Luar PMII (Lainnya)
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: BEM, Himpunan Mahasiswa Jurusan, UKM"
+                          value={organisasiPT}
+                          onChange={(e) => setOrganisasiPT(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 4: KARAKTER & MINAT */}
+                {activeTab === "karakter" && (
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Tahun Angkatan PMII
+                        </label>
+                        <Input
+                          placeholder="Contoh: 2026"
+                          value={currentCadre.isGraduated ? angkatan : ""}
+                          disabled={!isEditing || !currentCadre.isGraduated}
+                          onChange={(e) => {
+                            if (currentCadre.isGraduated) {
+                              setAngkatan(e.target.value);
+                            }
+                          }}
+                          className={`h-8.5 text-xs rounded-lg ${
+                            !currentCadre.isGraduated
+                              ? "bg-zinc-100 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                              : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Jabatan Kepengurusan
+                        </label>
+                        <Input
+                          disabled
+                          placeholder="Misal: Anggota, Pengurus Rayon/Komisariat"
+                          value={jabatan}
+                          className="h-8.5 text-xs bg-zinc-100 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Orientasi Profetik / Jalur Pengembangan
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: Intelektual, Akademik, Advokasi, Keagamaan"
+                          value={orientasiProfetik}
+                          onChange={(e) => setOrientasiProfetik(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Minat & Passion
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Misal: Kepenulisan, Desain Grafis, Riset, Wirausaha"
+                          value={minatPassion}
+                          onChange={(e) => setMinatPassion(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Motivasi Bergabung PMII
+                        </label>
+                        <Input
+                          disabled={!isEditing}
+                          placeholder="Alasan & cita-cita berkhidmat di PMII"
+                          value={motivasiMapaba}
+                          onChange={(e) => setMotivasiMapaba(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tab Navigation Footer */}
+              <div className="p-3.5 sm:p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-zinc-50/50 dark:bg-zinc-950/50">
+                <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={activeTab === "diri"}
+                    onClick={() => {
+                      if (activeTab === "akademik") setActiveTab("diri");
+                      if (activeTab === "riwayat") setActiveTab("akademik");
+                      if (activeTab === "karakter") setActiveTab("riwayat");
+                    }}
+                    className="text-xs h-8.5 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Sebelumnya</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={activeTab === "karakter"}
+                    onClick={() => {
+                      if (activeTab === "diri") setActiveTab("akademik");
+                      if (activeTab === "akademik") setActiveTab("riwayat");
+                      if (activeTab === "riwayat") setActiveTab("karakter");
+                    }}
+                    className="text-xs h-8.5 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <span>Selanjutnya</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+
+                {isEditing ? (
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      className="flex-1 sm:flex-initial text-xs h-8.5 px-3.5 rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isSaving}
+                      className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-8.5 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors"
+                    >
+                      {isSaving ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>Simpan Perubahan</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-8.5 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit Data Profil</span>
+                  </Button>
+                )}
+              </div>
+            </Card>
           </form>
         </div>
 
