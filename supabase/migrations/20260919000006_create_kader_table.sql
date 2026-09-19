@@ -1,0 +1,60 @@
+-- Migration: Create kader table
+-- Description: Database Anggota & Kader PMII dengan ID UUID
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS kader (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  level TEXT DEFAULT 'MAPABA', -- 'MAPABA', 'PKD', 'PKL'
+  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
+  rayon TEXT DEFAULT '',
+  "startDate" DATE DEFAULT CURRENT_DATE,
+  status TEXT NOT NULL DEFAULT 'AKTIF', -- 'AKTIF', 'SELESAI', 'REVISI'
+  submissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  phone TEXT,
+  email TEXT,
+  password TEXT, -- Cadre Account Password
+  role TEXT DEFAULT 'anggota',
+  address TEXT,
+  instagram TEXT,
+  "isGraduated" BOOLEAN DEFAULT false,
+  nta TEXT,
+  nipa TEXT,
+  "registrationNumber" TEXT,
+  angkatan TEXT,
+  "memberStatus" TEXT DEFAULT 'Aktif',
+  jabatan TEXT,
+  gender TEXT,
+  history JSONB DEFAULT '[]'::jsonb,
+  provinsi TEXT,
+  kabupaten TEXT,
+  kecamatan TEXT,
+  nik TEXT,
+  "ktpName" TEXT,
+  "tempatLahir" TEXT,
+  "tanggalLahir" TEXT,
+  "alamatRumah" TEXT,
+  "alamatDomisili" TEXT,
+  "pendidikanSD" TEXT,
+  "pendidikanSMP" TEXT,
+  "pendidikanSMA" TEXT,
+  "perguruanTinggi" TEXT,
+  fakultas TEXT,
+  jurusan TEXT,
+  "ktmName" TEXT,
+  twitter TEXT,
+  facebook TEXT,
+  "pasFotoName" TEXT,
+  avatar TEXT,
+  "riwayatPenyakit" TEXT,
+  "golonganDarah" TEXT,
+  "organisasiSD" TEXT,
+  "organisasiSMP" TEXT,
+  "organisasiSMA" TEXT,
+  "organisasiPT" TEXT,
+  "orientasiProfetik" TEXT,
+  "minatPassion" TEXT,
+  "motivasiMapaba" TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
