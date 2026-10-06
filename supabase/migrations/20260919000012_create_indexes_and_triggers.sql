@@ -2,7 +2,7 @@
 -- Description: Optimasi indeks query dan fungsi trigger otomatis timestamp
 
 -- 1. Index optimizations
-CREATE INDEX IF NOT EXISTS idx_kader_commissariat_rayon ON kader(commissariat, rayon);
+CREATE INDEX IF NOT EXISTS idx_kader_commissariat ON kader(commissariat);
 CREATE INDEX IF NOT EXISTS idx_kegiatan_commissariat ON kegiatan(commissariat);
 CREATE INDEX IF NOT EXISTS idx_pengguna_email ON pengguna(email);
 CREATE INDEX IF NOT EXISTS idx_pendaftaran_event ON pendaftaran("eventId");

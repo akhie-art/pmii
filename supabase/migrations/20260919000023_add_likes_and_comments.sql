@@ -54,7 +54,7 @@ VALUES
   'comm-2',
   'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21',
   'Sahabati Dewi Lestari',
-  'Pengurus Rayon Tarbiyah',
+  'Pengurus Komisariat',
   'DL',
   'Sepakat sahabat Farisi. Daya kritis transformatif harus terus diasah melalui forum diskusi dan pendampingan pasca-Mapaba yang konsisten.',
   8,
@@ -74,9 +74,9 @@ VALUES
   'comm-4',
   'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23',
   'Sahabat Hendra Wijaya',
-  'Ketua Rayon Syariah',
+  'Pengurus Bidang Kaderisasi',
   'HW',
-  'Langkah konkret yang sangat ditunggu oleh seluruh pengurus rayon. Digitalisasi surat menyurat membuat birokrasi jauh lebih rapi dan transparan.',
+  'Langkah konkret yang sangat ditunggu oleh seluruh pengurus. Digitalisasi surat menyurat membuat birokrasi jauh lebih rapi dan transparan.',
   7,
   '2026-09-09 11:45:00+00'
 )

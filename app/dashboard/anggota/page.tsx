@@ -1,21 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
-  UserCheck,
   Plus,
   Search,
-  Filter,
   Eye,
   Edit,
   Trash2,
   FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
-  Users,
-  Award,
-  CheckCircle2,
-  GraduationCap
+  Upload,
+  Share2
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +34,10 @@ import {
   SelectContent,
   SelectItem
 } from "@/components/ui/select";
-import { db } from "@/lib/db";
+import { generateUUID } from "@/lib/utils";
+import { useFeedbackModal } from "@/components/ui/feedback-modal";
+import { db, type UserAccount } from "@/lib/db";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { isRecordInTenant } from "@/lib/tenancy";
 import * as XLSX from "xlsx";
 
@@ -46,11 +46,21 @@ import { mapCadreToMember, mapMemberToCadre } from "./_components/types";
 import MemberFormModal from "./_components/MemberFormModal";
 import MemberDetailModal from "./_components/MemberDetailModal";
 import DeleteMemberModal from "./_components/DeleteMemberModal";
+import ImportMemberModal, { type ImportAccountSettings } from "./_components/ImportMemberModal";
+import ShareMemberLinkModal from "./_components/ShareMemberLinkModal";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MemberBulkActionBar } from "./_components/MemberBulkActionBar";
+import { MemberBulkDeleteDialog } from "./_components/MemberBulkDeleteDialog";
 
 export default function AnggotaPage() {
   const [mounted, setMounted] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Bulk Selection States
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,14 +80,13 @@ export default function AnggotaPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingMember, setDeletingMember] = useState<Member | null>(null);
 
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showShareLinkModal, setShowShareLinkModal] = useState(false);
+  const [sharingMember, setSharingMember] = useState<Member | null>(null);
+
   // UI state
   const [isExporting, setIsExporting] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-
-  const showToast = (msg: string, duration = 3000) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(""), duration);
-  };
+  const { showToast, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -144,7 +153,163 @@ export default function AnggotaPage() {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentMembers = filteredMembers.slice(indexOfFirstItem, indexOfLastItem);
 
-  // Add Member
+  const isAllCurrentSelected =
+    currentMembers.length > 0 && currentMembers.every((m) => selectedMemberIds.includes(m.id));
+  const isSomeCurrentSelected =
+    selectedMemberIds.length > 0 && !isAllCurrentSelected;
+
+  const handleToggleSelectMember = (memberId: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
+    );
+  };
+
+  const handleSelectAllCurrent = () => {
+    if (isAllCurrentSelected) {
+      setSelectedMemberIds((prev) =>
+        prev.filter((id) => !currentMembers.some((m) => m.id === id))
+      );
+    } else {
+      setSelectedMemberIds((prev) => {
+        const set = new Set([...prev, ...currentMembers.map((m) => m.id)]);
+        return Array.from(set);
+      });
+    }
+  };
+
+  const handleBulkActivateMembers = async () => {
+    if (selectedMemberIds.length === 0) return;
+    setIsBulkProcessing(true);
+    try {
+      const updatedMembers = members.map((m) => {
+        if (selectedMemberIds.includes(m.id)) {
+          return { ...m, status: "Aktif" as const };
+        }
+        return m;
+      });
+      setMembers(updatedMembers);
+
+      const dbCadres = await db.getCadres([]);
+      const updatedCadres = dbCadres.map((c) => {
+        if (selectedMemberIds.includes(c.id)) {
+          return { ...c, status: "AKTIF" as const };
+        }
+        return c;
+      });
+      await db.saveCadres(updatedCadres);
+
+      showToast(`${selectedMemberIds.length} data anggota berhasil diaktifkan!`);
+      setSelectedMemberIds([]);
+    } catch (err) {
+      console.error("Bulk activate members error:", err);
+      showToast("Gagal mengaktifkan anggota terpilih.");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDeactivateMembers = async () => {
+    if (selectedMemberIds.length === 0) return;
+    setIsBulkProcessing(true);
+    try {
+      const updatedMembers = members.map((m) => {
+        if (selectedMemberIds.includes(m.id)) {
+          return { ...m, status: "Pasif" as const };
+        }
+        return m;
+      });
+      setMembers(updatedMembers);
+
+      const dbCadres = await db.getCadres([]);
+      const updatedCadres = dbCadres.map((c) => {
+        if (selectedMemberIds.includes(c.id)) {
+          return { ...c, status: "REVISI" as const };
+        }
+        return c;
+      });
+      await db.saveCadres(updatedCadres);
+
+      showToast(`${selectedMemberIds.length} anggota diubah menjadi Non-Aktif.`);
+      setSelectedMemberIds([]);
+    } catch (err) {
+      console.error("Bulk deactivate members error:", err);
+      showToast("Gagal menonaktifkan anggota terpilih.");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkGraduateMembers = async () => {
+    if (selectedMemberIds.length === 0) return;
+    setIsBulkProcessing(true);
+    try {
+      const updatedMembers = members.map((m) => {
+        if (selectedMemberIds.includes(m.id)) {
+          return { ...m, isGraduated: true };
+        }
+        return m;
+      });
+      setMembers(updatedMembers);
+
+      const dbCadres = await db.getCadres([]);
+      const updatedCadres = dbCadres.map((c) => {
+        if (selectedMemberIds.includes(c.id)) {
+          return { ...c, isGraduated: true };
+        }
+        return c;
+      });
+      await db.saveCadres(updatedCadres);
+
+      showToast(`${selectedMemberIds.length} anggota diluluskan & KTA Digital diterbitkan.`);
+      setSelectedMemberIds([]);
+    } catch (err) {
+      console.error("Bulk graduate members error:", err);
+      showToast("Gagal meluluskan anggota terpilih.");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDeleteMembers = async () => {
+    if (selectedMemberIds.length === 0) return;
+    setIsBulkProcessing(true);
+    try {
+      const count = selectedMemberIds.length;
+      const updatedMembers = members.filter((m) => !selectedMemberIds.includes(m.id));
+      setMembers(updatedMembers);
+
+      const dbCadres = await db.getCadres([]);
+      const updatedCadres = dbCadres.filter((c) => !selectedMemberIds.includes(c.id));
+      await db.saveCadres(updatedCadres);
+
+      // Also clean up corresponding user accounts in users and Supabase Auth
+      try {
+        const targetMembers = members.filter((m) => selectedMemberIds.includes(m.id));
+        const users = await db.getUsers();
+        const updatedUsers = users.filter((u) => {
+          return !selectedMemberIds.some((id) => u.id === id || u.id === `usr-${id}`);
+        });
+        await db.saveUsers(updatedUsers);
+
+        // Hapus akun dari Supabase Auth
+        await db.deleteUsersFromAuth(targetMembers.map(m => ({
+          id: m.id,
+          email: m.email
+        })));
+      } catch (err) {
+        console.warn("User accounts cleanup notice:", err);
+      }
+
+      showToast(`${count} data anggota berhasil dihapus.`);
+      setSelectedMemberIds([]);
+      setIsBulkDeleteOpen(false);
+    } catch (err) {
+      console.error("Bulk delete members error:", err);
+      showToast("Gagal menghapus data anggota terpilih.");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
   const handleAddMember = async (data: Partial<Member>) => {
     const targetAngkatan = data.angkatan || "2026";
     const targetKomisariat = data.komisariat || "PK PMII Ki Ageng Getas Pendawa";
@@ -246,9 +411,190 @@ export default function AnggotaPage() {
     setMembers(remaining);
     await db.saveCadres(remaining.map((m) => mapMemberToCadre(m)));
 
+    // Sinkronkan penghapusan akun ke Supabase Auth
+    await db.deleteUserFromAuth({
+      id: deletingMember.id,
+      email: deletingMember.email
+    });
+
     setShowDeleteModal(false);
     showToast(`Data ${deletingMember.name} berhasil dihapus.`);
     setDeletingMember(null);
+  };
+
+  // Bulk Import Members with Optional Auto-Create Login Accounts
+  const handleImportMembers = async (
+    newMembersData: Partial<Member>[],
+    accountSettings: ImportAccountSettings
+  ) => {
+    let currentCount = members.length;
+    const now = Date.now();
+
+    const createdMembers: Member[] = [];
+    const newUsers: UserAccount[] = [];
+
+    newMembersData.forEach((data, idx) => {
+      currentCount++;
+      const targetAngkatan = data.angkatan || String(new Date().getFullYear());
+      const targetKomisariat =
+        data.komisariat || currentUser?.commissariat || "PK PMII Ki Ageng Getas Pendawa";
+      const targetLevel = data.level || "MAPABA";
+
+      const newNipa =
+        data.nipa && data.nipa.trim() !== ""
+          ? data.nipa
+          : `PMII.${targetAngkatan}.11.${
+              targetKomisariat.includes("Walisongo")
+                ? "05"
+                : targetKomisariat.includes("Diponegoro")
+                ? "02"
+                : "03"
+            }.${String(currentCount).padStart(4, "0")}`;
+
+      const newHistory: CadreHistory[] = [
+        {
+          level: targetLevel,
+          date: `Mar ${targetAngkatan}`,
+          location: targetKomisariat,
+          status: "Selesai"
+        }
+      ];
+
+      const cleanNik = data.nik ? data.nik.replace(/\D/g, "") : "";
+      const memberId = `cadre-${now}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+
+      // Tentukan email login unik
+      let memberEmail = data.email ? data.email.trim().toLowerCase() : "";
+      if (!memberEmail || !memberEmail.includes("@")) {
+        const fallbackSlug = (newNipa.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()) ||
+          cleanNik ||
+          (data.name || "kader").toLowerCase().replace(/\s+/g, ".");
+        memberEmail = `${fallbackSlug}@pmii.id`;
+      }
+
+      // Tentukan password
+      let assignedPassword = accountSettings.customPassword || "pmii1960";
+      if (accountSettings.passwordType === "nik") {
+        assignedPassword = cleanNik || accountSettings.customPassword || "pmii1960";
+      } else if (accountSettings.passwordType === "birthdate") {
+        const cleanBdate = (data.tanggalLahir || "").replace(/\D/g, "");
+        assignedPassword = cleanBdate.length >= 6 ? cleanBdate : accountSettings.customPassword || "pmii1960";
+      }
+
+      const newMember: Member = {
+        id: memberId,
+        name: data.name || "",
+        level: targetLevel,
+        komisariat: targetKomisariat,
+        angkatan: targetAngkatan,
+        status: data.status || "Aktif",
+        email: memberEmail,
+        phone: data.phone || "",
+        jabatan: data.jabatan || "Anggota",
+        nipa: newNipa,
+        gender: data.gender || "Laki-laki",
+        history: newHistory,
+        provinsi: data.provinsi || "",
+        kabupaten: data.kabupaten || "",
+        kecamatan: data.kecamatan || "",
+        nik: cleanNik,
+        ktpName: data.ktpName || "",
+        tempatLahir: data.tempatLahir || "",
+        tanggalLahir: data.tanggalLahir || "",
+        alamatRumah: data.alamatRumah || "",
+        alamatDomisili: data.alamatDomisili || data.alamatRumah || "",
+        pendidikanSD: data.pendidikanSD || "",
+        pendidikanSMP: data.pendidikanSMP || "",
+        pendidikanSMA: data.pendidikanSMA || "",
+        perguruanTinggi: data.perguruanTinggi || "",
+        fakultas: data.fakultas || "",
+        jurusan: data.jurusan || "",
+        ktmName: data.ktmName || "",
+        instagram: data.instagram || "",
+        twitter: data.twitter || "",
+        facebook: data.facebook || "",
+        pasFotoName: data.pasFotoName || "",
+        avatar: data.avatar || "",
+        riwayatPenyakit: data.riwayatPenyakit || "",
+        golonganDarah: data.golonganDarah || "O",
+        organisasiSD: data.organisasiSD || "",
+        organisasiSMP: data.organisasiSMP || "",
+        organisasiSMA: data.organisasiSMA || "",
+        organisasiPT: data.organisasiPT || "",
+        orientasiProfetik: data.orientasiProfetik || "",
+        minatPassion: data.minatPassion || "",
+        motivasiMapaba: data.motivasiMapaba || ""
+      };
+
+      // Simpan password di objek kader untuk sinkronisasi kredensial login
+      (newMember as any).password = assignedPassword;
+      createdMembers.push(newMember);
+
+      if (accountSettings.createAccounts) {
+        newUsers.push({
+          id: `usr-${memberId}`,
+          name: newMember.name,
+          email: memberEmail,
+          password: assignedPassword,
+          role: "anggota",
+          commissariat: targetKomisariat,
+          status: "AKTIF",
+          createdAt: new Date().toISOString(),
+          allowedMenus: [
+            "/kader",
+            "/kader/kegiatan",
+            "/kader/materi",
+            "/kader/profil",
+            "/kader/laporan"
+          ]
+        });
+      }
+    });
+
+    // Simpan ke Cadres
+    const updatedCadres = [...createdMembers, ...members];
+    setMembers(updatedCadres);
+    await db.saveCadres(updatedCadres.map((m) => mapMemberToCadre(m)));
+
+    // Simpan ke Users jika opsi pembuatan akun aktif
+    if (accountSettings.createAccounts && newUsers.length > 0) {
+      try {
+        const currentUsers = await db.getUsers();
+        const existingEmails = new Set(currentUsers.map((u) => u.email.toLowerCase()));
+        const filteredNewUsers = newUsers.filter((u) => !existingEmails.has(u.email.toLowerCase()));
+        const mergedUsers = [...filteredNewUsers, ...currentUsers];
+        await db.saveUsers(mergedUsers);
+
+        // Sinkronkan ke Supabase Auth jika terkonfigurasi
+        if (isSupabaseConfigured && supabase) {
+          for (const u of filteredNewUsers) {
+            try {
+              await supabase.auth.signUp({
+                email: u.email,
+                password: u.password || "pmii1960",
+                options: {
+                  data: {
+                    name: u.name,
+                    role: "anggota",
+                    commissariat: u.commissariat
+                  }
+                }
+              });
+            } catch (authErr) {
+              console.warn("Supabase user create notice:", authErr);
+            }
+          }
+        }
+      } catch (userErr) {
+        console.error("Gagal menyimpan akun login pengguna:", userErr);
+      }
+    }
+
+    if (accountSettings.createAccounts) {
+      showToast(`Berhasil mengimpor ${createdMembers.length} kader & mengaktifkan ${newUsers.length} akun login!`);
+    } else {
+      showToast(`Berhasil mengimpor ${createdMembers.length} data kader ke dalam database!`);
+    }
   };
 
   // Export Excel
@@ -596,150 +942,80 @@ export default function AnggotaPage() {
   if (!mounted) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-8 bg-zinc-200 dark:bg-zinc-800 rounded-lg w-1/4" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
-          <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
-          <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
-          <div className="h-20 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
-        </div>
+        <div className="h-9 bg-zinc-200 dark:bg-zinc-800 rounded-lg w-full" />
+        <div className="h-12 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
         <div className="h-96 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 select-none pb-8">
-      {/* MINIMAL HEADER (Benchmarked from dashboard/kegiatan) */}
+    <div className="space-y-4 select-none pb-8">
+      {/* BREADCRUMB & ACTION TOOLBAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            Database Anggota & Kader
-          </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Kelola data keanggotaan, histori kaderisasi, dan KTA digital secara terpusat
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleExportExcel}
-            disabled={isExporting}
-            variant="outline"
-            className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer disabled:opacity-50"
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <Link
+            href="/dashboard"
+            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span>{isExporting ? "Mengekspor..." : "Ekspor Excel"}</span>
-          </Button>
+            Dashboard
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+            Anggota
+          </span>
+        </nav>
 
+        {/* Action Buttons: Stacked & Full-Width on Mobile, Inline on Desktop */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
             onClick={() => setShowAddModal(true)}
-            className="h-8.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1.5 border-none cursor-pointer"
+            className="w-full sm:w-auto order-1 sm:order-3 h-8.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-1.5 border-none cursor-pointer shadow-xs"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>Registrasi Anggota</span>
           </Button>
+
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto order-2">
+            <Button
+              onClick={() => setShowImportModal(true)}
+              variant="outline"
+              className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer text-zinc-700 dark:text-zinc-300 shadow-2xs"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="truncate">Import Excel</span>
+            </Button>
+
+            <Button
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              variant="outline"
+              className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer disabled:opacity-50 text-zinc-700 dark:text-zinc-300 shadow-2xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="truncate">{isExporting ? "Mengekspor..." : "Ekspor Excel"}</span>
+            </Button>
+          </div>
         </div>
-      </div>
-
-      {/* TOAST NOTIFICATION (Benchmarked from dashboard/kegiatan) */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 px-3.5 py-2.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-medium rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 text-blue-500" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* STAT CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 shadow-none">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <Users className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                Total Anggota
-              </p>
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mt-0.5">
-                {members.length}
-              </h3>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 shadow-none">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <GraduationCap className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                MAPABA (Mu'taqid)
-              </p>
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mt-0.5">
-                {members.filter((m) => m.level === "MAPABA").length}
-              </h3>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 shadow-none">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-              <Award className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                PKD (Mujahid)
-              </p>
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mt-0.5">
-                {members.filter((m) => m.level === "PKD").length}
-              </h3>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 shadow-none">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
-              <Award className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                PKL & PKN
-              </p>
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mt-0.5">
-                {members.filter((m) => m.level === "PKL" || m.level === "PKN").length}
-              </h3>
-            </div>
-          </div>
-        </Card>
       </div>
 
       {/* FILTER PANEL */}
       <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none p-3">
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <div className="relative w-full sm:max-w-xs">
+        <div className="flex flex-col md:flex-row gap-2.5 items-stretch md:items-center justify-between">
+          <div className="relative w-full md:max-w-xs">
             <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <Input
               type="text"
               placeholder="Cari nama, NIPA, kampus..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100"
+              className="pl-8 h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100 w-full"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
-            <div className="flex items-center gap-1.5 text-zinc-500 text-xs font-medium mr-1">
-              <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Filter:</span>
-            </div>
-
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full md:w-auto">
             <Select value={levelFilter} onValueChange={(val) => setLevelFilter(val ?? "ALL")}>
-              <SelectTrigger className="h-8.5 w-[140px] text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
+              <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[130px]">
                 <SelectValue placeholder="Kaderisasi" />
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
@@ -756,7 +1032,7 @@ export default function AnggotaPage() {
                 value={komisariatFilter}
                 onValueChange={(val) => setKomisariatFilter(val ?? "ALL")}
               >
-                <SelectTrigger className="h-8.5 w-[160px] text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[160px]">
                   <SelectValue placeholder="Komisariat" />
                 </SelectTrigger>
                 <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
@@ -777,7 +1053,7 @@ export default function AnggotaPage() {
                   setKomisariatFilter("ALL");
                   setSearchTerm("");
                 }}
-                className="h-8.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer px-2"
+                className="col-span-2 sm:col-span-1 h-8.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer px-2"
               >
                 Reset
               </Button>
@@ -786,169 +1062,400 @@ export default function AnggotaPage() {
         </div>
       </Card>
 
-      {/* TABLE */}
+      {/* DATA CONTAINER (Mobile Cards View & Desktop Table View) */}
       <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none overflow-hidden">
-        <Table>
-          <TableHeader className="bg-zinc-50/70 dark:bg-zinc-950/70 border-b border-zinc-200 dark:border-zinc-800">
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider pl-4 py-3">
-                Nama & NIPA
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
-                Komisariat
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
-                Tingkat
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
-                Jabatan
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
-                Angkatan
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
-                Status
-              </TableHead>
-              <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider text-center pr-4 py-3">
-                Aksi
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-            {currentMembers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-36 text-center text-xs text-zinc-400">
-                  Tidak ada data anggota yang sesuai filter.
-                </TableCell>
-              </TableRow>
-            ) : (
-              currentMembers.map((member) => {
-                const initials = member.name
-                  .split(" ")
-                  .slice(-2)
-                  .map((n) => n[0])
-                  .join("")
-                  .toUpperCase();
-
-                const photoSrc =
-                  member.avatar ||
-                  (member.pasFotoName &&
-                  (member.pasFotoName.startsWith("data:") ||
-                    member.pasFotoName.startsWith("http") ||
-                    member.pasFotoName.startsWith("/"))
-                    ? member.pasFotoName
-                    : "");
-
-                return (
-                  <TableRow
-                    key={member.id}
-                    className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40 border-b border-zinc-100 dark:border-zinc-800/80 transition-colors"
-                  >
-                    {/* Nama & NIPA */}
-                    <TableCell className="pl-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 shrink-0 overflow-hidden">
-                          {photoSrc && (
-                            <AvatarImage
-                              src={photoSrc}
-                              alt={member.name}
-                              className="object-cover w-full h-full"
-                            />
-                          )}
-                          <AvatarFallback className="bg-blue-600 text-white font-bold text-[11px] rounded-lg">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate block">
-                            {member.name}
-                          </span>
-                          <span className="text-[10px] font-mono text-zinc-400 block mt-0.5">
-                            {member.nipa || "-"}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    {/* Komisariat */}
-                    <TableCell className="py-3 text-xs text-zinc-600 dark:text-zinc-300">
-                      {member.komisariat}
-                    </TableCell>
-
-                    {/* Tingkat */}
-                    <TableCell className="py-3">
-                      {getLevelBadge(member.level)}
-                    </TableCell>
-
-                    {/* Jabatan */}
-                    <TableCell className="py-3 text-xs text-zinc-600 dark:text-zinc-300">
-                      {member.jabatan || "Anggota"}
-                    </TableCell>
-
-                    {/* Angkatan */}
-                    <TableCell className="py-3 font-mono text-xs text-zinc-500">
-                      {member.angkatan}
-                    </TableCell>
-
-                    {/* Status */}
-                    <TableCell className="py-3">
-                      {getStatusBadge(member.status)}
-                    </TableCell>
-
-                    {/* Aksi */}
-                    <TableCell className="text-center pr-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setDetailMember(member);
-                            setShowDetailModal(true);
-                          }}
-                          className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
-                          title="Detail Profil & KTA"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingMember(member);
-                            setShowEditModal(true);
-                          }}
-                          className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-                          title="Edit Anggota"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setDeletingMember(member);
-                            setShowDeleteModal(true);
-                          }}
-                          className="h-7 w-7 p-0 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                          title="Hapus Anggota"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
+        {/* 1. MOBILE CARD VIEW (< md) */}
+        <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {/* Header Mobile: Checkbox Master & Info */}
+          <div className="p-3 bg-zinc-50/80 dark:bg-zinc-950/80 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isAllCurrentSelected ? true : isSomeCurrentSelected ? "indeterminate" : false}
+                onCheckedChange={handleSelectAllCurrent}
+                id="select-all-mobile"
+              />
+              <label htmlFor="select-all-mobile" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                Pilih Semua ({currentMembers.length})
+              </label>
+            </div>
+            {selectedMemberIds.length > 0 && (
+              <Badge className="bg-blue-600 text-white text-[10px] font-medium">
+                {selectedMemberIds.length} Terpilih
+              </Badge>
             )}
-          </TableBody>
-        </Table>
+          </div>
 
-        {/* PAGINATION */}
-        <div className="p-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-zinc-500">
-          <span>
+          {currentMembers.length === 0 ? (
+            <div className="p-8 text-center text-xs text-zinc-400">
+              Tidak ada data anggota yang sesuai filter.
+            </div>
+          ) : (
+            currentMembers.map((member) => {
+              const initials = member.name
+                .split(" ")
+                .slice(-2)
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase();
+
+              const photoSrc =
+                member.avatar ||
+                (member.pasFotoName &&
+                (member.pasFotoName.startsWith("data:") ||
+                  member.pasFotoName.startsWith("http") ||
+                  member.pasFotoName.startsWith("/"))
+                  ? member.pasFotoName
+                  : "");
+
+              const isSelected = selectedMemberIds.includes(member.id);
+              const isIncomplete = !member.nik || !member.phone || !member.email;
+
+              return (
+                <div
+                  key={member.id}
+                  className={`p-3.5 transition-colors space-y-2.5 ${
+                    isSelected
+                      ? "bg-blue-50/70 dark:bg-blue-950/30"
+                      : "hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40"
+                  }`}
+                >
+                  {/* Top Bar: Checkbox + Avatar + Name + Badges */}
+                  <div className="flex items-start gap-2.5">
+                    <div className="pt-0.5">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => handleToggleSelectMember(member.id)}
+                      />
+                    </div>
+
+                    <Avatar className="w-10 h-10 rounded-lg border border-zinc-200 dark:border-zinc-800 shrink-0 overflow-hidden">
+                      {photoSrc && (
+                        <AvatarImage src={photoSrc} alt={member.name} className="object-cover w-full h-full" />
+                      )}
+                      <AvatarFallback className="bg-blue-600 text-white font-bold text-xs rounded-lg">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <span className="text-xs font-bold text-zinc-900 dark:text-white leading-tight">
+                          {member.name}
+                        </span>
+                        <div className="shrink-0">{getStatusBadge(member.status)}</div>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className="text-[10px] font-mono text-zinc-400">
+                          {member.nipa || "-"}
+                        </span>
+                        {isIncomplete && (
+                          <span className="inline-block text-[9px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900/40">
+                            Perlu Dilengkapi
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Info Summary Grid */}
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-zinc-50 dark:bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800/70">
+                    <div>
+                      <span className="text-zinc-400 block text-[10px]">Komisariat:</span>
+                      <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate block">
+                        {member.komisariat}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-400 block text-[10px]">Tingkat:</span>
+                      <div className="mt-0.5">{getLevelBadge(member.level)}</div>
+                    </div>
+                    <div>
+                      <span className="text-zinc-400 block text-[10px]">Jabatan:</span>
+                      <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate block">
+                        {member.jabatan || "Anggota"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-400 block text-[10px]">Angkatan:</span>
+                      <span className="font-mono text-zinc-600 dark:text-zinc-400">
+                        {member.angkatan}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Bar (Touch-Friendly Buttons for Mobile) */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSharingMember(member);
+                        setShowShareLinkModal(true);
+                      }}
+                      className="flex-1 h-8 text-[11px] font-semibold border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 rounded-lg"
+                    >
+                      <Share2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Kirim WA</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDetailMember(member);
+                        setShowDetailModal(true);
+                      }}
+                      className="h-8 px-2.5 text-[11px] font-medium border-zinc-200 dark:border-zinc-800 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 gap-1 rounded-lg"
+                      title="Detail & KTA"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">KTA</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingMember(member);
+                        setShowEditModal(true);
+                      }}
+                      className="h-8 px-2.5 text-[11px] font-medium border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"
+                      title="Edit Anggota"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDeletingMember(member);
+                        setShowDeleteModal(true);
+                      }}
+                      className="h-8 px-2.5 text-[11px] font-medium border-rose-200 dark:border-rose-900/50 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg"
+                      title="Hapus Anggota"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* 2. DESKTOP TABLE VIEW (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-zinc-50/70 dark:bg-zinc-950/70 border-b border-zinc-200 dark:border-zinc-800">
+              <TableRow className="hover:bg-transparent">
+                {/* Master Checkbox */}
+                <TableHead className="w-10 px-4 py-3">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      checked={isAllCurrentSelected ? true : isSomeCurrentSelected ? "indeterminate" : false}
+                      onCheckedChange={handleSelectAllCurrent}
+                      title="Pilih Semua di Halaman Ini"
+                    />
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider pl-2 py-3">
+                  Nama & NIPA
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
+                  Komisariat
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
+                  Tingkat
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
+                  Jabatan
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
+                  Angkatan
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider py-3">
+                  Status
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider text-center pr-4 py-3">
+                  Aksi
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {currentMembers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-36 text-center text-xs text-zinc-400">
+                    Tidak ada data anggota yang sesuai filter.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                currentMembers.map((member) => {
+                  const initials = member.name
+                    .split(" ")
+                    .slice(-2)
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase();
+
+                  const photoSrc =
+                    member.avatar ||
+                    (member.pasFotoName &&
+                    (member.pasFotoName.startsWith("data:") ||
+                      member.pasFotoName.startsWith("http") ||
+                      member.pasFotoName.startsWith("/"))
+                      ? member.pasFotoName
+                      : "");
+
+                  const isSelected = selectedMemberIds.includes(member.id);
+
+                  return (
+                    <TableRow
+                      key={member.id}
+                      className={`border-b border-zinc-100 dark:border-zinc-800/80 transition-colors ${
+                        isSelected
+                          ? "bg-blue-50/70 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-900/30"
+                          : "hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40"
+                      }`}
+                    >
+                      {/* Row Checkbox */}
+                      <TableCell className="w-10 px-4 py-3">
+                        <div className="flex items-center justify-center">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleToggleSelectMember(member.id)}
+                            title={`Pilih ${member.name}`}
+                          />
+                        </div>
+                      </TableCell>
+
+                      {/* Nama & NIPA */}
+                      <TableCell className="pl-2 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 shrink-0 overflow-hidden">
+                            {photoSrc && (
+                              <AvatarImage
+                                src={photoSrc}
+                                alt={member.name}
+                                className="object-cover w-full h-full"
+                              />
+                            )}
+                            <AvatarFallback className="bg-blue-600 text-white font-bold text-[11px] rounded-lg">
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate block">
+                              {member.name}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] font-mono text-zinc-400 block">
+                                {member.nipa || "-"}
+                              </span>
+                              {(!member.nik || !member.phone || !member.email) && (
+                                <span className="inline-block text-[9px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900/40">
+                                  Perlu Dilengkapi
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Komisariat */}
+                      <TableCell className="py-3 text-xs text-zinc-600 dark:text-zinc-300">
+                        {member.komisariat}
+                      </TableCell>
+
+                      {/* Tingkat */}
+                      <TableCell className="py-3">
+                        {getLevelBadge(member.level)}
+                      </TableCell>
+
+                      {/* Jabatan */}
+                      <TableCell className="py-3 text-xs text-zinc-600 dark:text-zinc-300">
+                        {member.jabatan || "Anggota"}
+                      </TableCell>
+
+                      {/* Angkatan */}
+                      <TableCell className="py-3 font-mono text-xs text-zinc-500">
+                        {member.angkatan}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell className="py-3">
+                        {getStatusBadge(member.status)}
+                      </TableCell>
+
+                      {/* Aksi */}
+                      <TableCell className="text-center pr-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSharingMember(member);
+                              setShowShareLinkModal(true);
+                            }}
+                            className="h-7 w-7 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
+                            title="Bagikan Tautan Lengkapi Data (WhatsApp / Link)"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDetailMember(member);
+                              setShowDetailModal(true);
+                            }}
+                            className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
+                            title="Detail Profil & KTA"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingMember(member);
+                              setShowEditModal(true);
+                            }}
+                            className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                            title="Edit Anggota"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDeletingMember(member);
+                              setShowDeleteModal(true);
+                            }}
+                            className="h-7 w-7 p-0 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                            title="Hapus Anggota"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* PAGINATION (Responsive Stack on Mobile, Inline on Desktop) */}
+        <div className="p-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-0 text-xs text-zinc-500">
+          <span className="text-[11px] sm:text-xs text-zinc-400">
             Menampilkan {currentMembers.length} dari {filteredMembers.length} kader
           </span>
 
@@ -1020,6 +1527,46 @@ export default function AnggotaPage() {
         }}
         onConfirm={handleDeleteMember}
       />
+
+      <ImportMemberModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={handleImportMembers}
+        defaultKomisariat={currentUser?.commissariat || "PK PMII Ki Ageng Getas Pendawa"}
+        currentMemberCount={members.length}
+      />
+
+      <ShareMemberLinkModal
+        isOpen={showShareLinkModal}
+        onClose={() => {
+          setShowShareLinkModal(false);
+          setSharingMember(null);
+        }}
+        member={sharingMember}
+        onShowToast={showToast}
+      />
+
+      {/* FLOATING BULK ACTION BAR */}
+      <MemberBulkActionBar
+        selectedCount={selectedMemberIds.length}
+        onClearSelection={() => setSelectedMemberIds([])}
+        onBulkActivate={handleBulkActivateMembers}
+        onBulkDeactivate={handleBulkDeactivateMembers}
+        onBulkGraduate={handleBulkGraduateMembers}
+        onOpenBulkDelete={() => setIsBulkDeleteOpen(true)}
+        isProcessing={isBulkProcessing}
+      />
+
+      {/* BULK DELETE CONFIRMATION DIALOG */}
+      <MemberBulkDeleteDialog
+        isOpen={isBulkDeleteOpen}
+        onClose={() => setIsBulkDeleteOpen(false)}
+        selectedCount={selectedMemberIds.length}
+        onConfirm={handleBulkDeleteMembers}
+        isProcessing={isBulkProcessing}
+      />
+
+      {FeedbackModalComponent}
     </div>
   );
 }

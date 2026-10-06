@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS pengurus (
   role TEXT DEFAULT 'pengurus',
   position TEXT,
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT DEFAULT '',
   period TEXT NOT NULL,
   phone TEXT,
   email TEXT,

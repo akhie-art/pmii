@@ -18,6 +18,5 @@ CREATE TABLE IF NOT EXISTS arsip (
   "isStarred" BOOLEAN DEFAULT false NOT NULL,
   url TEXT,
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

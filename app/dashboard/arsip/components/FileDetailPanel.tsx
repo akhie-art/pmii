@@ -15,6 +15,7 @@ interface Props {
   setDocuments: (docs: DocumentItem[]) => void;
   setSelectedDoc: (doc: DocumentItem | null) => void;
   onPreviewClick?: () => void;
+  onDeleteClick?: (docId: string) => void;
 }
 
 interface ExcelCsvPreviewProps {
@@ -109,9 +110,9 @@ export function ExcelCsvPreview({ fileUrl, title }: ExcelCsvPreviewProps) {
     }
 
     return (
-      <div className="w-full h-full flex flex-col bg-white dark:bg-[#0c1222] overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <div className="w-full h-full flex flex-col bg-white dark:bg-zinc-900 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
         {/* Spreadsheet Header Bar */}
-        <div className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-4 py-2.5 flex items-center justify-between">
+        <div className="bg-zinc-50 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-emerald-500/10 text-emerald-600 rounded-lg shrink-0">
               <FileSpreadsheet className="w-4 h-4" />
@@ -151,7 +152,7 @@ export function ExcelCsvPreview({ fileUrl, title }: ExcelCsvPreviewProps) {
                 <tr 
                   key={rowIdx} 
                   className={`border-b border-zinc-150 dark:border-zinc-800/60 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors ${
-                    rowIdx % 2 === 0 ? "bg-white dark:bg-[#0c1222]" : "bg-zinc-50/30 dark:bg-zinc-950/20"
+                    rowIdx % 2 === 0 ? "bg-white dark:bg-zinc-900" : "bg-zinc-50/30 dark:bg-zinc-950/20"
                   }`}
                 >
                   <td className="text-center font-mono py-2 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-zinc-400 font-bold select-none">{rowIdx + 1}</td>
@@ -176,7 +177,7 @@ export function ExcelCsvPreview({ fileUrl, title }: ExcelCsvPreviewProps) {
 
   if (loading) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white dark:bg-[#090d16] p-8 space-y-3">
+      <div className="w-full h-full flex flex-col items-center justify-center bg-white dark:bg-zinc-900 p-8 space-y-3">
         <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         <span className="text-xs font-bold text-zinc-500">Membaca file data...</span>
       </div>
@@ -197,7 +198,7 @@ export function ExcelCsvPreview({ fileUrl, title }: ExcelCsvPreviewProps) {
   return renderMockOrRealTable();
 }
 
-export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handleDownload, documents, setDocuments, setSelectedDoc, onPreviewClick }: Props) {
+export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handleDownload, documents, setDocuments, setSelectedDoc, onPreviewClick, onDeleteClick }: Props) {
   if (!selectedDoc) {
     return (
       <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg p-5 shadow-none overflow-hidden h-full flex flex-col items-center justify-center">
@@ -211,7 +212,9 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
   }
 
   const handleDelete = () => {
-    if (confirm("Apakah Sahabat yakin ingin menghapus berkas ini dari arsip digital?")) {
+    if (onDeleteClick) {
+      onDeleteClick(selectedDoc.id);
+    } else {
       const updated = documents.filter(d => d.id !== selectedDoc.id);
       setDocuments(updated);
       setSelectedDoc(updated[0] || null);
@@ -320,21 +323,21 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
     if (fileType === "FORM" || titleLower.includes("kogniti") || titleLower.includes("kuesioner")) {
       return (
         <div className="w-full h-full flex flex-col bg-zinc-50 dark:bg-zinc-950 p-2 select-none text-left relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#7248b9]" />
-          <div className="w-full h-full bg-white dark:bg-[#0c1222] border border-zinc-200 dark:border-zinc-800 rounded-md p-2 mt-1 shadow-2xs flex flex-col space-y-2.5 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-purple-600" />
+          <div className="w-full h-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-2 mt-1 shadow-2xs flex flex-col space-y-2.5 overflow-hidden">
             <div className="border-b border-purple-100 dark:border-purple-950 pb-1.5 space-y-0.5">
-              <div className="text-[6.5px] font-black text-zinc-800 dark:text-zinc-200 truncate leading-tight">
+              <div className="text-[6.5px] font-bold text-zinc-800 dark:text-zinc-200 truncate leading-tight">
                 Analisis Preferensi Kognitif & Arah Karier Mahasiswa
               </div>
-              <div className="text-[4px] text-red-500 font-bold">* Menunjukkan pertanyaan wajib</div>
+              <div className="text-[4px] text-rose-500 font-semibold">* Menunjukkan pertanyaan wajib</div>
             </div>
             <div className="space-y-1.5 flex-1">
               <div className="space-y-0.5">
-                <div className="text-[5px] font-bold text-zinc-700 dark:text-zinc-300">Nama Lengkap *</div>
+                <div className="text-[5px] font-medium text-zinc-700 dark:text-zinc-300">Nama Lengkap *</div>
                 <div className="h-0.5 border-b border-dotted border-zinc-300 dark:border-zinc-700 w-11/12" />
               </div>
               <div className="space-y-0.5">
-                <div className="text-[5px] font-bold text-zinc-700 dark:text-zinc-300">Kampus *</div>
+                <div className="text-[5px] font-medium text-zinc-700 dark:text-zinc-300">Kampus *</div>
                 <div className="h-0.5 border-b border-dotted border-zinc-300 dark:border-zinc-700 w-11/12" />
               </div>
             </div>
@@ -346,10 +349,10 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
     if (fileType === "EXCEL") {
       const isSiakad = titleLower.includes("siakad") || titleLower.includes("kaderisasi") || titleLower.includes("anggota");
       return (
-        <div className="w-full h-full flex flex-col bg-white dark:bg-[#0c1222] select-none border-b border-zinc-100 dark:border-zinc-900 rounded-md p-1.5 overflow-hidden">
+        <div className="w-full h-full flex flex-col bg-white dark:bg-zinc-900 select-none border-b border-zinc-100 dark:border-zinc-800 rounded-md p-1.5 overflow-hidden">
           {isSiakad ? (
-            <div className="flex-1 flex flex-col border border-zinc-200 dark:border-zinc-800 rounded-sm overflow-hidden bg-white dark:bg-[#0b1329]">
-              <div className="bg-[#0a2a5c] h-3 px-1 text-[4px] font-bold text-white flex items-center justify-between border-b border-zinc-300 dark:border-zinc-800 select-none">
+            <div className="flex-1 flex flex-col border border-zinc-200 dark:border-zinc-800 rounded-sm overflow-hidden bg-white dark:bg-zinc-950">
+              <div className="bg-blue-700 h-3 px-1 text-[4px] font-bold text-white flex items-center justify-between border-b border-blue-800 select-none">
                 <div className="w-[12%] text-center border-r border-white/20">No</div>
                 <div className="w-[28%] pl-0.5 border-r border-white/20 truncate">Nama Lengkap</div>
                 <div className="w-[20%] text-center border-r border-white/20 truncate">PKD/PKL</div>
@@ -367,16 +370,16 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
                     className="h-2.5 px-1 text-[3.8px] font-medium flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900/60 bg-white dark:bg-zinc-950"
                   >
                     <div className="w-[12%] text-center text-zinc-500 font-mono border-r border-zinc-100 dark:border-zinc-900">{row.no}</div>
-                    <div className="w-[28%] pl-0.5 font-bold text-zinc-800 dark:text-zinc-200 border-r border-zinc-100 dark:border-zinc-900 truncate">{row.nama}</div>
+                    <div className="w-[28%] pl-0.5 font-semibold text-zinc-800 dark:text-zinc-200 border-r border-zinc-100 dark:border-zinc-900 truncate">{row.nama}</div>
                     <div className="w-[20%] text-center text-zinc-600 dark:text-zinc-400 border-r border-zinc-100 dark:border-zinc-900">{row.level}</div>
                     <div className="w-[20%] text-center text-zinc-600 dark:text-zinc-400 border-r border-zinc-100 dark:border-zinc-900 truncate">{row.cabang}</div>
-                    <div className="w-[20%] text-center text-emerald-600 font-bold">{row.status}</div>
+                    <div className="w-[20%] text-center text-emerald-600 font-semibold">{row.status}</div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col border border-zinc-200 dark:border-zinc-800 rounded-sm overflow-hidden bg-white dark:bg-[#0b1329]">
+            <div className="flex-1 flex flex-col border border-zinc-200 dark:border-zinc-800 rounded-sm overflow-hidden bg-white dark:bg-zinc-950">
               <div className="grid grid-cols-5 gap-0.5 border-b border-zinc-200 dark:border-zinc-800 text-[4px] font-bold text-zinc-400 dark:text-zinc-500 text-center pb-0.5 bg-zinc-50 dark:bg-zinc-900">
                 <div className="py-0.5 border-r border-zinc-200 dark:border-zinc-800">A</div>
                 <div className="py-0.5 border-r border-zinc-200 dark:border-zinc-800">B</div>
@@ -388,7 +391,7 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
                 {Array.from({ length: 10 }).map((_, idx) => (
                   <div 
                     key={idx} 
-                    className="bg-white dark:bg-zinc-950 flex items-center justify-center text-[4px] font-semibold text-zinc-700 dark:text-zinc-300 truncate px-0.5 h-2.5 border border-zinc-50"
+                    className="bg-white dark:bg-zinc-950 flex items-center justify-center text-[4px] font-semibold text-zinc-700 dark:text-zinc-300 truncate px-0.5 h-2.5 border border-zinc-50 dark:border-zinc-900"
                   >
                     {idx === 0 ? "id" : idx === 1 ? "username" : idx === 2 ? "amount" : idx === 3 ? "date" : idx === 4 ? "status" : ""}
                   </div>
@@ -405,20 +408,20 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
       return (
         <div className="w-full h-full flex bg-zinc-50 dark:bg-zinc-950 p-1.5 select-none overflow-hidden">
           {isCv ? (
-            <div className="flex-1 bg-white dark:bg-[#0b1329] border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-2 flex flex-col justify-between text-left overflow-hidden">
+            <div className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-2 flex flex-col justify-between text-left overflow-hidden">
               <div className="border-b border-zinc-150 dark:border-zinc-800 pb-1 flex justify-between items-start">
-                <div className="text-[6.5px] font-black text-zinc-900 dark:text-white truncate max-w-[80px]">CV Akhie Najhan.pdf</div>
-                <div className="text-[4.5px] bg-red-100 text-red-700 px-1 py-0.2 rounded-xs font-black">PDF</div>
+                <div className="text-[6.5px] font-bold text-zinc-900 dark:text-white truncate max-w-[80px]">CV Akhie Najhan.pdf</div>
+                <div className="text-[4.5px] bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 px-1 py-0.2 rounded-xs font-bold">PDF</div>
               </div>
               <div className="space-y-0.5 mt-1 border-b border-zinc-100 dark:border-zinc-900 pb-1">
-                <div className="text-[4px] font-black text-pmii-blue dark:text-pmii-gold">PROFIL</div>
+                <div className="text-[4px] font-bold text-blue-600 dark:text-blue-400">PROFIL</div>
                 <p className="text-[3px] text-zinc-500 leading-normal line-clamp-2">
                   Saya adalah seorang mahasiswa semester 7 Program Studi Ilmu Komputer...
                 </p>
               </div>
             </div>
           ) : (
-            <div className="flex-1 bg-white dark:bg-[#0b1329] border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-2 flex flex-col justify-between text-left overflow-hidden">
+            <div className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-2 flex flex-col justify-between text-left overflow-hidden">
               <div className="border-b border-zinc-200 dark:border-zinc-800 pb-1 text-center font-bold text-[5px] text-rose-500 tracking-wider">
                 SURAT RESMI CABANG PMII
               </div>
@@ -435,8 +438,8 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
     if (fileType === "WORD") {
       return (
         <div className="w-full h-full flex bg-zinc-50 dark:bg-zinc-950 p-1.5 select-none overflow-hidden">
-          <div className="flex-1 bg-white dark:bg-[#0b1329] border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-2 flex flex-col justify-between text-left overflow-hidden">
-            <div className="border-b border-zinc-150 dark:border-zinc-800 pb-1 text-left font-bold text-[6px] text-blue-500 tracking-wide truncate">
+          <div className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-2 flex flex-col justify-between text-left overflow-hidden">
+            <div className="border-b border-zinc-150 dark:border-zinc-800 pb-1 text-left font-semibold text-[6px] text-blue-500 tracking-wide truncate">
               {selectedDoc.title}
             </div>
             <div className="space-y-1 pt-1 flex-1">
@@ -451,7 +454,7 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
     if (fileType === "JSON") {
       return (
         <div className="w-full h-full flex bg-zinc-50 dark:bg-zinc-950 p-1.5 select-none overflow-hidden">
-          <div className="flex-1 bg-white dark:bg-[#0b1329] border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-1.5 flex flex-col justify-between text-left overflow-hidden">
+          <div className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-sm shadow-2xs p-1.5 flex flex-col justify-between text-left overflow-hidden">
             <div className="font-mono text-[3.8px] leading-normal text-zinc-500 flex-1 overflow-hidden space-y-0.5">
               <div><span className="text-purple-600 font-bold">{"{"}</span></div>
               <div className="pl-1.5"><span className="text-blue-600">"applet_id"</span>: <span className="text-green-600">"8cb113f"</span></div>
@@ -471,48 +474,61 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
   };
 
   return (
-    <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg p-5 shadow-none overflow-hidden relative">
+    <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-xl p-5 shadow-none overflow-hidden relative">
       <div className="space-y-5">
         <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-          <span className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block font-mono">Detail File</span>
-          <button onClick={() => setShowRightPanel(false)} className="w-6 h-6 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors border-none cursor-pointer">
+          <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block font-mono">Detail Berkas</span>
+          <button onClick={() => setShowRightPanel(false)} className="w-6 h-6 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors border-none cursor-pointer">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="h-40 w-full bg-white dark:bg-[#0c1222] rounded-xl flex items-center justify-center overflow-hidden border border-zinc-200 dark:border-zinc-800 relative shadow-inner group/preview">
+        <div className="h-40 w-full bg-zinc-50 dark:bg-zinc-950/60 rounded-xl flex items-center justify-center overflow-hidden border border-zinc-200 dark:border-zinc-800 relative shadow-inner group/preview">
           {renderDetailPreview()}
         </div>
 
         <div className="space-y-3.5">
           <div className="space-y-1">
-            <h3 className="text-xs font-black text-zinc-800 dark:text-white leading-relaxed">{selectedDoc.title}</h3>
+            <h3 className="text-xs font-bold text-zinc-800 dark:text-white leading-relaxed">{selectedDoc.title}</h3>
             <CategoryBadge category={selectedDoc.category} />
           </div>
           <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400 text-justify border-t border-zinc-100 dark:border-zinc-800 pt-3">{textDescription}</p>
           
           <div className="space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3.5 text-[10px] font-sans">
-            <div className="flex justify-between"><span className="text-zinc-400 font-bold uppercase tracking-wider">Akses</span><span><AccessBadge access={selectedDoc.access} /></span></div>
-            <div className="flex justify-between"><span className="text-zinc-400 font-bold uppercase tracking-wider">Tahun</span><span className="font-bold font-mono text-zinc-700 dark:text-zinc-300">{selectedDoc.year}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-400 font-bold uppercase tracking-wider">Ukuran</span><span className="font-semibold font-mono text-zinc-700 dark:text-zinc-300">{selectedDoc.size}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-400 font-bold uppercase tracking-wider">Arsipir</span><span className="font-semibold text-zinc-700 dark:text-zinc-300">{selectedDoc.uploader}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-400 font-bold uppercase tracking-wider">Tanggal</span><span className="font-semibold text-zinc-700 dark:text-zinc-300">{selectedDoc.uploadedDate}</span></div>
+            <div className="flex justify-between"><span className="text-zinc-400 font-medium uppercase tracking-wider">Akses</span><span><AccessBadge access={selectedDoc.access} /></span></div>
+            <div className="flex justify-between"><span className="text-zinc-400 font-medium uppercase tracking-wider">Tahun</span><span className="font-semibold font-mono text-zinc-700 dark:text-zinc-300">{selectedDoc.year}</span></div>
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-400 font-medium uppercase tracking-wider">Pengunggah</span>
+              <div className="flex items-center gap-1.5">
+                {selectedDoc.uploaderAvatar ? (
+                  <div className="w-4 h-4 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 shrink-0">
+                    <img src={selectedDoc.uploaderAvatar} alt={selectedDoc.uploader} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-4 h-4 rounded-full bg-blue-600 text-white font-bold text-[7.5px] flex items-center justify-center shrink-0">
+                    {(selectedDoc.uploader || "AD").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{selectedDoc.uploader}</span>
+              </div>
+            </div>
+            <div className="flex justify-between"><span className="text-zinc-400 font-medium uppercase tracking-wider">Tanggal</span><span className="font-semibold text-zinc-700 dark:text-zinc-300">{selectedDoc.uploadedDate}</span></div>
           </div>
         </div>
 
         <div className="space-y-2.5 pt-3.5 border-t border-zinc-100 dark:border-zinc-800">
           <Button 
             onClick={onPreviewClick}
-            className="w-full bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-white font-bold text-xs py-2 h-9 rounded-xl border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            className="w-full bg-zinc-50 dark:bg-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-white font-semibold text-xs py-2 h-9 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs"
           >
             <Eye className="w-4 h-4" /> Pratinjau Berkas
           </Button>
 
           <div className="grid grid-cols-2 gap-2">
-            <Button onClick={() => handleDownload(selectedDoc.id)} className="bg-pmii-blue text-white dark:bg-pmii-gold dark:text-[#090d16] font-bold text-xs rounded-xl border-none">
+            <Button onClick={() => handleDownload(selectedDoc.id)} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl h-9 cursor-pointer shadow-xs border-none">
               <Download className="w-4 h-4 mr-1.5" /> Unduh
             </Button>
-            <Button variant="outline" onClick={handleDelete} className="rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 text-xs font-bold">
+            <Button variant="outline" onClick={handleDelete} className="rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 text-xs font-semibold h-9 cursor-pointer">
               <Trash2 className="w-4 h-4 mr-1.5" /> Hapus
             </Button>
           </div>

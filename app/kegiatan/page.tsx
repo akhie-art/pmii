@@ -11,13 +11,31 @@ export default function DirectKegiatanRedirectPage() {
       const search = window.location.search;
       const params = new URLSearchParams(search);
       const eventId = params.get("event") || params.get("id");
+      const level = params.get("level") || params.get("kaderisasi");
 
       const activeCadreId = localStorage.getItem("PMII_ACTIVE_CADRE_ID");
       const savedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
 
+      let role = "peserta";
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          if (parsed?.role) {
+            const r = parsed.role.toLowerCase();
+            if (r === "admin" || r === "pengurus" || r === "komisariat") {
+              role = r === "admin" ? "admin" : "pengurus";
+            } else {
+              role = r;
+            }
+          }
+        } catch (e) {}
+      }
+
       const targetDestination = eventId
-        ? `/kader/kegiatan?event=${encodeURIComponent(eventId)}`
-        : `/kader/kegiatan`;
+        ? `/${role}/kegiatan?event=${encodeURIComponent(eventId)}`
+        : level
+        ? `/${role}/kegiatan?level=${encodeURIComponent(level)}`
+        : `/${role}/kegiatan`;
 
       if (!activeCadreId && !savedUser) {
         router.replace(`/login?redirect=${encodeURIComponent(targetDestination)}`);

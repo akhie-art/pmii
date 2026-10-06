@@ -3,32 +3,52 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   FileText,
-  Building,
-  Settings,
-  ChevronUp,
-  ChevronDown,
   Printer,
   X,
-  Image as ImageIcon,
   Plus,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
-  FileSpreadsheet,
-  Layers,
-  Columns,
   Sparkles,
   Check,
   Info,
+  Bookmark,
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  RefreshCw,
+  Loader2,
+  FileCode,
+  MapPin,
   Calendar,
-  User,
-  ArrowRight,
-  Bookmark
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  RotateCcw,
+  Upload,
+  FileSpreadsheet,
+  Tag,
+  Eye,
+  Edit3,
+  Layers
 } from "lucide-react";
+import PizZip from "pizzip";
+import * as XLSX from "xlsx";
+import { toast } from "sonner";
+import { db, SuratTemplate } from "@/lib/db";
+import {
+  base64ToArrayBuffer,
+  fillDocxTemplate,
+  parseTemplateContent,
+  downloadDocxBlob
+} from "./docx-template-helper";
+import { LetterNumberingBoxes } from "./letter-numbering-boxes";
+import { LetterExcelImporter } from "./letter-excel-importer";
+import { LetterDocxPlaceholders } from "./letter-docx-placeholders";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+
 import {
   Dialog,
   DialogContent,
@@ -47,92 +67,223 @@ import {
   SelectItem
 } from "@/components/ui/select";
 
-interface LetterGeneratorDialogProps {
-  onPublish: (newMailData: {
-    nomor: string;
-    recipient: string;
-    subject: string;
-    classification: "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi";
-    content: string;
-    senderTitle: string;
-    senderLocation: string;
-  }) => void;
-}
-
-const TEMPLATES: Record<
-  string,
-  {
-    subject: string;
-    classification: "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi";
-    content: string;
-    senderTitle: string;
-    senderLocation: string;
-  }
-> = {
-  undangan: {
-    subject: "Undangan Rapat Pleno Pengurus Cabang",
-    classification: "Undangan",
-    content: `Assalamu'alaikum Warahmatullahi Wabarakatuh<br><br>Salam silaturrahim teriring doa kami sampaikan semoga Sahabat-sahabat senantiasa dalam lindungan Allah SWT, serta eksis dalam menjalankan aktivitas keseharian. Amin.<br><br>Sehubungan dengan akan dilaksanakannya agenda Rapat Pleno Pengurus Cabang PMII guna membahas evaluasi program kerja dan persiapan agenda kaderisasi, maka dengan ini kami mengundang seluruh jajaran Pengurus untuk dapat hadir pada:<br><br><table style="border-collapse: collapse; margin: 4px 0 10px 0; font-size: inherit; font-family: inherit; width: 100%; max-width: 480px;"><tbody><tr><td style="padding: 2px 0; width: 105px; vertical-align: top;">Hari, Tanggal</td><td style="padding: 2px 6px; width: 15px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">Sabtu, 30 Mei 2026</td></tr><tr><td style="padding: 2px 0; vertical-align: top;">Waktu</td><td style="padding: 2px 6px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">19.30 WIB - Selesai</td></tr><tr><td style="padding: 2px 0; vertical-align: top;">Tempat</td><td style="padding: 2px 6px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">Sekretariat PC PMII</td></tr><tr><td style="padding: 2px 0; vertical-align: top;">Agenda</td><td style="padding: 2px 6px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">Rapat Pleno Pengurus Cabang</td></tr></tbody></table>Demikian surat undangan ini kami sampaikan, atas perhatian dan kehadiran Sahabat-sahabat kami ucapkan terima kasih.<br><br>Wallahul Muwaffieq Ilaa Aqwamith Tharieq<br>Wassalamu'alaikum Warahmatullahi Wabarakatuh`,
-    senderTitle: "Sahabat Ketua Umum",
-    senderLocation: "Semarang"
-  },
-  permohonan: {
-    subject: "Permohonan Izin Peminjaman Aula Gedung NU",
-    classification: "Permohonan",
-    content: `Assalamu'alaikum Warahmatullahi Wabarakatuh<br><br>Salam silaturrahim teriring doa kami sampaikan semoga Sahabat-sahabat senantiasa dalam lindungan Allah SWT, serta eksis dalam menjalankan aktivitas keseharian. Amin.<br><br>Sehubungan dengan akan diselenggarakannya agenda Pelatihan Kader Lanjut (PKL) oleh Pengurus Cabang Pergerakan Mahasiswa Islam Indonesia (PC PMII), maka dengan ini kami mengajukan permohonan izin peminjaman Aula Gedung PCNU yang rencananya akan dilaksanakan pada:<br><br><table style="border-collapse: collapse; margin: 4px 0 10px 0; font-size: inherit; font-family: inherit; width: 100%; max-width: 480px;"><tbody><tr><td style="padding: 2px 0; width: 105px; vertical-align: top;">Hari, Tanggal</td><td style="padding: 2px 6px; width: 15px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">Jumat - Senin, 12 - 15 Juni 2026</td></tr><tr><td style="padding: 2px 0; vertical-align: top;">Waktu</td><td style="padding: 2px 6px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">08.00 WIB - Selesai</td></tr><tr><td style="padding: 2px 0; vertical-align: top;">Tempat</td><td style="padding: 2px 6px; vertical-align: top; text-align: center;">:</td><td style="padding: 2px 0; vertical-align: top;">Aula Lantai 2 Gedung NU</td></tr></tbody></table>Sebagai bahan pertimbangan, bersama ini kami lampirkan proposal kegiatan. Demikian surat permohonan ini kami sampaikan, atas perhatian, izin dan kerjasama Bapak/Ibu kami ucapkan terima kasih.<br><br>Wallahul Muwaffieq Ilaa Aqwamith Tharieq<br>Wassalamu'alaikum Warahmatullahi Wabarakatuh`,
-    senderTitle: "Sahabat Ketua Umum",
-    senderLocation: "Semarang"
-  }
+const isCoreStandardKey = (key: string) => {
+  const lk = key.toLowerCase();
+  return (
+    lk === "nomor" ||
+    lk === "no" ||
+    lk === "perihal" ||
+    lk === "hal" ||
+    lk === "penerima" ||
+    lk === "kepada" ||
+    lk === "lokasi" ||
+    lk === "kota" ||
+    lk === "tanggal" ||
+    lk === "hari_tanggal"
+  );
 };
 
-export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDialogProps) {
+const humanizePlaceholderKey = (key: string): string => {
+  const lk = key.toLowerCase();
+  if (lk === "isi") return "Isi Surat / Redaksi Pokok";
+  if (lk === "kegiatan" || lk === "acara") return "Nama Kegiatan / Acara";
+  if (lk === "tema") return "Tema Kegiatan";
+  if (lk === "tempat") return "Tempat / Lokasi Kegiatan";
+  if (lk === "waktu" || lk === "pukul") return "Waktu / Pukul Pelaksanaan";
+  if (lk === "hari") return "Hari Pelaksanaan";
+  if (lk === "lampiran" || lk === "lamp") return "Lampiran Surat";
+  if (lk === "narasumber" || lk === "pemateri") return "Nama Narasumber / Pemateri";
+  if (lk === "nama") return "Nama Lengkap";
+  if (lk === "ketua") return "Nama Ketua / Pimpinan";
+  if (lk === "sekretaris") return "Nama Sekretaris";
+  if (lk === "peserta") return "Target Peserta";
+  if (lk === "keterangan" || lk === "catatan") return "Keterangan / Catatan Tambahan";
+
+  return key
+    .replace(/_/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
+};
+
+const isMultilineField = (key: string): boolean => {
+  const lk = key.toLowerCase();
+  return (
+    lk === "isi" ||
+    lk === "deskripsi" ||
+    lk === "agenda" ||
+    lk === "catatan" ||
+    lk === "keterangan" ||
+    lk.includes("konten") ||
+    lk.includes("materi")
+  );
+};
+
+interface LetterGeneratorDialogProps {
+  onPublish: (
+    newMailData:
+      | {
+          nomor: string;
+          recipient: string;
+          subject: string;
+          classification: "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi";
+          content: string;
+          senderTitle: string;
+          senderLocation: string;
+        }
+      | Array<{
+          nomor: string;
+          recipient: string;
+          subject: string;
+          classification: "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi";
+          content: string;
+          senderTitle: string;
+          senderLocation: string;
+        }>
+  ) => void;
+  existingMails?: any[];
+  onOpenTemplateManager?: () => void;
+  defaultMode?: "single" | "bulk";
+}
+
+export default function LetterGeneratorDialog({
+  onPublish,
+  existingMails,
+  onOpenTemplateManager,
+  defaultMode = "single"
+}: LetterGeneratorDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const excelInputRef = useRef<HTMLInputElement>(null);
+  const [letterMode, setLetterMode] = useState<"single" | "bulk">(defaultMode);
+  const [mailHistory, setMailHistory] = useState<any[]>(existingMails || []);
+  const [hasAutoFilled, setHasAutoFilled] = useState(false);
   const canvasTextareaRef = useRef<HTMLDivElement>(null);
-  const savedSelectionRef = useRef<Range | null>(null);
 
-  // Mode Pembuatan (SINGLE vs BULK)
-  const [generationMode, setGenerationMode] = useState<"single" | "bulk">("single");
+  // States khusus Surat Massal
+  const [bulkRecipientsText, setBulkRecipientsText] = useState<string>("");
+  const [isSequentialNumbering, setIsSequentialNumbering] = useState<boolean>(true);
+  const [previewBulkIndex, setPreviewBulkIndex] = useState<number>(0);
+  const [isBatchPrinting, setIsBatchPrinting] = useState<boolean>(false);
 
-  // Form States
-  const [createTemplate, setCreateTemplate] = useState<string>("undangan");
-  const [createRecipient, setCreateRecipient] = useState("Pengurus Komisariat PMII se-Kota Semarang");
-  const [createSubject, setCreateSubject] = useState(TEMPLATES.undangan.subject);
+  // Kolom & Data Baris Excel / Mail-Merge Kustom
+  const [excelColumns, setExcelColumns] = useState<{
+    key: string;
+    originalHeader: string;
+    sampleValue: string;
+  }[]>([]);
+  const [excelRowsData, setExcelRowsData] = useState<{
+    recipient: string;
+    data: Record<string, string>;
+  }[]>([]);
+
+  // Dialog Tambah Placeholder Kustom / Manual
+  const [isAddPlaceholderOpen, setIsAddPlaceholderOpen] = useState(false);
+  const [manualKeyInput, setManualKeyInput] = useState("");
+  const [manualValInput, setManualValInput] = useState("");
+
+  // Mode Tampilan Canvas HTML (Edit Template vs Pratinjau Terisi)
+  const [htmlCanvasMode, setHtmlCanvasMode] = useState<"edit" | "preview">("edit");
+
+  // Selection range tracker untuk penempatan placeholder di posisi kursor
+  const lastSelectionRangeRef = useRef<Range | null>(null);
+
+  // Sync Mail History
+  useEffect(() => {
+    if (existingMails && existingMails.length > 0) {
+      setMailHistory(existingMails);
+    } else {
+      db.getSurat().then((res) => {
+        if (res && Array.isArray(res)) {
+          const outOnly = res.filter((m: any) => m.type === "KELUAR" || !m.type);
+          setMailHistory(outOnly);
+        }
+      });
+    }
+  }, [existingMails, isOpen]);
+
+  const getHighestSeqNumber = (mails: any[]): number => {
+    let maxSeq = 0;
+    mails.forEach((m) => {
+      if (!m.nomor) return;
+      const match = m.nomor.trim().match(/^(\d{1,4})/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSeq && num < 10000) {
+          maxSeq = num;
+        }
+      }
+    });
+    return maxSeq;
+  };
+
+  const getNextSeqNumber = (mails: any[]): string => {
+    const highest = getHighestSeqNumber(mails);
+    return (highest + 1).toString().padStart(3, "0");
+  };
+
+  // Form States (Google Docs editable mode)
+  const [createTemplate, setCreateTemplate] = useState<string>("custom_blank");
+  const [customTemplates, setCustomTemplates] = useState<SuratTemplate[]>([]);
+
+  // Konsep Pengisi Template DOCX (docxtemplater + PizZip + docx-preview)
+  const [activeFileBase64, setActiveFileBase64] = useState<string>("");
+  const [activePlaceholders, setActivePlaceholders] = useState<string[]>([]);
+  const [docxValues, setDocxValues] = useState<Record<string, string>>({});
+  const [isRenderingDocx, setIsRenderingDocx] = useState(false);
+
+  const [createRecipient, setCreateRecipient] = useState("");
+  const [createSubject, setCreateSubject] = useState("");
   const [createClassification, setCreateClassification] = useState<
     "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi"
-  >(TEMPLATES.undangan.classification);
-  const [createContent, setCreateContent] = useState(TEMPLATES.undangan.content.replace(/\n/g, "<br>"));
-  const [createSenderLocation, setCreateSenderLocation] = useState(TEMPLATES.undangan.senderLocation);
-
-  // Kop & Footer Settings
-  const [showKopFooterSettings, setShowKopFooterSettings] = useState(false);
-  const [createKopTitle, setCreateKopTitle] = useState("PERGERAKAN MAHASISWA ISLAM INDONESIA");
-  const [createKopSubtitle, setCreateKopSubtitle] = useState("PENGURUS CABANG KOTA SEMARANG");
-  const [createKopEnglish, setCreateKopEnglish] = useState("Branch Board of Indonesian Moslem Student Movement");
-  const [createKopAddress, setCreateKopAddress] = useState(
-    "Sekretariat: Jl. Sunan Kalijaga No. 10 | Telp: +62 812-3456-7890 | Email: pc.semarang@pmii.or.id"
-  );
-  const [createFooterLeft, setCreateFooterLeft] = useState("Dzikir, Fikir, Amal Sholeh");
-  const [createLogoUrl, setCreateLogoUrl] = useState<string>("");
-
-  // Context Menu State
-  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number }>({
-    visible: false,
-    x: 0,
-    y: 0
+  >("Permohonan");
+  const [createContent, setCreateContent] = useState("");
+  const [createSenderLocation, setCreateSenderLocation] = useState("Purwodadi");
+  const [letterDate, setLetterDate] = useState(() => {
+    const months = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    const now = new Date();
+    return `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   });
 
+  // Kop & Footer Settings (Default PK PMII Ki Ageng Getas Pendawa)
+  const [createKopTitle, setCreateKopTitle] = useState("PERGERAKAN MAHASISWA ISLAM INDONESIA");
+  const [createKopSubtitle, setCreateKopSubtitle] = useState("PENGURUS KOMISARIAT");
+  const [createKopEnglish, setCreateKopEnglish] = useState("(Commissariat Board Indonesian Islamic Student Movement)");
+  const [createKopAddress, setCreateKopAddress] = useState(
+    "Jl. Getas Pendawa RT 01/RW 12 Kec. Purwodadi Kab. Grobogan\nEmail : pb.pmii@gmail.com Website : https://pmii.or.id"
+  );
+  const [createFooterLeft, setCreateFooterLeft] = useState("Dzikir, Fikir, Amal Sholeh");
+  const [createLogoUrl, setCreateLogoUrl] = useState<string>("/image/logo_komsat.png");
+
   // STATE MODE 1: SINGLE SURAT (9 Kotak PMII)
-  const [numBox1, setNumBox1] = useState("021");
+  const [numBox1, setNumBox1] = useState("001");
   const [numBox2, setNumBox2] = useState("PK");
   const [numBox3, setNumBox3] = useState("XI");
   const [numBox4, setNumBox4] = useState("Z-03");
   const [numBox5, setNumBox5] = useState("01");
   const [numBox6, setNumBox6] = useState("010");
   const [numBox7, setNumBox7] = useState("B-II");
-  const [numBox8, setNumBox8] = useState("12");
-  const [numBox9, setNumBox9] = useState("2026");
+  const [numBox8, setNumBox8] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
+  const [numBox9, setNumBox9] = useState(String(new Date().getFullYear()));
+
+  // Auto assign next number when modal opens
+  useEffect(() => {
+    if (isOpen && mailHistory.length > 0 && !hasAutoFilled) {
+      const next = getNextSeqNumber(mailHistory);
+      setNumBox1(next);
+      setNumBox8(String(new Date().getMonth() + 1).padStart(2, "0"));
+      setNumBox9(String(new Date().getFullYear()));
+      setHasAutoFilled(true);
+    }
+  }, [isOpen, mailHistory, hasAutoFilled]);
+
+  const handleAutoAssignNextNumber = () => {
+    const next = getNextSeqNumber(mailHistory);
+    setNumBox1(next);
+    setNumBox8(String(new Date().getMonth() + 1).padStart(2, "0"));
+    setNumBox9(String(new Date().getFullYear()));
+  };
 
   const boxRefs = [
     useRef<HTMLInputElement>(null),
@@ -146,59 +297,593 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
     useRef<HTMLInputElement>(null)
   ];
 
-  // STATE MODE 2: MASSAL / BULK DINAMIS
-  const [bulkColumns, setBulkColumns] = useState<string[]>(["Nomor_Surat", "Penerima"]);
-  const [bulkDataRows, setBulkDataRows] = useState<Record<string, string>[]>([
-    { Nomor_Surat: "021.PK-XI.Z-03.01.010.B-II.12.2026", Penerima: "Pengurus Komisariat Sultan Agung" },
-    { Nomor_Surat: "022.PK-XI.Z-03.01.011.B-II.12.2026", Penerima: "Pengurus Komisariat Walisongo" },
-    { Nomor_Surat: "023.PK-XI.Z-03.01.012.B-II.12.2026", Penerima: "Pengurus Komisariat UIN Semarang" }
-  ]);
-  const [newColumnName, setNewColumnName] = useState("");
-  const [previewIndex, setPreviewIndex] = useState<number>(0);
-
   const baseSingleNomor = `${numBox1}.${numBox2}-${numBox3}.${numBox4}.${numBox5}.${numBox6}.${numBox7}.${numBox8}.${numBox9}`;
-  const activeSenderTitle = TEMPLATES[createTemplate]?.senderTitle || "Sahabat Ketua Umum";
+  const activeSenderTitle =
+    customTemplates.find((t) => t.id === createTemplate)?.senderTitle ||
+    "Sahabat Ketua Umum";
 
-  // Parser Text Dinamis untuk Variabel
-  const getDynamicParsedText = (baseText: string, rowIndex: number) => {
-    if (generationMode === "single" || !baseText) return baseText;
-    let parsed = baseText;
-    const activeRow = bulkDataRows[rowIndex];
-    if (activeRow) {
-      bulkColumns.forEach((col) => {
-        const value = activeRow[col] || "";
-        parsed = parsed.split(`{${col}}`).join(value);
-      });
+  // Parsing Daftar Penerima Surat Massal
+  const parsedBulkRecipients = React.useMemo(() => {
+    return bulkRecipientsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }, [bulkRecipientsText]);
+
+  // Jaga indeks preview agar tetap dalam rentang
+  useEffect(() => {
+    if (previewBulkIndex >= parsedBulkRecipients.length && parsedBulkRecipients.length > 0) {
+      setPreviewBulkIndex(parsedBulkRecipients.length - 1);
     }
-    return parsed;
+  }, [parsedBulkRecipients.length, previewBulkIndex]);
+
+  // Kalkulasi nomor surat per indeks penerima massal
+  const getNomorForIndex = (index: number) => {
+    if (!isSequentialNumbering) {
+      return baseSingleNomor;
+    }
+    const startNum = parseInt(numBox1, 10);
+    const currentNum = isNaN(startNum) ? 1 : startNum + index;
+    const padLength = Math.max(numBox1.length, 3);
+    const paddedNum = currentNum.toString().padStart(padLength, "0");
+    return `${paddedNum}.${numBox2}-${numBox3}.${numBox4}.${numBox5}.${numBox6}.${numBox7}.${numBox8}.${numBox9}`;
   };
 
-  // Deklarasi Variabel Preview Utama
+  // Ref & Handler Upload Excel untuk Surat Massal
+  const excelFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Simpan posisi kursor saat pengguna mengetik/mengklik lembar surat
+  const saveCanvasSelection = () => {
+    if (typeof window === "undefined") return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && canvasTextareaRef.current) {
+      const range = sel.getRangeAt(0);
+      if (canvasTextareaRef.current.contains(range.commonAncestorContainer)) {
+        lastSelectionRangeRef.current = range.cloneRange();
+      }
+    }
+  };
+
+  // Sisipkan tag placeholder ke lembar surat di posisi kursor aktif
+  const insertPlaceholderAtCursor = (placeholderKey: string, explicitVal?: string) => {
+    const clean = placeholderKey.replace(/^\{+/, "").replace(/\}+$/, "").trim();
+    const cleanKey = clean.toLowerCase();
+
+    // Pastikan terdaftar di activePlaceholders agar muncul di form variabel
+    if (!activePlaceholders.includes(cleanKey)) {
+      setActivePlaceholders((prev) => [...prev, cleanKey]);
+    }
+
+    // Pastikan mode edit aktif agar kursor dapat menulis
+    if (htmlCanvasMode !== "edit") {
+      setHtmlCanvasMode("edit");
+    }
+
+    const canvas = canvasTextareaRef.current;
+    if (!canvas) {
+      navigator.clipboard.writeText(`{{${cleanKey}}}`);
+      toast.success(`Placeholder {{${cleanKey}}} disalin ke clipboard! Tempelkan (Ctrl+V) di surat.`);
+      return;
+    }
+
+    const rowData = getRowDataForIndex(previewBulkIndex);
+    const colDef = excelColumns.find((c) => c.key === cleanKey || c.originalHeader?.toLowerCase() === cleanKey);
+    const liveVal =
+      explicitVal ||
+      rowData[cleanKey] ||
+      rowData[clean] ||
+      docxValues[cleanKey] ||
+      docxValues[clean] ||
+      colDef?.sampleValue ||
+      (excelRowsData[previewBulkIndex]?.data?.[cleanKey]) ||
+      "";
+
+    // Buat elemen span penampung variabel live dengan aksen biru dan garis bawah titik-titik
+    const span = document.createElement("span");
+    span.setAttribute("data-placeholder", cleanKey);
+    span.style.color = "#1d4ed8";
+    span.style.fontWeight = "600";
+    span.style.textDecoration = "underline decoration-dotted";
+    span.style.textUnderlineOffset = "3px";
+    span.title = `Variabel: {{${cleanKey}}}`;
+    span.textContent = liveVal || `{{${cleanKey}}}`;
+
+    canvas.focus();
+    let inserted = false;
+
+    // Coba gunakan saved selection range jika ada
+    const savedRange = lastSelectionRangeRef.current;
+    const sel = typeof window !== "undefined" ? window.getSelection() : null;
+
+    if (savedRange && canvas.contains(savedRange.commonAncestorContainer)) {
+      try {
+        savedRange.deleteContents();
+        savedRange.insertNode(span);
+
+        // Tambah spasi setelah span agar mengetik berikutnya lancar
+        const spaceNode = document.createTextNode(" ");
+        if (span.parentNode) {
+          span.parentNode.insertBefore(spaceNode, span.nextSibling);
+        }
+
+        const newRange = document.createRange();
+        newRange.setStartAfter(spaceNode);
+        newRange.setEndAfter(spaceNode);
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+        lastSelectionRangeRef.current = newRange.cloneRange();
+        inserted = true;
+      } catch (err) {
+        console.warn("Gagal menyisipkan ke range tersimpan:", err);
+      }
+    }
+
+    if (!inserted) {
+      if (sel && sel.rangeCount > 0 && canvas.contains(sel.anchorNode)) {
+        try {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(span);
+
+          const spaceNode = document.createTextNode(" ");
+          if (span.parentNode) {
+            span.parentNode.insertBefore(spaceNode, span.nextSibling);
+          }
+
+          range.setStartAfter(spaceNode);
+          range.setEndAfter(spaceNode);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          lastSelectionRangeRef.current = range.cloneRange();
+          inserted = true;
+        } catch (err) {
+          console.warn("Gagal menyisipkan kursor langsung:", err);
+        }
+      }
+    }
+
+    if (!inserted) {
+      // Coba sisipkan di blok penerima jika ditemukan
+      const recipientEl = canvas.querySelector('[data-field="recipient-name"]');
+      if (recipientEl && recipientEl.parentElement) {
+        const div = document.createElement("div");
+        div.appendChild(span);
+        recipientEl.parentElement.appendChild(div);
+        inserted = true;
+      } else {
+        canvas.appendChild(span);
+        const spaceNode = document.createTextNode(" ");
+        canvas.appendChild(spaceNode);
+        inserted = true;
+      }
+    }
+
+    setCreateContent(canvas.innerHTML);
+    toast.success(
+      liveVal
+        ? `Variabel {{${cleanKey}}} ("${liveVal}") berhasil ditempatkan!`
+        : `Variabel {{${cleanKey}}} ditempatkan! Anda dapat mengisi nilainya di formulir Isian Variabel.`
+    );
+  };
+
+  // Simpan placeholder kustom yang ditambahkan manual oleh pengguna
+  const handleSaveManualPlaceholder = () => {
+    let raw = manualKeyInput.trim();
+    if (!raw) {
+      toast.error("Nama placeholder tidak boleh kosong.");
+      return;
+    }
+    raw = raw.replace(/^\{+/, "").replace(/\}+$/, "");
+    const cleanKey = raw
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    if (!cleanKey) {
+      toast.error("Nama placeholder tidak valid.");
+      return;
+    }
+
+    const defaultVal = manualValInput.trim();
+
+    // Daftarkan ke excelColumns jika belum ada
+    setExcelColumns((prev) => {
+      if (prev.some((c) => c.key === cleanKey)) return prev;
+      return [
+        ...prev,
+        {
+          key: cleanKey,
+          originalHeader: raw,
+          sampleValue: defaultVal || cleanKey
+        }
+      ];
+    });
+
+    // Perbarui data setiap baris penerima
+    setExcelRowsData((prev) =>
+      prev.map((r) => ({
+        ...r,
+        data: {
+          ...r.data,
+          [cleanKey]: defaultVal || r.data[cleanKey] || ""
+        }
+      }))
+    );
+
+    // Daftarkan ke activePlaceholders
+    setActivePlaceholders((prev) => {
+      if (prev.includes(cleanKey)) return prev;
+      return [...prev, cleanKey];
+    });
+
+    setDocxValues((prev) => ({
+      ...prev,
+      [cleanKey]: defaultVal || prev[cleanKey] || ""
+    }));
+
+    setIsAddPlaceholderOpen(false);
+    setManualKeyInput("");
+    setManualValInput("");
+
+    // Sisipkan langsung ke kursor dengan nilai yang baru saja ditentukan
+    insertPlaceholderAtCursor(cleanKey, defaultVal);
+  };
+
+  // Ambil data variabel baris untuk indeks penerima tertentu
+  const getRowDataForIndex = (index: number): Record<string, string> => {
+    const recName = parsedBulkRecipients[index] || createRecipient || "";
+    const matched =
+      excelRowsData[index] ||
+      excelRowsData.find(
+        (r) => r.recipient.trim().toLowerCase() === recName.trim().toLowerCase()
+      );
+
+    // Fallback awal dari docxValues dan nilai contoh excelColumns
+    const defaultData: Record<string, string> = { ...docxValues };
+    excelColumns.forEach((c) => {
+      if (c.sampleValue && !defaultData[c.key]) {
+        defaultData[c.key] = c.sampleValue;
+      }
+    });
+
+    const baseData: Record<string, string> = {
+      ...defaultData,
+      ...(matched ? matched.data : {})
+    };
+
+    // Nilai manual docxValues diprioritaskan jika diisi pengguna
+    Object.entries(docxValues).forEach(([k, v]) => {
+      if (v !== undefined && v !== "") {
+        baseData[k] = v;
+      }
+    });
+
+    // Gandakan dalam huruf kecil agar pencarian case-insensitive selalu cocok
+    Object.entries({ ...baseData }).forEach(([k, v]) => {
+      baseData[k.toLowerCase()] = v;
+    });
+
+    baseData["penerima"] = recName || baseData["penerima"] || "";
+    baseData["nama_penerima"] = recName || baseData["nama_penerima"] || "";
+    baseData["kepada"] = recName || baseData["kepada"] || "";
+    baseData["nomor"] = getNomorForIndex(index);
+    baseData["no"] = baseData["nomor"];
+    baseData["perihal"] = currentPreviewSubject;
+    baseData["hal"] = currentPreviewSubject;
+    baseData["lokasi"] = currentPreviewLocation;
+    baseData["kota"] = currentPreviewLocation;
+    baseData["tanggal"] = letterDate;
+    baseData["hari_tanggal"] = letterDate;
+
+    return baseData;
+  };
+
+  // Helper interpolasi variabel {{...}} ke dalam HTML surat
+  const replacePlaceholdersInHtml = (
+    html: string,
+    data: Record<string, string>
+  ): string => {
+    if (!html) return "";
+    let result = html;
+
+    // 1. Data attributes: [data-field="..."] dan [data-placeholder="..."]
+    if (typeof DOMParser !== "undefined") {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(result, "text/html");
+
+        const setField = (selector: string, val: string) => {
+          doc.querySelectorAll(selector).forEach((el) => {
+            el.textContent = val;
+          });
+        };
+
+        if (data["nomor"]) setField('[data-field="nomor-value"]', data["nomor"]);
+        if (data["perihal"]) setField('[data-field="perihal-value"]', data["perihal"]);
+        if (data["penerima"]) setField('[data-field="recipient-name"]', data["penerima"]);
+        if (data["tanggal"] && data["lokasi"]) {
+          setField('[data-field="location-date"]', `${data["lokasi"]}, ${data["tanggal"]}`);
+        }
+
+        Object.entries(data).forEach(([key, val]) => {
+          if (!key) return;
+          setField(`[data-field="${key}"]`, val);
+        });
+
+        // Ganti elemen [data-placeholder] menjadi teks biasa bersih untuk cetak/pratinjau
+        doc.querySelectorAll("[data-placeholder]").forEach((el) => {
+          const key = el.getAttribute("data-placeholder") || "";
+          const cleanKey = key.toLowerCase();
+          const val =
+            data[cleanKey] ??
+            data[key] ??
+            docxValues[cleanKey] ??
+            docxValues[key] ??
+            "";
+          if (val) {
+            el.replaceWith(doc.createTextNode(val));
+          }
+        });
+
+        result = doc.body.innerHTML;
+      } catch (e) {
+        console.warn("replacePlaceholdersInHtml DOMParser error:", e);
+      }
+    }
+
+    // 2. Double curly braces {{key}}
+    Object.entries(data).forEach(([key, val]) => {
+      if (!key) return;
+      const safe = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`\\{\\{\\s*${safe}\\s*\\}\\}`, "gi");
+      result = result.replace(regex, val ?? "");
+    });
+
+    return result;
+  };
+
+  const handleDownloadExcelTemplate = () => {
+    try {
+      const headers = [
+        "Nama Penerima",
+        "Jabatan",
+        "Instansi / Lembaga",
+        "Alamat / Kota",
+        "Catatan Khusus"
+      ];
+      const sampleData = [
+        ["Sahabat Ahmad Fauzi", "Ketua Rayon", "PR PMII Rayon Tarbiyah", "Grobogan", "Konfirmasi kehadiran"],
+        ["Sahabati Siti Nurhaliza", "Ketua Rayon", "PR PMII Rayon Syariah", "Purwodadi", "Konfirmasi kehadiran"],
+        ["Sahabat Ridwan Kamil", "Ketua Rayon", "PR PMII Rayon Dakwah", "Grobogan", "Konfirmasi kehadiran"],
+        ["Sahabat Budi Santoso", "Ketua Rayon", "PR PMII Rayon Ushuluddin", "Purwodadi", "Konfirmasi kehadiran"],
+        ["Sahabati Dewi Lestari", "Ketua Rayon", "PR PMII Rayon Ekonomi & Bisnis", "Grobogan", "Konfirmasi kehadiran"]
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+      worksheet["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 24 }];
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Penerima Surat PMII");
+      XLSX.writeFile(workbook, "Format_Penerima_Surat_Massal_PMII.xlsx");
+      toast.success("Format template Excel berhasil diunduh!");
+    } catch (e: any) {
+      console.error("Gagal mengunduh format Excel:", e);
+      toast.error("Gagal mengunduh format Excel: " + e.message);
+    }
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        toast.error("File Excel kosong atau tidak memiliki lembar kerja.");
+        return;
+      }
+
+      const worksheet = workbook.Sheets[firstSheetName];
+      const sheetData: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: ""
+      });
+
+      if (!sheetData || sheetData.length === 0) {
+        toast.error("Lembar kerja Excel kosong.");
+        return;
+      }
+
+      // Deteksi baris header & kolom penerima
+      let headerRowIndex = 0;
+      let recipientColIndex = 0;
+      let foundHeader = false;
+
+      for (let r = 0; r < Math.min(sheetData.length, 5); r++) {
+        const row = sheetData[r] || [];
+        for (let c = 0; c < row.length; c++) {
+          const val = String(row[c] || "").trim().toLowerCase();
+          if (
+            val.includes("penerima") ||
+            val.includes("nama") ||
+            val.includes("tujuan") ||
+            val.includes("kepada") ||
+            val.includes("organisasi") ||
+            val.includes("instansi")
+          ) {
+            headerRowIndex = r;
+            recipientColIndex = c;
+            foundHeader = true;
+            break;
+          }
+        }
+        if (foundHeader) break;
+      }
+
+      // Ekstrak seluruh kolom dari header row
+      const headerRow = sheetData[headerRowIndex] || [];
+      const detectedCols: { key: string; originalHeader: string; sampleValue: string }[] = [];
+      const colMapping: { colIdx: number; key: string; originalHeader: string }[] = [];
+
+      headerRow.forEach((rawH: any, colIdx: number) => {
+        const headerStr = String(rawH || "").trim();
+        if (!headerStr) return;
+
+        let cleanKey = headerStr
+          .toLowerCase()
+          .replace(/[^\w\s]/g, "")
+          .replace(/\s+/g, "_")
+          .replace(/^_+|_+$/g, "");
+
+        if (!cleanKey) cleanKey = `kolom_${colIdx + 1}`;
+
+        let sampleVal = "";
+        for (let r = headerRowIndex + 1; r < sheetData.length; r++) {
+          const val = String(sheetData[r]?.[colIdx] || "").trim();
+          if (val && !val.toLowerCase().startsWith("contoh:")) {
+            sampleVal = val;
+            break;
+          }
+        }
+
+        colMapping.push({ colIdx, key: cleanKey, originalHeader: headerStr });
+        detectedCols.push({
+          key: cleanKey,
+          originalHeader: headerStr,
+          sampleValue: sampleVal
+        });
+      });
+
+      const startDataIndex = foundHeader ? headerRowIndex + 1 : 0;
+      const extractedNames: string[] = [];
+      const parsedRowsData: { recipient: string; data: Record<string, string> }[] = [];
+
+      for (let i = startDataIndex; i < sheetData.length; i++) {
+        const row = sheetData[i] || [];
+        const rawVal = row[recipientColIndex];
+        const name = String(rawVal || "").trim();
+        if (
+          name &&
+          !name.toLowerCase().startsWith("contoh:") &&
+          !name.toLowerCase().startsWith("nama penerima") &&
+          !name.toLowerCase().startsWith("penerima")
+        ) {
+          extractedNames.push(name);
+
+          const rowData: Record<string, string> = {};
+          colMapping.forEach(({ colIdx, key, originalHeader }) => {
+            const cellVal = String(row[colIdx] ?? "").trim();
+            rowData[key] = cellVal;
+            rowData[originalHeader] = cellVal;
+            rowData[originalHeader.toLowerCase()] = cellVal;
+          });
+          rowData["penerima"] = name;
+          rowData["nama_penerima"] = name;
+          rowData["kepada"] = name;
+
+          parsedRowsData.push({
+            recipient: name,
+            data: rowData
+          });
+        }
+      }
+
+      if (extractedNames.length === 0) {
+        toast.error("Tidak ditemukan nama penerima yang valid di file Excel.");
+        return;
+      }
+
+      setExcelColumns(detectedCols);
+      setExcelRowsData(parsedRowsData);
+      setBulkRecipientsText(extractedNames.join("\n"));
+      setPreviewBulkIndex(0);
+
+      // Daftarkan kolom kustom ke activePlaceholders
+      const extraKeys = detectedCols
+        .map((c) => c.key)
+        .filter((k) => !["no", "nomor", "penerima", "nama_penerima", "nama"].includes(k));
+
+      setActivePlaceholders((prev) => {
+        const set = new Set([...prev, ...extraKeys]);
+        return Array.from(set);
+      });
+
+      // Update docxValues dengan data baris pertama
+      if (parsedRowsData[0]) {
+        setDocxValues((prev) => ({
+          ...prev,
+          ...parsedRowsData[0].data
+        }));
+      }
+
+      toast.success(
+        `Berhasil mengimpor ${extractedNames.length} nama penerima & ${detectedCols.length} kolom data dari Excel!`
+      );
+    } catch (e: any) {
+      console.error("Gagal membaca file Excel:", e);
+      toast.error("Gagal membaca file Excel: " + e.message);
+    } finally {
+      if (excelFileInputRef.current) {
+        excelFileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Bersihkan Penerima Surat Massal
+  const loadPresetRecipients = (_type?: string) => {
+    setBulkRecipientsText("");
+    setExcelColumns([]);
+    setExcelRowsData([]);
+    setPreviewBulkIndex(0);
+  };
+
+  // Deteksi Duplikat Nomor Surat Keluar (Single Mode)
+  const currentNormalizedNomor = baseSingleNomor.trim().toLowerCase();
+  const duplicateEntry = mailHistory.find((m) => {
+    if (!m.nomor) return false;
+    return m.nomor.trim().toLowerCase() === currentNormalizedNomor;
+  });
+
+  const duplicateSeqEntry = !duplicateEntry
+    ? mailHistory.find((m) => {
+        if (!m.nomor) return false;
+        const seq = m.nomor.trim().match(/^(\d{1,4})/)?.[1];
+        return seq && parseInt(seq, 10) === parseInt(numBox1, 10);
+      })
+    : null;
+
+  // Deteksi Duplikat Nomor Surat Keluar (Bulk Mode)
+  const bulkDuplicateEntries = React.useMemo(() => {
+    if (letterMode !== "bulk" || parsedBulkRecipients.length === 0) return [];
+    const duplicates: { index: number; nomor: string; recipient: string; matchedMail: any }[] = [];
+    parsedBulkRecipients.forEach((rec, idx) => {
+      const nom = getNomorForIndex(idx).trim().toLowerCase();
+      const match = mailHistory.find((m) => m.nomor && m.nomor.trim().toLowerCase() === nom);
+      if (match) {
+        duplicates.push({ index: idx, nomor: getNomorForIndex(idx), recipient: rec, matchedMail: match });
+      }
+    });
+    return duplicates;
+  }, [letterMode, parsedBulkRecipients, isSequentialNumbering, numBox1, numBox2, numBox3, numBox4, numBox5, numBox6, numBox7, numBox8, numBox9, mailHistory]);
+
+  // Deklarasi Variabel Preview Utama (Mendukung Single & Bulk)
   const currentPreviewNomor =
-    generationMode === "single"
-      ? getDynamicParsedText(baseSingleNomor, previewIndex)
-      : getDynamicParsedText(bulkDataRows[previewIndex]?.["Nomor_Surat"] || "{Nomor_Surat}", previewIndex);
+    letterMode === "bulk"
+      ? getNomorForIndex(previewBulkIndex)
+      : baseSingleNomor;
 
   const currentPreviewRecipient =
-    generationMode === "single"
-      ? getDynamicParsedText(createRecipient, previewIndex)
-      : getDynamicParsedText(bulkDataRows[previewIndex]?.["Penerima"] || "{Penerima}", previewIndex);
+    letterMode === "bulk"
+      ? (parsedBulkRecipients[previewBulkIndex] || "Nama Penerima Surat")
+      : createRecipient;
 
-  const currentPreviewSubject = getDynamicParsedText(createSubject, previewIndex);
-  const currentPreviewLocation = getDynamicParsedText(createSenderLocation, previewIndex);
-  const currentPreviewFooterLeft = getDynamicParsedText(createFooterLeft, previewIndex);
-
-  useEffect(() => {
-    const handleCloseMenu = () => setContextMenu((prev) => (prev.visible ? { ...prev, visible: false } : prev));
-    window.addEventListener("click", handleCloseMenu);
-    return () => window.removeEventListener("click", handleCloseMenu);
-  }, []);
-
-  useEffect(() => {
-    if (previewIndex >= bulkDataRows.length) {
-      setPreviewIndex(Math.max(0, bulkDataRows.length - 1));
-    }
-  }, [bulkDataRows, previewIndex]);
+  const currentPreviewSubject = createSubject;
+  const currentPreviewLocation = createSenderLocation;
+  const currentPreviewFooterLeft = createFooterLeft;
 
   // Sinkronisasi Kop Surat & Logo Otomatis dari Pengaturan Sistem
   useEffect(() => {
@@ -230,30 +915,255 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
     }
   }, [isOpen]);
 
+  // Render Preview Menggunakan docxtemplater + PizZip + docx-preview (100% Persis Word Asli)
+  const renderFilledDocxPreview = async (b64: string, data: Record<string, string>) => {
+    const canvasEl = canvasTextareaRef.current;
+    if (!b64 || !canvasEl) return;
+    setIsRenderingDocx(true);
+    try {
+      const arrayBuffer = base64ToArrayBuffer(b64);
+      const { arrayBuffer: filledBuffer, error } = fillDocxTemplate(arrayBuffer, data);
+      if (error) {
+        console.warn("Docxtemplater warning:", error);
+      }
+      const docx = await import("docx-preview");
+      canvasEl.innerHTML = "";
+      await docx.renderAsync(filledBuffer, canvasEl, undefined, {
+        className: "docx",
+        inWrapper: true,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        ignoreFonts: false,
+        breakPages: true,
+        useBase64URL: true,
+        renderHeaders: true,
+        renderFooters: true,
+        renderAltChunks: true
+      });
+      setCreateContent(canvasEl.innerHTML);
+    } catch (e) {
+      console.error("Gagal render docx preview:", e);
+    } finally {
+      setIsRenderingDocx(false);
+    }
+  };
+
+  const handleDownloadDocxResult = () => {
+    if (!activeFileBase64) return;
+    try {
+      const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
+      const { blob, error } = fillDocxTemplate(arrayBuffer, docxValues);
+      if (error) {
+        toast.error("Gagal mengisi data ke docx: " + error);
+        return;
+      }
+      const safeNomor = currentPreviewNomor.replace(/[/\\?%*:|"<>]/g, "_");
+      const safeRecipient = currentPreviewRecipient.replace(/[/\\?%*:|"<>]/g, "_");
+      const fileName = `${safeNomor}_${safeRecipient}`;
+      downloadDocxBlob(blob, fileName);
+      toast.success("Dokumen Word (.docx) berhasil diunduh!");
+    } catch (e: any) {
+      toast.error("Gagal mengunduh file: " + e.message);
+    }
+  };
+
+  const handleDownloadBulkZip = () => {
+    if (!activeFileBase64 || parsedBulkRecipients.length === 0) return;
+    try {
+      const zip = new PizZip();
+      const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
+
+      parsedBulkRecipients.forEach((rec, idx) => {
+        const nomor = getNomorForIndex(idx);
+        const rowData = getRowDataForIndex(idx);
+        const data: Record<string, string> = { ...docxValues, ...rowData };
+
+        activePlaceholders.forEach((k) => {
+          const lk = k.toLowerCase();
+          if (lk === "nomor" || lk === "no") data[k] = nomor;
+          else if (lk === "penerima" || lk === "kepada") data[k] = rec;
+          else if (lk === "perihal" || lk === "hal") data[k] = currentPreviewSubject;
+          else if (lk === "lokasi" || lk === "kota") data[k] = currentPreviewLocation;
+          else if (lk === "tanggal" || lk === "hari_tanggal") data[k] = letterDate;
+          else if (rowData[k] !== undefined) data[k] = rowData[k];
+          else if (rowData[lk] !== undefined) data[k] = rowData[lk];
+        });
+        Object.entries(rowData).forEach(([k, v]) => {
+          data[k] = v;
+        });
+
+        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data);
+        const safeNomor = nomor.replace(/[/\\?%*:|"<>]/g, "_");
+        const safeRec = rec.replace(/[/\\?%*:|"<>]/g, "_");
+        zip.file(`${safeNomor}_${safeRec}.docx`, filledBuffer);
+      });
+
+      const zipBlob = zip.generate({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Surat_Massal_PMII_${parsedBulkRecipients.length}_Berkas.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+      toast.success(`Berhasil mengunduh paket ZIP (${parsedBulkRecipients.length} file .docx)!`);
+    } catch (e: any) {
+      console.error("Gagal buat ZIP docx:", e);
+      toast.error("Gagal mengunduh ZIP: " + e.message);
+    }
+  };
+
+  const applyTemplateSelection = (tmpl: SuratTemplate) => {
+    const parsed = parseTemplateContent(tmpl.content);
+    const b64 = tmpl.fileBase64 || parsed.fileBase64 || "";
+    const ph = tmpl.placeholders || parsed.placeholders || [];
+
+    setActiveFileBase64(b64);
+    setActivePlaceholders(ph);
+
+    setCreateSubject(tmpl.subject);
+    setCreateClassification(
+      (tmpl.classification as "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi") || "Undangan"
+    );
+    setCreateSenderLocation(tmpl.senderLocation || "Purwodadi");
+
+    const months = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    const today = `${new Date().getDate()} ${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
+
+    const initVals: Record<string, string> = {};
+    ph.forEach((k) => {
+      const lk = k.toLowerCase();
+      if (lk === "nomor" || lk === "no") initVals[k] = currentPreviewNomor;
+      else if (lk === "perihal" || lk === "hal") initVals[k] = tmpl.subject || "";
+      else if (lk === "penerima" || lk === "kepada") initVals[k] = createRecipient || "";
+      else if (lk === "lokasi" || lk === "kota") initVals[k] = tmpl.senderLocation || "Purwodadi";
+      else if (lk === "tanggal" || lk === "hari_tanggal") initVals[k] = letterDate || today;
+      else initVals[k] = "";
+    });
+    setDocxValues(initVals);
+
+    if (b64) {
+      renderFilledDocxPreview(b64, initVals);
+    } else {
+      setCreateContent(parsed.html || tmpl.content);
+      if (canvasTextareaRef.current) {
+        canvasTextareaRef.current.innerHTML = parsed.html || tmpl.content;
+      }
+    }
+  };
+
+  // Sinkronisasi Template Custom dari Database
+  useEffect(() => {
+    if (isOpen) {
+      db.getSuratTemplates()
+        .then((res) => {
+          if (res && Array.isArray(res)) {
+            setCustomTemplates(res);
+            // Hanya auto-select template pertama jika bukan mode surat massal
+            if (letterMode !== "bulk" && (!createTemplate || createTemplate === "custom_blank") && res.length > 0) {
+              const first = res[0];
+              setCreateTemplate(first.id);
+              applyTemplateSelection(first);
+            }
+          }
+        })
+        .catch((e) => {
+          console.error("Gagal memuat template dari database:", e);
+        });
+    }
+  }, [isOpen, letterMode]);
+
   const handleTemplateChange = (val: string | null) => {
     if (!val) return;
     setCreateTemplate(val);
-    const tmpl = TEMPLATES[val];
-    if (tmpl) {
-      setCreateSubject(tmpl.subject);
-      setCreateClassification(tmpl.classification);
-      setCreateContent(tmpl.content.replace(/\n/g, "<br>"));
-      setCreateSenderLocation(tmpl.senderLocation);
+    if (val === "custom_blank") {
+      setActiveFileBase64("");
+      setActivePlaceholders([]);
+      setDocxValues({});
+      setCreateSubject("");
+      setCreateClassification("Permohonan");
+      setCreateRecipient("");
+      const initialHtml = buildCanvasHtml();
+      setCreateContent(initialHtml);
+      if (canvasTextareaRef.current) {
+        canvasTextareaRef.current.innerHTML = initialHtml;
+      }
+      return;
+    }
+    const customTmpl = customTemplates.find((t) => t.id === val);
+    if (customTmpl) {
+      applyTemplateSelection(customTmpl);
     }
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setCreateLogoUrl(url);
-    }
-  };
+  // Sinkronisasi nilai field standar PMII & data baris Excel ke placeholder DOCX
+  useEffect(() => {
+    if (!activeFileBase64 || activePlaceholders.length === 0) return;
+    setDocxValues((prev) => {
+      const next = { ...prev };
+      let changed = false;
 
-  const handleRemoveLogo = () => {
-    setCreateLogoUrl("");
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+      // Sinkronisasi field pokok
+      activePlaceholders.forEach((k) => {
+        const lk = k.toLowerCase();
+        if ((lk === "nomor" || lk === "no") && next[k] !== currentPreviewNomor) {
+          next[k] = currentPreviewNomor;
+          changed = true;
+        } else if ((lk === "perihal" || lk === "hal") && next[k] !== currentPreviewSubject) {
+          next[k] = currentPreviewSubject;
+          changed = true;
+        } else if ((lk === "penerima" || lk === "kepada") && next[k] !== currentPreviewRecipient) {
+          next[k] = currentPreviewRecipient;
+          changed = true;
+        } else if ((lk === "lokasi" || lk === "kota") && next[k] !== currentPreviewLocation) {
+          next[k] = currentPreviewLocation;
+          changed = true;
+        } else if ((lk === "tanggal" || lk === "hari_tanggal") && next[k] !== letterDate) {
+          next[k] = letterDate;
+          changed = true;
+        }
+      });
+
+      // Jika dalam mode surat massal, timpa dengan data baris Excel penerima aktif
+      if (letterMode === "bulk") {
+        const rowData = getRowDataForIndex(previewBulkIndex);
+        Object.entries(rowData).forEach(([rk, rv]) => {
+          if (rv !== undefined && next[rk] !== rv) {
+            next[rk] = rv;
+            changed = true;
+          }
+        });
+      }
+
+      return changed ? next : prev;
+    });
+  }, [
+    currentPreviewNomor,
+    currentPreviewSubject,
+    currentPreviewRecipient,
+    currentPreviewLocation,
+    letterDate,
+    activeFileBase64,
+    activePlaceholders,
+    letterMode,
+    previewBulkIndex,
+    excelRowsData
+  ]);
+
+  // Debounced auto-render saat data placeholder diubah pengguna
+  useEffect(() => {
+    if (activeFileBase64) {
+      const timer = setTimeout(() => {
+        renderFilledDocxPreview(activeFileBase64, docxValues);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [docxValues, activeFileBase64]);
+
 
   const handleBoxChange = (index: number, value: string, setBoxState: (val: string) => void, maxLength: number) => {
     setBoxState(value);
@@ -262,263 +1172,103 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
     }
   };
 
-  const handleAddCustomColumn = () => {
-    const safeName = newColumnName.trim().replace(/\s+/g, "_");
-    if (!safeName) return;
-    if (bulkColumns.includes(safeName)) {
-      alert("Nama kolom tersebut sudah terdaftar.");
-      return;
-    }
-    setBulkColumns([...bulkColumns, safeName]);
-    setBulkDataRows(bulkDataRows.map((row) => ({ ...row, [safeName]: "" })));
-    setNewColumnName("");
-  };
-
-  const handleRemoveCustomColumn = (colName: string) => {
-    setBulkColumns(bulkColumns.filter((c) => c !== colName));
-    setBulkDataRows(
-      bulkDataRows.map((row) => {
-        const copy = { ...row };
-        delete copy[colName];
-        return copy;
-      })
-    );
-  };
-
-  const handleAddBulkRow = () => {
-    const newRowObj: Record<string, string> = {};
-    bulkColumns.forEach((col) => {
-      newRowObj[col] = "";
-    });
-    setBulkDataRows([...bulkDataRows, newRowObj]);
-  };
-
-  const handleRemoveBulkRow = (index: number) => {
-    if (bulkDataRows.length <= 1) {
-      alert("Minimal harus menyisakan satu baris data surat.");
-      return;
-    }
-    setBulkDataRows(bulkDataRows.filter((_, idx) => idx !== index));
-  };
-
-  const handleUpdateBulkCell = (rowIndex: number, colName: string, value: string) => {
-    const updated = [...bulkDataRows];
-    updated[rowIndex][colName] = value;
-    setBulkDataRows(updated);
-  };
-
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) return;
-
-      const lines = text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-      if (lines.length < 2) {
-        alert("File CSV kosong.");
-        return;
-      }
-
-      const parsedHeaders = lines[0]
-        .split(/[,;\t]/)
-        .map((h) => h.replace(/^["']|["']$/g, "").trim().replace(/\s+/g, "_"));
-      setBulkColumns(parsedHeaders);
-
-      const parsedRows: Record<string, string>[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const columns = lines[i].split(/[,;\t]/).map((col) => col.replace(/^["']|["']$/g, "").trim());
-        const rowObj: Record<string, string> = {};
-        parsedHeaders.forEach((header, idx) => {
-          rowObj[header] = columns[idx] || "";
-        });
-        parsedRows.push(rowObj);
-      }
-
-      setBulkDataRows(parsedRows);
-      setPreviewIndex(0);
-      alert("Berhasil memuat data kustom massal dari CSV.");
-    };
-    reader.readAsText(file);
-  };
-
-  const insertVariableAtCaret = (colName: string) => {
-    const el = canvasTextareaRef.current;
-    if (!el) return;
-    const sel = window.getSelection();
-    if (savedSelectionRef.current && sel) {
-      el.focus();
-      sel.removeAllRanges();
-      sel.addRange(savedSelectionRef.current);
-    } else {
-      el.focus();
-    }
-    document.execCommand("insertText", false, `{${colName}}`);
-    savedSelectionRef.current = null;
-  };
-
-  const applyFormat = (command: "bold" | "italic" | "underline") => {
-    const el = canvasTextareaRef.current;
-    if (!el) return;
-    el.focus();
-    document.execCommand(command, false);
-    setTimeout(() => {
-      if (canvasTextareaRef.current) {
-        setCreateContent(canvasTextareaRef.current.innerHTML);
-      }
-    }, 0);
-  };
-
-  const applyFontSize = (sizeInPt: string) => {
-    const el = canvasTextareaRef.current;
-    if (!el || !sizeInPt) return;
-    const sel = window.getSelection();
-    if (savedSelectionRef.current && sel) {
-      sel.removeAllRanges();
-      sel.addRange(savedSelectionRef.current);
-    }
-    document.execCommand("fontSize", false, "7");
-    const fonts = el.querySelectorAll('font[size="7"]');
-    fonts.forEach((font) => {
-      const span = document.createElement("span");
-      span.style.fontSize = sizeInPt;
-      span.innerHTML = (font as HTMLElement).innerHTML;
-      font.parentNode?.replaceChild(span, font);
-    });
-    savedSelectionRef.current = null;
-    setCreateContent(el.innerHTML);
-  };
-
-  const applyTextTransform = (transform: "uppercase" | "lowercase" | "none") => {
-    const el = canvasTextareaRef.current;
-    if (!el) return;
-    const sel = window.getSelection();
-    if (savedSelectionRef.current && sel) {
-      sel.removeAllRanges();
-      sel.addRange(savedSelectionRef.current);
-    } else {
-      el.focus();
-    }
-    document.execCommand("fontSize", false, "7");
-    const fonts = el.querySelectorAll('font[size="7"]');
-    fonts.forEach((font) => {
-      const span = document.createElement("span");
-      span.style.textTransform = transform;
-      span.innerHTML = (font as HTMLElement).innerHTML;
-      font.parentNode?.replaceChild(span, font);
-    });
-    savedSelectionRef.current = null;
-    setCreateContent(el.innerHTML);
-  };
-
-  const applyFontFamily = (family: string) => {
-    const el = canvasTextareaRef.current;
-    if (!el || !family) return;
-    const sel = window.getSelection();
-    if (savedSelectionRef.current && sel) {
-      sel.removeAllRanges();
-      sel.addRange(savedSelectionRef.current);
-    } else {
-      el.focus();
-    }
-    document.execCommand("fontSize", false, "7");
-    const fonts = el.querySelectorAll('font[size="7"]');
-    fonts.forEach((font) => {
-      const span = document.createElement("span");
-      span.style.fontFamily = family;
-      span.innerHTML = (font as HTMLElement).innerHTML;
-      font.parentNode?.replaceChild(span, font);
-    });
-    savedSelectionRef.current = null;
-    setCreateContent(el.innerHTML);
-  };
-
-  // Bangun HTML canvas penuh dari state saat ini
+  // Bangun HTML canvas default surat resmi PMII dengan placeholder lengkap
   const buildCanvasHtml = () => {
+    if (createContent && createContent.trim().length > 0) {
+      return createContent;
+    }
+
     const months = [
       "Januari", "Februari", "Maret", "April", "Mei", "Juni",
       "Juli", "Agustus", "September", "Oktober", "November", "Desember"
     ];
     const today = `${new Date().getDate()} ${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
-    const logoHtml = createLogoUrl
-      ? `<img src="${createLogoUrl}" alt="Logo" style="width:56px;height:56px;object-fit:contain;margin-right:12px;flex-shrink:0;" />`
-      : `<div style="width:48px;height:48px;border-radius:50%;background:#0A2A5C;color:white;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11pt;border:1px solid rgba(198,149,17,0.3);margin-right:12px;flex-shrink:0;">PMII</div>`;
-    return `
-<div data-section="kop" style="display:flex;align-items:center;padding-bottom:16px;border-bottom:3px double #0A2A5C;width:100%;margin-bottom:20px;">
-  ${logoHtml}
-  <div style="display:flex;flex-direction:column;text-align:center;flex:1;padding-right:24px;">
-    <span data-field="kop-subtitle" style="font-family:'Arial Narrow', Arial, sans-serif;font-size:14pt;font-weight:bold;text-transform:uppercase;color:#0A2A5C;line-height:1.0;">${createKopSubtitle}</span>
-    <span data-field="kop-title" style="font-family:'Arial Narrow', Arial, sans-serif;font-size:16pt;font-weight:bold;text-transform:uppercase;color:#0A2A5C;line-height:1.0;margin-top:2px;">${createKopTitle}</span>
-    <span data-field="kop-english" style="font-family:'Monotype Corsiva', 'Apple Chancery', cursive;font-size:11pt;color:#0A2A5C;line-height:1.0;margin-top:2px;">${createKopEnglish}</span>
-    <span data-field="kop-address" style="font-family:'Arial Narrow', Arial, sans-serif;font-size:11pt;color:#0A2A5C;line-height:1.0;margin-top:4px;white-space:pre-line;">${createKopAddress}</span>
+
+    return `<div style="font-family:'Arial Narrow', Arial, sans-serif; line-height:1.45; color:#0f172a; max-width:100%;">
+  <!-- KOP SURAT PMII -->
+  <div style="display:flex; align-items:center; justify-content:center; gap:16px; border-bottom:3px double #1e3a8a; padding-bottom:10px; margin-bottom:16px;">
+    <img src="${createLogoUrl || '/image/logo_komsat.png'}" alt="Logo PMII" style="width:64px; height:64px; object-fit:contain;" />
+    <div style="text-align:center;">
+      <div style="font-size:11px; font-weight:bold; letter-spacing:1px; color:#1e3a8a; text-transform:uppercase;">${createKopSubtitle}</div>
+      <div style="font-size:16px; font-weight:900; color:#1e3a8a; letter-spacing:0.5px; text-transform:uppercase;">${createKopTitle}</div>
+      <div style="font-size:11px; font-style:italic; color:#475569;">${createKopEnglish}</div>
+      <div style="font-size:9.5px; color:#334155; margin-top:3px; white-space:pre-line;">${createKopAddress}</div>
+    </div>
   </div>
-</div>
-<table style="width:100%;border-collapse:collapse;font-size:11pt;margin-bottom:20px;color:#27272a;">
-  <tbody>
-    <tr>
-      <td style="vertical-align:top;width:50%;">
-        <table style="border-collapse:collapse;">
-          <tbody>
-            <tr>
-              <td style="padding:1px 0;vertical-align:top;white-space:nowrap;"><strong>Nomor</strong></td>
-              <td style="padding:1px 6px;vertical-align:top;text-align:center;">:</td>
-              <td style="padding:1px 0;vertical-align:top;"><span data-field="nomor-value">${currentPreviewNomor}</span></td>
-            </tr>
-            <tr>
-              <td style="padding:1px 0;vertical-align:top;white-space:nowrap;"><strong>Lamp</strong></td>
-              <td style="padding:1px 6px;vertical-align:top;text-align:center;">:</td>
-              <td style="padding:1px 0;vertical-align:top;">-</td>
-            </tr>
-            <tr>
-              <td style="padding:1px 0;vertical-align:top;white-space:nowrap;"><strong>Hal</strong></td>
-              <td style="padding:1px 6px;vertical-align:top;text-align:center;">:</td>
-              <td style="padding:1px 0;vertical-align:top;"><u data-field="perihal-value">${currentPreviewSubject || "..."}</u></td>
-            </tr>
-          </tbody>
-        </table>
-      </td>
-      <td style="vertical-align:top;text-align:right;white-space:nowrap;"><span data-field="location-date">${currentPreviewLocation || "Semarang"}, ${today}</span></td>
-    </tr>
-  </tbody>
-</table>
-<div data-field="recipient" style="font-size:11pt;margin-bottom:16px;color:#27272a;line-height:1.0;border-bottom:2px dashed #bfdbfe;padding-bottom:16px;">
-  Kepada Yang Terhormat,<br/>
-  <strong data-field="recipient-name">${currentPreviewRecipient}</strong><br/>
-  di Tempat
-</div>
-<div data-field="body" style="flex:1;border-bottom:2px dashed #ede9fe;padding:8px 0;min-height:220px;word-break:break-word;font-size:11pt;text-align:justify;line-height:1.0;margin-bottom:8px;">${
-      createContent || '<span style="color:#a1a1aa;">Ketik isi surat di sini...</span>'
-    }</div>
-<div style="padding-top:12px;margin-top:auto;border-top:1px solid #e4e4e7;font-size:10pt;color:#27272a;">
-  <div style="line-height:1.7;margin-bottom:12px;">
-    <div>Mengetahui,</div>
-    <div><span data-field="sender-title">${activeSenderTitle}</span></div>
-    <div>${createKopTitle}</div>
-    <div>${createKopSubtitle}</div>
-  </div>
-  <table style="width:100%;border-collapse:collapse;">
+
+  <!-- NOMOR & TANGGAL -->
+  <table style="width:100%; margin-bottom:14px; font-size:13px; border-collapse:collapse;">
     <tbody>
       <tr>
-        <td style="width:50%;vertical-align:top;">
-          <div style="height:56px;"></div>
-          <u><strong>( _________________________ )</strong></u>
-          <div style="font-style:italic;font-size:9.5pt;margin-top:2px;">Ketua Umum</div>
-        </td>
-        <td style="width:50%;vertical-align:top;">
-          <div style="height:56px;"></div>
-          <u><strong>( _________________________ )</strong></u>
-          <div style="font-style:italic;font-size:9.5pt;margin-top:2px;">Sekretaris Umum</div>
-        </td>
+        <td style="width:75px; padding:2px 0;">Nomor</td>
+        <td style="width:10px; padding:2px 0;">:</td>
+        <td style="padding:2px 0; font-weight:bold;" data-field="nomor-value">{{nomor}}</td>
+        <td style="text-align:right; padding:2px 0;" data-field="location-date">${createSenderLocation || "Purwodadi"}, ${today}</td>
+      </tr>
+      <tr>
+        <td style="padding:2px 0;">Lampiran</td>
+        <td style="padding:2px 0;">:</td>
+        <td style="padding:2px 0;">- (Satu Berkas)</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td style="padding:2px 0;">Perihal</td>
+        <td style="padding:2px 0;">:</td>
+        <td style="padding:2px 0; font-weight:bold; color:#1e3a8a;" data-field="perihal-value">{{perihal}}</td>
+        <td></td>
       </tr>
     </tbody>
   </table>
-  <div style="text-align:right;margin-top:10px;">
-    <span data-field="footer-text" style="font-size:11pt;color:#2563eb;font-family:'Monotype Corsiva','Apple Chancery',cursive;font-style:italic;line-height:1.6;">${currentPreviewFooterLeft}</span>
+
+  <!-- KEPADA YTH / PENERIMA -->
+  <div style="margin-bottom:16px; font-size:13px; line-height:1.5;">
+    Kepada Yang Terhormat:<br/>
+    <b style="font-size:13.5px;" data-field="recipient-name">{{penerima}}</b><br/>
+    <span style="color:#1e3a8a; font-weight:600;">{{jabatan}}</span> <span>{{instansi}}</span><br/>
+    di - Tempat
+  </div>
+
+  <!-- SALAM & REDAKSI ISI SURAT -->
+  <div style="font-size:13px; line-height:1.65; text-align:justify; margin-bottom:20px;">
+    <p style="margin:0 0 8px 0;"><i><b>Assalamu'alaikum Warahmatullahi Wabarakatuh</b></i></p>
+    <p style="margin:0 0 8px 0;">Salam silaturrahim teriring do'a kami sampaikan kepada Sahabat/i, semoga senantiasa dalam lindungan Allah SWT serta eksis dalam menjalankan aktifitas keseharian. Amin.</p>
+    <p style="margin:0 0 8px 0;">Sehubungan dengan akan dilaksanakannya agenda kegiatan organisasi Pengurus Komisariat PMII, maka dengan ini kami memohon/mengundang Sahabat/i untuk dapat hadir pada:</p>
+
+    <div style="margin:10px 0 10px 24px; font-size:13px;">
+      <table style="border-collapse:collapse; font-size:13px;">
+        <tr><td style="width:110px; padding:3px 0;">Hari / Tanggal</td><td style="width:10px;">:</td><td style="font-weight:bold;">{{tanggal}}</td></tr>
+        <tr><td style="padding:3px 0;">Waktu</td><td>:</td><td>09.00 WIB s.d Selesai</td></tr>
+        <tr><td style="padding:3px 0;">Tempat</td><td>:</td><td>Gedung PCNU Lt. 2 Purwodadi</td></tr>
+        <tr><td style="padding:3px 0;">Agenda Acara</td><td>:</td><td style="font-weight:bold; color:#1e3a8a;">{{perihal}}</td></tr>
+      </table>
+    </div>
+
+    <p style="margin:0 0 8px 0;">Demikian surat permohonan ini kami sampaikan, atas perhatian dan kehadirannya kami haturkan terima kasih.</p>
+    <p style="margin:0 0 4px 0;"><i><b>Wallahul Muwaffiq Ila Aqwamith Thariq</b></i></p>
+    <p style="margin:0 0 16px 0;"><i><b>Wassalamu'alaikum Warahmatullahi Wabarakatuh</b></i></p>
+  </div>
+
+  <!-- TANDA TANGAN PIMPINAN -->
+  <div style="margin-top:24px; font-size:13px;">
+    <div style="text-align:center; font-weight:bold; margin-bottom:50px;">
+      PENGURUS KOMISARIAT<br/>
+      PERGERAKAN MAHASISWA ISLAM INDONESIA<br/>
+      KI AGENG GETAS PENDAWA GROBOGAN
+    </div>
+    <table style="width:100%; text-align:center; font-size:13px;">
+      <tr>
+        <td style="width:50%;">
+          <b>Ketua Komisariat</b><br/><br/><br/><br/>
+          <u><b>Sahabat Ahmad Fauzi</b></u><br/>
+          NIA. 010.01.001
+        </td>
+        <td style="width:50%;">
+          <b>Sekretaris</b><br/><br/><br/><br/>
+          <u><b>Sahabat Ridwan Kamil</b></u><br/>
+          NIA. 010.01.002
+        </td>
+      </tr>
+    </table>
   </div>
 </div>`;
   };
@@ -538,194 +1288,256 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
       else el.textContent = val;
     };
 
-    const kopSection = canvas.querySelector('[data-section="kop"]');
-    if (kopSection && kopSection.firstElementChild) {
-      const logoEl = kopSection.firstElementChild as HTMLElement;
-      if (createLogoUrl && logoEl.tagName !== "IMG") {
-        logoEl.outerHTML = `<img src="${createLogoUrl}" alt="Logo" style="width:56px;height:56px;object-fit:contain;margin-right:12px;flex-shrink:0;" />`;
-      } else if (!createLogoUrl && logoEl.tagName === "IMG") {
-        logoEl.outerHTML = `<div style="width:48px;height:48px;border-radius:50%;background:#0A2A5C;color:white;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11pt;border:1px solid rgba(198,149,17,0.3);margin-right:12px;flex-shrink:0;">PMII</div>`;
-      } else if (createLogoUrl && logoEl.tagName === "IMG") {
-        (logoEl as HTMLImageElement).src = createLogoUrl;
-      }
-    }
-    set("kop-title", createKopTitle);
-    set("kop-subtitle", createKopSubtitle);
-    set("kop-english", createKopEnglish);
-    set("kop-address", createKopAddress);
     set("nomor-value", currentPreviewNomor);
-    set("perihal-value", currentPreviewSubject || "...");
-    set("location-date", `${currentPreviewLocation || "Semarang"}, ${today}`);
-    set("recipient-name", currentPreviewRecipient);
-    set("footer-text", currentPreviewFooterLeft);
-    // Update body content preserving HTML (tables, formatting)
-    // Only update if the canvas body doesn't already match (avoids overwriting manual edits)
-    const bodyEl = canvas.querySelector('[data-field="body"]') as HTMLElement | null;
-    if (bodyEl && bodyEl.innerHTML !== createContent) {
-      bodyEl.innerHTML = createContent || '<span style="color:#a1a1aa;">Ketik isi surat di sini...</span>';
+    if (currentPreviewSubject) set("perihal-value", currentPreviewSubject);
+    set("location-date", `${currentPreviewLocation || "Purwodadi"}, ${today}`);
+    if (currentPreviewRecipient) set("recipient-name", currentPreviewRecipient);
+    if (currentPreviewFooterLeft) set("footer-text", currentPreviewFooterLeft);
+
+    // Ambil data baris saat ini (dari Excel atau form isian variabel)
+    const currentRowData = getRowDataForIndex(previewBulkIndex);
+
+    // Update semua elemen [data-placeholder] yang sudah terpasang di canvas
+    const placeholderEls = canvas.querySelectorAll<HTMLElement>("[data-placeholder]");
+    placeholderEls.forEach((el) => {
+      const key = el.getAttribute("data-placeholder") || "";
+      const cleanKey = key.toLowerCase();
+      const val =
+        currentRowData[cleanKey] ||
+        currentRowData[key] ||
+        docxValues[cleanKey] ||
+        docxValues[key] ||
+        excelColumns.find((c) => c.key === cleanKey)?.sampleValue ||
+        "";
+
+      if (val) {
+        el.textContent = val;
+      }
+    });
+
+    // Pindai teks mentah {{key}} yang mungkin baru diketik pengguna dan konversikan ke live span
+    scanAndConvertRawPlaceholders(canvas, currentRowData);
+  };
+
+  // Pindai dan ubah {{placeholder}} yang diketik manual menjadi span variabel aktif
+  const scanAndConvertRawPlaceholders = (
+    canvas: HTMLElement,
+    rowData: Record<string, string>
+  ) => {
+    const inner = canvas.innerHTML;
+    if (!inner.includes("{{")) return;
+
+    let hasChange = false;
+    const updatedHtml = inner.replace(/\{\{\s*([\w-]+)\s*\}\}/g, (match, rawKey) => {
+      const cleanKey = rawKey.toLowerCase();
+      const val =
+        rowData[cleanKey] ||
+        rowData[rawKey] ||
+        docxValues[cleanKey] ||
+        docxValues[rawKey] ||
+        excelColumns.find((c) => c.key === cleanKey)?.sampleValue ||
+        "";
+
+      hasChange = true;
+      setActivePlaceholders((prev) => (prev.includes(cleanKey) ? prev : [...prev, cleanKey]));
+
+      const displayContent = val || `{{${rawKey}}}`;
+      return `<span data-placeholder="${cleanKey}" style="color:#1d4ed8; font-weight:600; text-decoration:underline decoration-dotted; text-underline-offset:3px;" title="Variabel: {{${cleanKey}}}">${displayContent}</span>`;
+    });
+
+    if (hasChange) {
+      canvas.innerHTML = updatedHtml;
+      setCreateContent(updatedHtml);
     }
   };
 
+  // Canvas initialization: Untuk custom/blank (non-DOCX)
   useEffect(() => {
-    const el = canvasTextareaRef.current;
-    if (!el) return;
-    el.innerHTML = buildCanvasHtml();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, createTemplate, createLogoUrl]);
+    if (!activeFileBase64 && isOpen) {
+      const el = canvasTextareaRef.current;
+      if (!el) return;
 
-  useEffect(() => {
-    updateCanvasFields();
+      if (letterMode === "bulk" && htmlCanvasMode === "preview") {
+        const rowData = getRowDataForIndex(previewBulkIndex);
+        const fullData: Record<string, string> = {
+          ...docxValues,
+          ...rowData,
+          nomor: currentPreviewNomor,
+          no: currentPreviewNomor,
+          penerima: currentPreviewRecipient,
+          kepada: currentPreviewRecipient,
+          perihal: currentPreviewSubject,
+          hal: currentPreviewSubject,
+          lokasi: currentPreviewLocation,
+          kota: currentPreviewLocation,
+          tanggal: letterDate,
+          hari_tanggal: letterDate
+        };
+        el.innerHTML = replacePlaceholdersInHtml(createContent || buildCanvasHtml(), fullData);
+      } else {
+        if (createContent) {
+          el.innerHTML = createContent;
+        } else {
+          el.innerHTML = buildCanvasHtml();
+        }
+        updateCanvasFields();
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    createKopTitle,
-    createKopSubtitle,
-    createKopAddress,
-    createKopEnglish,
+    isOpen,
+    createTemplate,
+    activeFileBase64,
+    letterMode,
+    htmlCanvasMode,
+    previewBulkIndex,
+    currentPreviewNomor,
+    currentPreviewRecipient,
+    currentPreviewSubject,
+    currentPreviewLocation,
+    letterDate,
+    excelRowsData,
+    docxValues,
+    activePlaceholders,
+    bulkRecipientsText
+  ]);
+
+  // Jika template DOCX aktif dan dialog dibuka, render preview Word asli
+  useEffect(() => {
+    if (isOpen && activeFileBase64) {
+      const timer = setTimeout(() => {
+        renderFilledDocxPreview(activeFileBase64, docxValues);
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, activeFileBase64]);
+
+  useEffect(() => {
+    if (!activeFileBase64 && (letterMode !== "bulk" || htmlCanvasMode === "edit")) {
+      updateCanvasFields();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
     currentPreviewNomor,
     currentPreviewSubject,
     currentPreviewLocation,
     currentPreviewRecipient,
     currentPreviewFooterLeft,
-    createContent
+    activeFileBase64,
+    htmlCanvasMode,
+    letterMode
   ]);
-
-  const handleCanvasContextMenu = (e: React.MouseEvent) => {
-    if (generationMode !== "bulk") return;
-    e.preventDefault();
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
-    }
-    setContextMenu({
-      visible: true,
-      x: e.clientX + 5,
-      y: e.clientY + 2
-    });
-  };
 
   const handlePrintLetter = () => {
     const printContent = document.getElementById("custom-letter-print-area");
     if (!printContent) return;
     const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    if (generationMode === "single") {
-      executePrintWindow(printWindow, printContent.innerHTML, currentPreviewNomor);
-    } else {
-      let masterHtml = "";
-      bulkDataRows.forEach((row, idx) => {
-        const loopNomor = getDynamicParsedText(row["Nomor_Surat"] || "{Nomor_Surat}", idx);
-        const loopPenerima = getDynamicParsedText(row["Penerima"] || "{Penerima}", idx);
-        const loopSubject = getDynamicParsedText(createSubject, idx);
-        const loopLocation = getDynamicParsedText(createSenderLocation, idx);
-        const loopBody = getDynamicParsedText(createContent, idx);
-        const loopFooterLeft = getDynamicParsedText(createFooterLeft, idx);
-
-        masterHtml += `
-          <div class="f4-page-break" style="${idx > 0 ? "page-break-before: always;" : ""}">
-            <header class="letter-header" style="position: relative; padding-bottom: 20px; margin-bottom: 16px; border-bottom: 2px dashed #bfdbfe;">
-              <div class="kop-surat" style="display: flex; align-items: center; border-bottom: 3px double #0A2A5C; padding-bottom: 15px; margin-bottom: 25px;">
-                ${
-                  createLogoUrl
-                    ? `<img src="${createLogoUrl}" style="width: 55px; height: 55px; object-fit: contain; margin-right: 15px; flex-shrink: 0;" />`
-                    : `<div style="width: 55px; height: 55px; border-radius: 50%; background-color: #0A2A5C; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 11pt; margin-right: 15px; border: 1px solid #c69511; flex-shrink: 0;">PMII</div>`
-                }
-                <div style="text-align: center; flex: 1; pr: 24px; display: flex; flex-direction: column;">
-                  <span style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 14pt; font-weight: bold; text-transform: uppercase; color: #0A2A5C; line-height: 1.0;">${createKopSubtitle}</span>
-                  <span style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 16pt; font-weight: bold; text-transform: uppercase; color: #0A2A5C; line-height: 1.0; margin-top: 2px;">${createKopTitle}</span>
-                  <span style="font-family: 'Monotype Corsiva', 'Apple Chancery', cursive; font-size: 11pt; color: #0A2A5C; line-height: 1.0; margin-top: 2px;">${createKopEnglish}</span>
-                  <span style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 11pt; color: #0A2A5C; line-height: 1.0; margin-top: 4px; white-space: pre-line;">${createKopAddress}</span>
-                </div>
-              </div>
-              <table style="width: 100%; border-collapse: collapse; font-size: 11pt; margin-bottom: 20px; color: #27272a;">
-                <tbody>
-                  <tr>
-                    <td style="vertical-align: top; width: 50%;">
-                      <table style="border-collapse: collapse;">
-                        <tbody>
-                          <tr>
-                            <td style="padding: 1px 0; vertical-align: top; white-space: nowrap;"><strong>Nomor</strong></td>
-                            <td style="padding: 1px 6px; vertical-align: top; text-align: center;">:</td>
-                            <td style="padding: 1px 0; vertical-align: top;">${loopNomor}</td>
-                          </tr>
-                          <tr>
-                            <td style="padding: 1px 0; vertical-align: top; white-space: nowrap;"><strong>Lamp</strong></td>
-                            <td style="padding: 1px 6px; vertical-align: top; text-align: center;">:</td>
-                            <td style="padding: 1px 0; vertical-align: top;">-</td>
-                          </tr>
-                          <tr>
-                            <td style="padding: 1px 0; vertical-align: top; white-space: nowrap;"><strong>Hal</strong></td>
-                            <td style="padding: 1px 6px; vertical-align: top; text-align: center;">:</td>
-                            <td style="padding: 1px 0; vertical-align: top;"><u>${loopSubject}</u></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                    <td style="vertical-align: top; text-align: right; white-space: nowrap;">${loopLocation}, ${new Date().getDate()} ${
-          [
-            "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-            "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-          ][new Date().getMonth()]
-        } ${new Date().getFullYear()}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div style="margin-bottom: 20px; font-size: 11pt;">Kepada Yang Terhormat,<br/><strong>${loopPenerima}</strong><br/>di Tempat</div>
-            </header>
-            <main style="flex: 1; padding: 16px 0; border-bottom: 2px dashed #ddd;">
-              <div style="text-align: justify; white-space: normal; margin-bottom: 20px; font-size: 11pt;">${loopBody}</div>
-            </main>
-            <footer style="padding-top: 12px; margin-top: auto; border-top: 1px solid #e4e4e7; font-size: 10pt; color: #27272a;">
-              <div style="line-height: 1.7; margin-bottom: 12px;">
-                <div>Mengetahui,</div>
-                <div>${activeSenderTitle}</div>
-                <div>${createKopTitle}</div>
-                <div>${createKopSubtitle}</div>
-              </div>
-              <table style="width: 100%; border-collapse: collapse;">
-                <tbody>
-                  <tr>
-                    <td style="width: 50%; vertical-align: top;">
-                      <div style="height: 56px;"></div>
-                      <u><strong>( _________________________ )</strong></u>
-                      <div style="font-style: italic; font-size: 9.5pt; margin-top: 2px;">Ketua Umum</div>
-                    </td>
-                    <td style="width: 50%; vertical-align: top;">
-                      <div style="height: 56px;"></div>
-                      <u><strong>( _________________________ )</strong></u>
-                      <div style="font-style: italic; font-size: 9.5pt; margin-top: 2px;">Sekretaris Umum</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div style="text-align: right; margin-top: 10px;">
-                <span style="font-size: 11pt; color: #2563eb; font-family: 'Monotype Corsiva', cursive; font-style: italic; line-height: 1.6;">${loopFooterLeft}</span>
-              </div>
-            </footer>
-          </div>
-        `;
-      });
-      executePrintWindow(printWindow, masterHtml, `Cetak Massal - ${bulkDataRows.length} Surat`);
+    if (!printWindow) {
+      toast.error("Gagal membuka jendela cetak. Pastikan izin pop-up browser aktif.");
+      return;
     }
-  };
 
-  const executePrintWindow = (printWindow: Window, htmlContent: string, docTitle: string) => {
+    // Ambil seluruh style asli (termasuk CSS yang digenerate oleh docx-preview)
+    const allStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
+      .map((el) => el.outerHTML)
+      .join("\n");
+
+    const printTitle = (currentPreviewNomor || "Surat_PMII").replace(/\s+/g, "_");
+
     printWindow.document.write(`
-      <html>
+      <!DOCTYPE html>
+      <html lang="id">
         <head>
-          <title>${docTitle}</title>
+          <meta charset="utf-8">
+          <title>${printTitle}</title>
+          ${allStyles}
           <style>
-            @page { size: 215mm 330mm; margin: 20mm; }
-            body { font-family: "Arial Narrow", Arial, sans-serif; color: #111; background: white; margin: 0; padding: 0; line-height: 1.0; font-size: 11pt; }
-            * { box-sizing: border-box; }
-            .print-label { display: none !important; }
-            .f4-page-break { display: flex; flex-direction: column; min-height: 290mm; box-sizing: border-box; }
+            @page {
+              size: auto;
+              margin: 0mm;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              width: 100% !important;
+              min-height: auto !important;
+              visibility: visible !important;
+            }
+            body, body * {
+              visibility: visible !important;
+            }
+            #custom-letter-print-area,
+            #custom-letter-print-area * {
+              visibility: visible !important;
+            }
+            .print-label {
+              display: none !important;
+            }
+            .docx-wrapper {
+              padding: 0 !important;
+              margin: 0 auto !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              display: block !important;
+              width: 100% !important;
+            }
+            .docx-wrapper > section.docx {
+              margin: 0 auto !important;
+              margin-bottom: 0 !important;
+              box-shadow: none !important;
+              border: none !important;
+              box-sizing: border-box !important;
+            }
+            .docx-wrapper > section.docx:not(:last-child) {
+              page-break-after: always !important;
+              break-after: page !important;
+            }
+            @media print {
+              html, body {
+                background: #ffffff !important;
+              }
+              body, body * {
+                visibility: visible !important;
+              }
+              #custom-letter-print-area,
+              #custom-letter-print-area * {
+                visibility: visible !important;
+              }
+              .docx-wrapper {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: transparent !important;
+              }
+              .docx-wrapper > section.docx {
+                box-shadow: none !important;
+                margin: 0 auto !important;
+                margin-bottom: 0 !important;
+              }
+              .print-label {
+                display: none !important;
+              }
+            }
           </style>
         </head>
         <body>
-          <div style="padding: 10px;">${htmlContent}</div>
+          <div id="custom-letter-print-area">${printContent.innerHTML}</div>
           <script>
-            window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); };
+            window.addEventListener('load', function() {
+              setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 250);
+            });
+            window.addEventListener('afterprint', function() {
+              window.close();
+            });
           </script>
         </body>
       </html>
@@ -733,33 +1545,306 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
     printWindow.document.close();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handlePrintBulkLetters = async () => {
+    if (parsedBulkRecipients.length === 0) return;
+    setIsBatchPrinting(true);
+    try {
+      const allStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
+        .map((el) => el.outerHTML)
+        .join("\n");
+
+      const printTitle = `Surat_Massal_PMII_${parsedBulkRecipients.length}_Penerima`;
+      const batchContainer = document.createElement("div");
+
+      if (activeFileBase64) {
+        const docx = await import("docx-preview");
+        const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
+
+        for (let i = 0; i < parsedBulkRecipients.length; i++) {
+          const rec = parsedBulkRecipients[i];
+          const nomor = getNomorForIndex(i);
+          const rowData = getRowDataForIndex(i);
+
+          const data: Record<string, string> = { ...docxValues, ...rowData };
+          activePlaceholders.forEach((k) => {
+            const lk = k.toLowerCase();
+            if (lk === "nomor" || lk === "no") data[k] = nomor;
+            else if (lk === "penerima" || lk === "kepada") data[k] = rec;
+            else if (lk === "perihal" || lk === "hal") data[k] = currentPreviewSubject;
+            else if (lk === "lokasi" || lk === "kota") data[k] = currentPreviewLocation;
+            else if (lk === "tanggal" || lk === "hari_tanggal") data[k] = letterDate;
+            else if (rowData[k] !== undefined) data[k] = rowData[k];
+            else if (rowData[lk] !== undefined) data[k] = rowData[lk];
+          });
+          Object.entries(rowData).forEach(([k, v]) => {
+            data[k] = v;
+          });
+
+          const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data);
+          const pageEl = document.createElement("div");
+          pageEl.className = "bulk-letter-page";
+
+          await docx.renderAsync(filledBuffer, pageEl, undefined, {
+            className: "docx",
+            inWrapper: true,
+            ignoreWidth: false,
+            ignoreHeight: false,
+            ignoreFonts: false,
+            breakPages: true,
+            useBase64URL: true,
+            renderHeaders: true,
+            renderFooters: true,
+            renderAltChunks: true
+          });
+
+          batchContainer.appendChild(pageEl);
+        }
+      } else {
+        const baseHtml = createContent || (canvasTextareaRef.current?.innerHTML ?? "");
+        for (let i = 0; i < parsedBulkRecipients.length; i++) {
+          const rec = parsedBulkRecipients[i];
+          const nomor = getNomorForIndex(i);
+          const rowData = getRowDataForIndex(i);
+
+          const pageEl = document.createElement("div");
+          pageEl.className = "bulk-letter-page";
+
+          const fullData: Record<string, string> = {
+            ...docxValues,
+            ...rowData,
+            nomor,
+            no: nomor,
+            penerima: rec,
+            kepada: rec,
+            perihal: currentPreviewSubject,
+            hal: currentPreviewSubject,
+            lokasi: currentPreviewLocation,
+            kota: currentPreviewLocation,
+            tanggal: letterDate,
+            hari_tanggal: letterDate
+          };
+
+          const renderedHtml = replacePlaceholdersInHtml(baseHtml, fullData);
+          pageEl.innerHTML = renderedHtml;
+          batchContainer.appendChild(pageEl);
+        }
+      }
+
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast.error("Gagal membuka jendela cetak. Pastikan izin pop-up browser aktif.");
+        return;
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="id">
+          <head>
+            <meta charset="utf-8">
+            <title>${printTitle}</title>
+            ${allStyles}
+            <style>
+              @page {
+                size: auto;
+                margin: 0mm;
+              }
+              *, *::before, *::after {
+                box-sizing: border-box !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                width: 100% !important;
+                min-height: auto !important;
+                visibility: visible !important;
+              }
+              body, body * {
+                visibility: visible !important;
+              }
+              #custom-letter-print-area,
+              #custom-letter-print-area * {
+                visibility: visible !important;
+              }
+              .bulk-letter-page {
+                page-break-after: always !important;
+                break-after: page !important;
+                width: 100% !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                display: block !important;
+              }
+              .bulk-letter-page:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
+              }
+              .docx-wrapper {
+                padding: 0 !important;
+                margin: 0 auto !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                display: block !important;
+                width: 100% !important;
+              }
+              .docx-wrapper > section.docx {
+                margin: 0 auto !important;
+                margin-bottom: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+                box-sizing: border-box !important;
+              }
+              .docx-wrapper > section.docx:not(:last-child) {
+                page-break-after: always !important;
+                break-after: page !important;
+              }
+              @media print {
+                html, body {
+                  background: #ffffff !important;
+                }
+                body, body * {
+                  visibility: visible !important;
+                }
+                #custom-letter-print-area,
+                #custom-letter-print-area * {
+                  visibility: visible !important;
+                }
+                .bulk-letter-page {
+                  page-break-after: always !important;
+                  break-after: page !important;
+                }
+                .bulk-letter-page:last-child {
+                  page-break-after: auto !important;
+                  break-after: auto !important;
+                }
+                .docx-wrapper {
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  background: transparent !important;
+                }
+                .docx-wrapper > section.docx {
+                  box-shadow: none !important;
+                  margin: 0 auto !important;
+                  margin-bottom: 0 !important;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div id="custom-letter-print-area">
+              ${batchContainer.innerHTML}
+            </div>
+            <script>
+              window.addEventListener('load', function() {
+                setTimeout(function() {
+                  window.focus();
+                  window.print();
+                }, 350);
+              });
+              window.addEventListener('afterprint', function() {
+                window.close();
+              });
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } catch (e: any) {
+      console.error("Gagal cetak surat massal:", e);
+      toast.error("Gagal mencetak surat massal: " + e.message);
+    } finally {
+      setIsBatchPrinting(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onPublish({
-      nomor: currentPreviewNomor,
-      recipient: currentPreviewRecipient,
-      subject: currentPreviewSubject,
-      classification: createClassification,
-      content: getDynamicParsedText(createContent, previewIndex),
-      senderTitle: activeSenderTitle,
-      senderLocation: currentPreviewLocation
-    });
-    handlePrintLetter();
-    setIsOpen(false);
+
+    if (letterMode === "bulk") {
+      if (parsedBulkRecipients.length === 0) {
+        toast.error("Silakan masukkan minimal 1 nama penerima surat massal.");
+        return;
+      }
+      if (bulkDuplicateEntries.length > 0) {
+        const confirmUse = window.confirm(
+          `PERINGATAN: Terdapat ${bulkDuplicateEntries.length} nomor surat yang sudah pernah digunakan:\n${bulkDuplicateEntries.slice(0, 3).map(d => `• ${d.nomor} (${d.recipient})`).join("\n")}${bulkDuplicateEntries.length > 3 ? "\n...dan lainnya" : ""}\n\nTetap lanjutkan menerbitkan dengan nomor duplikat ini?`
+        );
+        if (!confirmUse) return;
+      }
+
+      const massMails = parsedBulkRecipients.map((rec, idx) => {
+        const rowData = getRowDataForIndex(idx);
+        const fullData: Record<string, string> = {
+          ...docxValues,
+          ...rowData,
+          nomor: getNomorForIndex(idx),
+          penerima: rec,
+          perihal: currentPreviewSubject,
+          lokasi: currentPreviewLocation,
+          tanggal: letterDate
+        };
+        const mailContent = !activeFileBase64
+          ? replacePlaceholdersInHtml(createContent, fullData)
+          : createContent;
+
+        return {
+          nomor: getNomorForIndex(idx),
+          recipient: rec,
+          subject: currentPreviewSubject,
+          classification: createClassification,
+          content: mailContent,
+          senderTitle: activeSenderTitle,
+          senderLocation: currentPreviewLocation,
+          customData: rowData
+        };
+      });
+
+      onPublish(massMails);
+      await handlePrintBulkLetters();
+      setIsOpen(false);
+    } else {
+      if (duplicateEntry) {
+        const confirmUse = window.confirm(
+          `PERINGATAN: Nomor surat "${currentPreviewNomor}" sudah pernah digunakan pada surat "${duplicateEntry.subject || 'Surat Keluar'}".\n\nTetap lanjutkan menerbitkan dengan nomor duplikat ini?`
+        );
+        if (!confirmUse) return;
+      }
+      onPublish({
+        nomor: currentPreviewNomor,
+        recipient: currentPreviewRecipient,
+        subject: currentPreviewSubject,
+        classification: createClassification,
+        content: createContent,
+        senderTitle: activeSenderTitle,
+        senderLocation: currentPreviewLocation
+      });
+      handlePrintLetter();
+      setIsOpen(false);
+    }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger render={
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg h-9 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors border-none">
-          <FileText className="w-3.5 h-3.5" />
-          <span>Buat Surat Resmi</span>
-        </Button>
-      } />
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setLetterMode("single");
+          setIsOpen(true);
+        }}
+        className="h-9 px-4 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer border-none shrink-0"
+      >
+        <FileText className="w-3.5 h-3.5" />
+        <span>Buat Surat Resmi</span>
+      </button>
 
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent
         showCloseButton={false}
-        className="w-[96vw] max-w-7xl h-[94vh] md:h-[90vh] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-0 gap-0 flex flex-col overflow-hidden"
+        className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none bg-white dark:bg-zinc-900 border-none rounded-none ring-0 shadow-none p-0 gap-0 flex flex-col overflow-hidden z-50"
+        style={{ transform: "none", translate: "none" }}
       >
         {/* Header Modul (Mengikuti Standar Verifikasi) */}
         <DialogHeader className="p-4 sm:p-5 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
@@ -769,16 +1854,11 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
                 <FileText className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                    Pembuat Surat Resmi (Letter Generator)
-                  </DialogTitle>
-                  <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
-                    Format F4 / A4
-                  </Badge>
-                </div>
-                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Generate lembaran surat resmi PMII dengan live WYSIWYG canvas, penomoran 9 segmen baku, dan dukungan cetak massal.
+                <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Pembuat Surat Resmi
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Formulir pembuatan surat resmi PMII
                 </DialogDescription>
               </div>
             </div>
@@ -794,690 +1874,509 @@ export default function LetterGeneratorDialog({ onPublish }: LetterGeneratorDial
         {/* Workspace Panel */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden h-full">
           {/* Sisi Kiri: Form Input & Konfigurasi */}
-          <form
-            onSubmit={handleSubmit}
-            className="lg:col-span-5 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30 h-full flex flex-col overflow-hidden"
-          >
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-              {/* TABS MODE PEMBUATAN (Persis seperti Tabs di Verifikasi) */}
-              <div className="grid grid-cols-2 gap-2 bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setGenerationMode("single")}
-                  className={`py-2 text-xs font-semibold rounded-md transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    generationMode === "single"
-                      ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
-                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Single Surat</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGenerationMode("bulk")}
-                  className={`py-2 text-xs font-semibold rounded-md transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    generationMode === "bulk"
-                      ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
-                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Cetak Massal (Mail Merge)</span>
-                </button>
-              </div>
+          {(() => {
+            const selectedTemplateObj = customTemplates.find((t) => t.id === createTemplate);
+            const detailPlaceholders = activePlaceholders.filter((k) => !isCoreStandardKey(k));
 
-              {/* CARD 1: TEMPLATE & KLASIFIKASI */}
-              <div className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3 shadow-none">
-                <div className="flex items-center gap-2 pb-1 border-b border-zinc-100 dark:border-zinc-800">
-                  <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                    Template &amp; Klasifikasi
-                  </span>
-                </div>
+            return (
+              <form
+                onSubmit={handleSubmit}
+                className="lg:col-span-4 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30 h-full flex flex-col overflow-hidden"
+              >
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+                  {/* CARD 1: PILIHAN TEMPLATE SURAT */}
+                  <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2.5 shadow-none">
+                    <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                          Template Surat
+                        </span>
+                      </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Pilih Template</label>
+                      {onOpenTemplateManager && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOpen(false);
+                            onOpenTemplateManager();
+                          }}
+                          className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold flex items-center gap-1 cursor-pointer border-none bg-transparent hover:underline"
+                          title="Buka panel pengelolaan template surat"
+                        >
+                          <Bookmark className="w-3 h-3" />
+                          <span>Kelola Template</span>
+                        </button>
+                      )}
+                    </div>
+
                     <Select value={createTemplate} onValueChange={handleTemplateChange}>
                       <SelectTrigger className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
-                        <SelectValue placeholder="Pilih Template" />
+                        <SelectValue placeholder="Pilih Template Surat">
+                          {createTemplate === "custom_blank"
+                            ? "Lembar Kosong (Mulai dari Nol)"
+                            : selectedTemplateObj?.name || "Pilih Template Surat"}
+                        </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="border-zinc-200 dark:border-zinc-800">
-                        <SelectItem value="undangan">Undangan</SelectItem>
-                        <SelectItem value="permohonan">Permohonan</SelectItem>
+                      <SelectContent className="border-zinc-200 dark:border-zinc-800 max-h-64">
+                        <SelectItem value="custom_blank">Lembar Kosong (Mulai dari Nol)</SelectItem>
+                        {customTemplates.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 border-t border-zinc-100 dark:border-zinc-800 mt-1 pt-1">
+                              Template Tersimpan ({customTemplates.length})
+                            </div>
+                            {customTemplates.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                <div className="flex items-center justify-between w-full gap-2">
+                                  <span className="truncate">{t.name}</span>
+                                  {t.classification && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 shrink-0">
+                                      {t.classification}
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Klasifikasi</label>
-                    <select
-                      value={createClassification}
-                      onChange={(e) => setCreateClassification(e.target.value as any)}
-                      className="h-9 w-full text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                    >
-                      <option value="Instruksi">Instruksi</option>
-                      <option value="Permohonan">Permohonan</option>
-                      <option value="Undangan">Undangan</option>
-                      <option value="Keputusan">Keputusan</option>
-                      <option value="Rekomendasi">Rekomendasi</option>
-                    </select>
-                  </div>
-                </div>
+                  {/* CARD 2: INFORMASI SURAT */}
+                  <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3 shadow-none">
+                    <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <Bookmark className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                          Informasi Surat
+                        </span>
+                      </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Perihal / Hal Surat *</label>
-                  <Input
-                    required
-                    value={createSubject}
-                    onChange={(e) => setCreateSubject(e.target.value)}
-                    placeholder="Contoh: Undangan Rapat Pleno..."
-                    className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Kota Pengirim</label>
-                  <Input
-                    value={createSenderLocation}
-                    onChange={(e) => setCreateSenderLocation(e.target.value)}
-                    placeholder="Semarang"
-                    className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                  />
-                </div>
-              </div>
-
-              {/* CARD 2: PENOMORAN & PENERIMA */}
-              {generationMode === "single" ? (
-                <div className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3 shadow-none">
-                  <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="flex items-center gap-2">
-                      <Bookmark className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                        Nomor Surat Baku PMII (9 Segmen)
-                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleAutoAssignNextNumber}
+                        className="h-6 px-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded flex items-center gap-1 border border-blue-200/60 dark:border-blue-800/60 cursor-pointer shadow-none"
+                        title="Ambil nomor urut berikutnya"
+                      >
+                        <Sparkles className="w-3 h-3 text-blue-500" />
+                        <span>No. Otomatis (#{getNextSeqNumber(mailHistory)})</span>
+                      </Button>
                     </div>
-                  </div>
 
-                  <div className="space-y-1.5">
-                    <div className="grid grid-cols-9 gap-1 bg-zinc-50 dark:bg-zinc-950 p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                      <Input
-                        ref={boxRefs[0]}
-                        maxLength={3}
-                        placeholder="021"
-                        value={numBox1}
-                        onChange={(e) => handleBoxChange(0, e.target.value, setNumBox1, 3)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="1. Nomor Urut Surat"
-                      />
-                      <Input
-                        ref={boxRefs[1]}
-                        maxLength={2}
-                        placeholder="PK"
-                        value={numBox2}
-                        onChange={(e) => handleBoxChange(1, e.target.value, setNumBox2, 2)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="2. Jenis & Tingkat Kepengurusan"
-                      />
-                      <Input
-                        ref={boxRefs[2]}
-                        maxLength={4}
-                        placeholder="XI"
-                        value={numBox3}
-                        onChange={(e) => handleBoxChange(2, e.target.value, setNumBox3, 4)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="3. Periode / Wilayah"
-                      />
-                      <Input
-                        ref={boxRefs[3]}
-                        maxLength={5}
-                        placeholder="Z-03"
-                        value={numBox4}
-                        onChange={(e) => handleBoxChange(3, e.target.value, setNumBox4, 5)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="4. Kode Klasifikasi"
-                      />
-                      <Input
-                        ref={boxRefs[4]}
-                        maxLength={2}
-                        placeholder="01"
-                        value={numBox5}
-                        onChange={(e) => handleBoxChange(4, e.target.value, setNumBox5, 2)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="5. Kode Wilayah"
-                      />
-                      <Input
-                        ref={boxRefs[5]}
-                        maxLength={3}
-                        placeholder="010"
-                        value={numBox6}
-                        onChange={(e) => handleBoxChange(5, e.target.value, setNumBox6, 3)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="6. Kode Cabang"
-                      />
-                      <Input
-                        ref={boxRefs[6]}
-                        maxLength={4}
-                        placeholder="B-II"
-                        value={numBox7}
-                        onChange={(e) => handleBoxChange(6, e.target.value, setNumBox7, 4)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="7. Kode Intern / Ekstern"
-                      />
-                      <Input
-                        ref={boxRefs[7]}
-                        maxLength={2}
-                        placeholder="12"
-                        value={numBox8}
-                        onChange={(e) => handleBoxChange(7, e.target.value, setNumBox8, 2)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="8. Bulan Hijri / Masehi"
-                      />
-                      <Input
-                        ref={boxRefs[8]}
-                        maxLength={4}
-                        placeholder="2026"
-                        value={numBox9}
-                        onChange={(e) => handleBoxChange(8, e.target.value, setNumBox9, 4)}
-                        className="text-center font-mono text-[11px] font-bold px-0 h-8 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-none"
-                        title="9. Tahun"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400 px-1 pt-0.5">
-                      <span>No.Urut • Tingkat • Wilayah • Klas • Prov • Cab • Int/Eks • Bulan • Tahun</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                      Tujuan / Nama Penerima *
-                    </label>
-                    <Input
-                      required
-                      value={createRecipient}
-                      onChange={(e) => setCreateRecipient(e.target.value)}
-                      placeholder="Contoh: Pengurus Rayon PMII..."
-                      className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                    {/* 9 Segmen Nomor Surat */}
+                    <LetterNumberingBoxes
+                      boxes={[numBox1, numBox2, numBox3, numBox4, numBox5, numBox6, numBox7, numBox8, numBox9]}
+                      onBoxChange={(index, val) => {
+                        const setters = [
+                          setNumBox1, setNumBox2, setNumBox3, setNumBox4, setNumBox5,
+                          setNumBox6, setNumBox7, setNumBox8, setNumBox9
+                        ];
+                        setters[index](val);
+                      }}
+                      letterMode={letterMode}
+                      isSequentialNumbering={isSequentialNumbering}
+                      onToggleSequential={setIsSequentialNumbering}
+                      bulkDuplicateEntries={bulkDuplicateEntries}
+                      duplicateEntry={duplicateEntry}
+                      duplicateSeqEntry={duplicateSeqEntry}
+                      onAutoAssignNextNumber={handleAutoAssignNextNumber}
+                      nextSeqNumber={getNextSeqNumber(mailHistory)}
+                      parsedBulkRecipientsLength={parsedBulkRecipients.length}
+                      firstNomor={getNomorForIndex(0)}
+                      lastNomor={getNomorForIndex(Math.max(0, parsedBulkRecipients.length - 1))}
                     />
-                  </div>
-                </div>
-              ) : (
-                /* CARD BULK / MAIL MERGE */
-                <div className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3 shadow-none">
-                  <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                        Data Surat Massal ({bulkDataRows.length} Data)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <input type="file" ref={excelInputRef} accept=".csv,.txt" onChange={handleExcelUpload} className="hidden" />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => excelInputRef.current?.click()}
-                        className="h-7 text-[10px] font-medium border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
-                      >
-                        <FileSpreadsheet className="w-3 h-3 mr-1 text-emerald-600" /> Impor CSV
-                      </Button>
-                    </div>
-                  </div>
 
-                  {/* Tambah Kolom Variabel */}
-                  <div className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-2">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                      <Columns className="w-3 h-3 text-blue-600" /> Tambah Kolom Variabel
-                    </span>
-                    <div className="flex gap-2">
+                    {/* Perihal Surat */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                        Perihal Surat *
+                      </label>
                       <Input
-                        placeholder="Misal: Nomor_Surat, Penerima, Nama_Kader"
-                        value={newColumnName}
-                        onChange={(e) => setNewColumnName(e.target.value)}
-                        className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        required
+                        value={createSubject}
+                        onChange={(e) => setCreateSubject(e.target.value)}
+                        placeholder="Perihal / agenda surat..."
+                        className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleAddCustomColumn}
-                        className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg shrink-0 cursor-pointer"
-                      >
-                        + Kolom
-                      </Button>
+                    </div>
+
+                    {/* Tujuan / Penerima */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Tujuan / Penerima *</span>
+                        </label>
+                        {/* Selector Mode Penerima (Tunggal vs Massal) */}
+                        <div className="inline-flex items-center p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg border border-zinc-200/80 dark:border-zinc-700/80 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setLetterMode("single")}
+                            className={`px-2 py-0.5 rounded-md transition-all cursor-pointer border-none ${
+                              letterMode === "single"
+                                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
+                                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 bg-transparent font-medium"
+                            }`}
+                          >
+                            1 Penerima
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLetterMode("bulk")}
+                            className={`px-2 py-0.5 rounded-md transition-all cursor-pointer border-none flex items-center gap-1 ${
+                              letterMode === "bulk"
+                                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
+                                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 bg-transparent font-medium"
+                            }`}
+                          >
+                            <span>Banyak (Excel)</span>
+                            {parsedBulkRecipients.length > 0 && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[9px] font-bold">
+                                {parsedBulkRecipients.length}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {letterMode === "bulk" ? (
+                        <>
+                          <input
+                            type="file"
+                            ref={excelFileInputRef}
+                            onChange={handleExcelUpload}
+                            accept=".xlsx, .xls, .csv"
+                            className="hidden"
+                          />
+                          <LetterExcelImporter
+                            parsedBulkRecipients={parsedBulkRecipients}
+                            bulkRecipientsText={bulkRecipientsText}
+                            onBulkRecipientsChange={setBulkRecipientsText}
+                            excelColumns={excelColumns}
+                            excelRowsData={excelRowsData}
+                            activePlaceholders={activePlaceholders}
+                            docxValues={docxValues}
+                            onUploadExcelClick={() => excelFileInputRef.current?.click()}
+                            onDownloadExcelTemplate={handleDownloadExcelTemplate}
+                            onLoadPreset={loadPresetRecipients}
+                            onOpenAddPlaceholder={() => setIsAddPlaceholderOpen(true)}
+                            onInsertPlaceholder={insertPlaceholderAtCursor}
+                            previewBulkIndex={previewBulkIndex}
+                            onSelectPreviewIndex={setPreviewBulkIndex}
+                            getNomorForIndex={getNomorForIndex}
+                            getRowDataForIndex={getRowDataForIndex}
+                          />
+                        </>
+                      ) : (
+                        <Input
+                          required
+                          value={createRecipient}
+                          onChange={(e) => setCreateRecipient(e.target.value)}
+                          placeholder="Nama tujuan / instansi penerima..."
+                          className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        />
+                      )}
+                    </div>
+
+                    {/* Kota & Tanggal */}
+                    <div className="grid grid-cols-2 gap-2 pt-0.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          Kota
+                        </label>
+                        <Input
+                          value={createSenderLocation}
+                          onChange={(e) => setCreateSenderLocation(e.target.value)}
+                          placeholder="Purwodadi"
+                          className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          Tanggal
+                        </label>
+                        <Input
+                          value={letterDate}
+                          onChange={(e) => setLetterDate(e.target.value)}
+                          placeholder="12 Oktober 2026"
+                          className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Tabel Data Massal */}
-                  <div className="w-full overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900 max-h-48">
-                    <table className="w-full text-left text-xs min-w-[360px]">
-                      <thead className="bg-zinc-50 dark:bg-zinc-950 font-semibold text-[11px] border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300">
-                        <tr>
-                          {bulkColumns.map((col) => (
-                            <th key={col} className="px-3 py-2">
-                              <div className="flex items-center justify-between group gap-2">
-                                <span className="font-mono text-zinc-700 dark:text-zinc-300">{col}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveCustomColumn(col)}
-                                  className="text-rose-400 hover:text-rose-600 hidden group-hover:block bg-transparent border-none cursor-pointer"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            </th>
-                          ))}
-                          <th className="w-8 text-center"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        {bulkDataRows.map((row, rIdx) => (
-                          <tr key={rIdx} className={previewIndex === rIdx ? "bg-blue-50/50 dark:bg-blue-950/30" : ""}>
-                            {bulkColumns.map((col) => (
-                              <td key={col} className="p-1">
-                                <Input
-                                  value={row[col] || ""}
-                                  onChange={(e) => handleUpdateBulkCell(rIdx, col, e.target.value)}
-                                  onFocus={() => setPreviewIndex(rIdx)}
-                                  className="h-7 text-xs px-2 bg-transparent border-none shadow-none focus-visible:ring-1"
-                                />
-                              </td>
-                            ))}
-                            <td className="p-1 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveBulkRow(rIdx)}
-                                className="text-rose-500 hover:text-rose-600 border-none bg-transparent cursor-pointer p-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddBulkRow}
-                    className="w-full text-xs font-medium h-8 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Tambah Baris Baru
-                  </Button>
+                  {/* CARD 3: ISIAN VARIABEL TEMPLATE & PLACEHOLDER KUSTOM */}
+                  <LetterDocxPlaceholders
+                    detailPlaceholders={detailPlaceholders}
+                    docxValues={docxValues}
+                    onDocxValueChange={(key, val) =>
+                      setDocxValues((prev) => ({
+                        ...prev,
+                        [key]: val,
+                      }))
+                    }
+                    excelColumns={excelColumns}
+                    currentRowData={excelRowsData[previewBulkIndex]?.data || {}}
+                    humanizePlaceholderKey={humanizePlaceholderKey}
+                    isMultilineField={isMultilineField}
+                  />
                 </div>
-              )}
 
-              {/* CARD 3: LOGO & KOP SURAT */}
-              <div className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3 shadow-none">
-                <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                {/* Footer Form Kiri */}
+                <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end bg-zinc-50/50 dark:bg-zinc-950/50 px-5 py-3.5">
                   <div className="flex items-center gap-2">
-                    <Building className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      Kop Surat &amp; Logo Resmi
+                    <DialogClose render={
+                      <Button type="button" variant="outline" className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer">
+                        Batal
+                      </Button>
+                    } />
+                    <Button
+                      type="submit"
+                      disabled={isBatchPrinting || (letterMode === "bulk" && parsedBulkRecipients.length === 0)}
+                      className="h-9 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isBatchPrinting ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menyiapkan {parsedBulkRecipients.length} Dokumen...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>
+                            {letterMode === "bulk"
+                              ? `Terbitkan & Cetak ${parsedBulkRecipients.length} Surat Massal`
+                              : "Terbitkan & Cetak PDF"}
+                          </span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            );
+          })()}
+
+          {/* Sisi Kanan: Real-time Live WYSIWYG Canvas */}
+          <div className="lg:col-span-8 p-4 md:p-6 flex flex-col gap-3 bg-zinc-100 dark:bg-zinc-950 overflow-y-auto h-full relative">
+            <div className="w-full flex flex-col gap-3 relative max-w-3xl mx-auto">
+              {/* Carousel / Navigation Bar saat mode Surat Massal */}
+              {letterMode === "bulk" && parsedBulkRecipients.length > 0 && (
+                <div className="w-full flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3.5 py-2 rounded-xl shadow-xs shrink-0">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 shrink-0">
+                      Pratinjau Surat:
+                    </span>
+                    <Badge className="bg-blue-600 text-white text-[10px] px-2 py-0.5 h-5 shrink-0">
+                      #{previewBulkIndex + 1} dari {parsedBulkRecipients.length}
+                    </Badge>
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                      {parsedBulkRecipients[previewBulkIndex]}
+                    </span>
+                    <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0 hidden sm:inline">
+                      ({currentPreviewNomor})
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowKopFooterSettings(!showKopFooterSettings)}
-                    className="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-none"
-                  >
-                    <span>{showKopFooterSettings ? "Sembunyikan Teks" : "Sesuaikan Teks"}</span>
-                    {showKopFooterSettings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
 
-                {/* Upload Logo */}
-                <div className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                  {createLogoUrl ? (
-                    <div className="relative w-12 h-12 bg-white rounded-lg border border-zinc-200 p-1 flex items-center justify-center shrink-0">
-                      <img src={createLogoUrl} alt="Logo PMII" className="w-full h-full object-contain" />
-                      <button
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!activeFileBase64 && (
+                      <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 mr-1">
+                        <button
+                          type="button"
+                          onClick={() => setHtmlCanvasMode("edit")}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                            htmlCanvasMode === "edit"
+                              ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+                              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                          title="Mode Edit: Ketik isi surat dan tempatkan placeholder {{...}}"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit Template</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHtmlCanvasMode("preview")}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                            htmlCanvasMode === "preview"
+                              ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+                              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                          title="Mode Pratinjau: Lihat tampilan surat dengan data terisi per penerima"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Pratinjau Terisi</span>
+                        </button>
+                      </div>
+                    )}
+                    {activeFileBase64 && (
+                      <Button
                         type="button"
-                        onClick={handleRemoveLogo}
-                        className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 hover:bg-rose-600 shadow-sm cursor-pointer border-none"
-                        title="Hapus Logo"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownloadBulkZip}
+                        className="h-7 text-[10px] font-medium text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 mr-1 flex items-center gap-1 cursor-pointer"
+                        title="Unduh semua berkas Word sebagai arsip ZIP"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-12 h-12 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-400 cursor-pointer bg-white dark:bg-zinc-900 shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <input type="file" ref={fileInputRef} accept="image/*" onChange={handleLogoChange} className="hidden" />
+                        <Download className="w-3 h-3 text-blue-600" />
+                        <span className="hidden sm:inline">Unduh ZIP</span>
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="h-7 text-[11px] font-medium border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+                      disabled={previewBulkIndex <= 0}
+                      onClick={() => setPreviewBulkIndex((prev) => Math.max(0, prev - 1))}
+                      className="h-7 w-7 p-0 cursor-pointer disabled:opacity-30 border-zinc-200 dark:border-zinc-700"
+                      title="Penerima Sebelumnya"
                     >
-                      {createLogoUrl ? "Ganti Gambar Logo" : "Pilih Logo Lembaga"}
+                      <ChevronLeft className="w-3.5 h-3.5" />
                     </Button>
-                    <p className="text-[10px] text-zinc-400 mt-1">Logo tersinkron otomatis dari Pengaturan Sistem.</p>
-                  </div>
-                </div>
-
-                {/* Accordion Sesuaikan Kop */}
-                {showKopFooterSettings && (
-                  <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Tingkat Kepengurusan (Kop Baris 1)
-                      </label>
-                      <Input
-                        value={createKopSubtitle}
-                        onChange={(e) => setCreateKopSubtitle(e.target.value)}
-                        className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Nama Organisasi (Kop Baris 2)
-                      </label>
-                      <Input
-                        value={createKopTitle}
-                        onChange={(e) => setCreateKopTitle(e.target.value)}
-                        className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Terjemahan Bahasa Inggris (Kop Baris 3)
-                      </label>
-                      <Input
-                        value={createKopEnglish}
-                        onChange={(e) => setCreateKopEnglish(e.target.value)}
-                        className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Alamat &amp; Kontak Sekretariat (Kop Baris 4)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={createKopAddress}
-                        onChange={(e) => setCreateKopAddress(e.target.value)}
-                        className="w-full text-xs p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none text-zinc-800 dark:text-zinc-200"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Teks Motto Footer
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={createFooterLeft}
-                        onChange={(e) => setCreateFooterLeft(e.target.value)}
-                        className="w-full text-xs p-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none text-zinc-800 dark:text-zinc-200"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer Form Kiri */}
-            <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-950/50 px-5 py-3.5">
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                <Info className="w-3.5 h-3.5 text-zinc-400" /> Format F4 (215 x 330 mm)
-              </span>
-              <div className="flex items-center gap-2">
-                <DialogClose render={
-                  <Button type="button" variant="outline" className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer">
-                    Batal
-                  </Button>
-                } />
-                <Button
-                  type="submit"
-                  className="h-9 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 cursor-pointer flex items-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>
-                    {generationMode === "single"
-                      ? "Terbitkan & Cetak PDF"
-                      : `Cetak Massal (${bulkDataRows.length} Surat)`}
-                  </span>
-                </Button>
-              </div>
-            </div>
-          </form>
-
-          {/* Sisi Kanan: Real-time Live WYSIWYG Canvas */}
-          <div className="lg:col-span-7 p-4 md:p-6 flex flex-col gap-3 bg-zinc-100 dark:bg-zinc-950 overflow-y-auto h-full relative">
-            <div className="w-full flex flex-col gap-3 relative max-w-2xl mx-auto">
-              {/* Header Preview & Controls */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                {generationMode === "single" ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                      Pratinjau Kertas F4 (Live WYSIWYG)
+                    <span className="text-xs font-mono font-semibold px-1 text-zinc-600 dark:text-zinc-300">
+                      {previewBulkIndex + 1}/{parsedBulkRecipients.length}
                     </span>
-                    <Badge variant="outline" className="text-[10px] font-semibold bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-                      Siap Cetak
-                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={previewBulkIndex >= parsedBulkRecipients.length - 1}
+                      onClick={() => setPreviewBulkIndex((prev) => Math.min(parsedBulkRecipients.length - 1, prev + 1))}
+                      className="h-7 w-7 p-0 cursor-pointer disabled:opacity-30 border-zinc-200 dark:border-zinc-700"
+                      title="Penerima Berikutnya"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                      Surat ke-{previewIndex + 1} dari {bulkDataRows.length}
-                    </span>
-                    <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-0.5 rounded-lg shadow-xs">
-                      <button
-                        type="button"
-                        disabled={previewIndex === 0}
-                        onClick={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
-                        className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded disabled:opacity-30 cursor-pointer border-none bg-transparent"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={previewIndex >= bulkDataRows.length - 1}
-                        onClick={() => setPreviewIndex((prev) => Math.min(bulkDataRows.length - 1, prev + 1))}
-                        className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded disabled:opacity-30 cursor-pointer border-none bg-transparent"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrintLetter}
-                  className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer flex items-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>Uji Cetak Lembaran</span>
-                </Button>
-              </div>
-
-              {/* Toolbar Format Teks Canvas */}
-              <div className="print-label flex items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 shadow-xs">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pr-2 border-r border-zinc-200 dark:border-zinc-800 mr-0.5">
-                  Format
-                </span>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applyFormat("bold");
-                  }}
-                  className="w-6 h-6 rounded font-bold text-[12px] hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 border-none bg-transparent cursor-pointer transition-colors"
-                  title="Tebal (Bold)"
-                >
-                  B
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applyFormat("italic");
-                  }}
-                  className="w-6 h-6 rounded italic text-[12px] hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 border-none bg-transparent cursor-pointer transition-colors"
-                  title="Miring (Italic)"
-                >
-                  I
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applyFormat("underline");
-                  }}
-                  className="w-6 h-6 rounded underline text-[12px] hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 border-none bg-transparent cursor-pointer transition-colors"
-                  title="Garis Bawah (Underline)"
-                >
-                  U
-                </button>
-
-                <span className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
-
-                {/* Ukuran Font */}
-                <select
-                  onMouseDown={() => {
-                    const sel = window.getSelection();
-                    if (sel && sel.rangeCount > 0) {
-                      savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
-                    }
-                  }}
-                  onChange={(e) => {
-                    applyFontSize(e.target.value);
-                    e.target.value = "";
-                  }}
-                  defaultValue=""
-                  className="h-6 text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-1 outline-none cursor-pointer"
-                  title="Ukuran Font"
-                >
-                  <option value="" disabled>
-                    Ukuran
-                  </option>
-                  {[9, 10, 11, 12, 13, 14, 16, 18].map((s) => (
-                    <option key={s} value={`${s}pt`}>
-                      {s}pt
-                    </option>
-                  ))}
-                </select>
-
-                <span className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
-
-                {/* Font Family */}
-                <select
-                  onMouseDown={() => {
-                    const sel = window.getSelection();
-                    if (sel && sel.rangeCount > 0) {
-                      savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
-                    }
-                  }}
-                  onChange={(e) => {
-                    applyFontFamily(e.target.value);
-                    e.target.value = "";
-                  }}
-                  defaultValue=""
-                  className="h-6 text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-1 outline-none cursor-pointer max-w-[110px]"
-                  title="Jenis Font"
-                >
-                  <option value="" disabled>
-                    Jenis Huruf
-                  </option>
-                  <option value='"Arial Narrow", Arial, sans-serif'>Arial Narrow</option>
-                  <option value='"Monotype Corsiva", "Apple Chancery", cursive'>Monotype Corsiva</option>
-                  <option value='Arial, sans-serif'>Arial</option>
-                  <option value='"Times New Roman", Times, serif'>Times New Roman</option>
-                </select>
-
-                <span className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
-
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    const sel = window.getSelection();
-                    if (sel && sel.rangeCount > 0) savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
-                    applyTextTransform("uppercase");
-                  }}
-                  className="h-6 px-1.5 rounded text-[10px] font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 border-none bg-transparent cursor-pointer transition-colors"
-                  title="HURUF BESAR (UPPERCASE)"
-                >
-                  AA
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    const sel = window.getSelection();
-                    if (sel && sel.rangeCount > 0) savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
-                    applyTextTransform("lowercase");
-                  }}
-                  className="h-6 px-1.5 rounded text-[10px] font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 border-none bg-transparent cursor-pointer transition-colors"
-                  title="huruf kecil (lowercase)"
-                >
-                  aa
-                </button>
-              </div>
-
-              {/* CANVAS KERTAS F4 */}
-              <div
-                id="custom-letter-print-area"
-                ref={canvasTextareaRef}
-                contentEditable
-                suppressContentEditableWarning
-                onContextMenu={handleCanvasContextMenu}
-                onInput={() => {
-                  // Sync createContent from the body field when user types directly
-                  const bodyEl = canvasTextareaRef.current?.querySelector('[data-field="body"]') as HTMLElement | null;
-                  if (bodyEl) setCreateContent(bodyEl.innerHTML);
-                }}
-                className="w-full aspect-[215/330] bg-white text-zinc-900 p-8 sm:p-10 rounded-xl border border-zinc-300 shadow-xl flex flex-col outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 cursor-text overflow-auto"
-                style={{ fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.0" }}
-              />
-
-              {/* Context Menu untuk Sisipkan Variabel Kustom */}
-              {contextMenu.visible && (
-                <div
-                  className="fixed bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl py-1.5 w-48 z-50 font-sans border-l-[3px] border-l-blue-600"
-                  style={{ top: contextMenu.y, left: contextMenu.x }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="px-3 py-1 text-[10px] font-bold uppercase text-zinc-400 tracking-wider border-b border-zinc-100 dark:border-zinc-800 pb-1 mb-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-500" /> Sisipkan Variabel
-                  </div>
-                  {bulkColumns.length === 0 ? (
-                    <div className="px-3 py-1.5 text-[10px] text-zinc-400 italic">Kolom kustom kosong</div>
-                  ) : (
-                    bulkColumns.map((col) => (
-                      <button
-                        key={col}
-                        type="button"
-                        onClick={() => {
-                          insertVariableAtCaret(col);
-                          setContextMenu((prev) => ({ ...prev, visible: false }));
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 font-mono font-bold border-none bg-transparent cursor-pointer transition-colors"
-                      >
-                        {"{"}{col}{"}"}
-                      </button>
-                    ))
-                  )}
                 </div>
               )}
+
+
+              {/* CANVAS KERTAS SURAT (Word Asli / Plain Paper) */}
+              <div className="w-full relative min-h-[600px] flex flex-col items-center justify-start">
+                {isRenderingDocx && (
+                  <div className="absolute inset-0 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl">
+                    <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-xl shadow-lg">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Merender Dokumen Word Asli...
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  id="custom-letter-print-area"
+                  ref={canvasTextareaRef}
+                  contentEditable={htmlCanvasMode === "edit"}
+                  suppressContentEditableWarning
+                  onInput={() => {
+                    if (canvasTextareaRef.current && htmlCanvasMode === "edit") {
+                      setCreateContent(canvasTextareaRef.current.innerHTML);
+                    }
+                  }}
+                  onKeyUp={(e) => {
+                    saveCanvasSelection();
+                    if (e.key === "}" && canvasTextareaRef.current) {
+                      updateCanvasFields();
+                    }
+                  }}
+                  onMouseUp={saveCanvasSelection}
+                  onSelect={saveCanvasSelection}
+                  onBlur={() => {
+                    saveCanvasSelection();
+                    if (canvasTextareaRef.current) {
+                      updateCanvasFields();
+                    }
+                  }}
+                  className={
+                    activeFileBase64
+                      ? "w-full min-h-[600px] flex flex-col items-center justify-start p-2 sm:p-4 overflow-auto outline-none"
+                      : "w-full aspect-[215/330] bg-white text-zinc-900 p-8 sm:p-10 rounded-xl border border-zinc-300 shadow-xl flex flex-col outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 cursor-text overflow-auto"
+                  }
+                  style={activeFileBase64 ? undefined : { fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.35" }}
+                />
+              </div>
             </div>
           </div>
         </div>
+
+        {/* DIALOG MODAL: TAMBAH PLACEHOLDER MANUAL */}
+        <Dialog open={isAddPlaceholderOpen} onOpenChange={setIsAddPlaceholderOpen}>
+          <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                <Tag className="w-4 h-4 text-blue-600" />
+                <span>Tambah Placeholder Sendiri</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400">
+                Buat tag variabel baru (misal: <code>&#123;&#123;ruangan&#125;&#125;</code> atau <code>&#123;&#123;keperluan&#125;&#125;</code>) yang dapat Anda tempatkan ke dalam teks surat.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                  Nama Tag Placeholder *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-400">
+                    &#123;&#123;
+                  </span>
+                  <Input
+                    value={manualKeyInput}
+                    onChange={(e) => setManualKeyInput(e.target.value)}
+                    placeholder="contoh: ruangan, keperluan, alamat"
+                    className="pl-7 pr-7 h-9 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-400">
+                    &#125;&#125;
+                  </span>
+                </div>
+                <p className="text-[10px] text-zinc-400">
+                  Gunakan huruf kecil atau garis bawah tanpa spasi (misal: <code>alamat_tujuan</code>).
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                  Nilai Default / Contoh
+                </label>
+                <Input
+                  value={manualValInput}
+                  onChange={(e) => setManualValInput(e.target.value)}
+                  placeholder="contoh: Gedung PCNU Lt. 2"
+                  className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddPlaceholderOpen(false)}
+                className="text-xs h-8"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveManualPlaceholder}
+                className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              >
+                Simpan &amp; Sisipkan ke Surat
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

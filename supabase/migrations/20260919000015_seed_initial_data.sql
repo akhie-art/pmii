@@ -12,18 +12,16 @@ WHERE email IN (
 );
 
 -- 2. AKUN SEED BERDASARKAN 4 ROLE RESMI (admin, pengurus, anggota, peserta)
-INSERT INTO pengguna (id, name, email, password, role, commissariat, rayon, status)
+INSERT INTO pengguna (id, name, email, role, commissariat, status)
 VALUES 
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid, 'Admin PK PMII Ki Ageng Getas Pendawa', 'admin@pmii.org', 'password', 'admin', 'Ki Ageng Getas Pendawa', 'Komisariat', 'AKTIF'),
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12'::uuid, 'Pengurus PK PMII Ki Ageng Getas Pendawa', 'pengurus@pmii.org', 'password', 'pengurus', 'Ki Ageng Getas Pendawa', 'Komisariat', 'AKTIF'),
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13'::uuid, 'Sahabat Anggota (Kader Resmi)', 'anggota@pmii.org', 'password', 'anggota', 'Ki Ageng Getas Pendawa', 'Tarbiyah', 'AKTIF'),
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14'::uuid, 'Calon Anggota (Peserta MAPABA)', 'peserta@pmii.org', 'password', 'peserta', 'Ki Ageng Getas Pendawa', 'Syari''ah', 'AKTIF')
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid, 'Admin PK PMII Ki Ageng Getas Pendawa', 'admin@pmii.org', 'admin', 'Ki Ageng Getas Pendawa', 'AKTIF'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12'::uuid, 'Pengurus PK PMII Ki Ageng Getas Pendawa', 'pengurus@pmii.org', 'pengurus', 'Ki Ageng Getas Pendawa', 'AKTIF'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13'::uuid, 'Sahabat Anggota (Kader Resmi)', 'anggota@pmii.org', 'anggota', 'Ki Ageng Getas Pendawa', 'AKTIF'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14'::uuid, 'Calon Anggota (Peserta MAPABA)', 'peserta@pmii.org', 'peserta', 'Ki Ageng Getas Pendawa', 'AKTIF')
 ON CONFLICT (email) DO UPDATE SET
   name = EXCLUDED.name,
-  password = EXCLUDED.password,
   role = EXCLUDED.role,
   commissariat = EXCLUDED.commissariat,
-  rayon = EXCLUDED.rayon,
   status = EXCLUDED.status;
 
 -- 3. DATA RESMI KOMISARIAT
@@ -36,8 +34,7 @@ INSERT INTO komisariat (
   "logoInitial", 
   "contactEmail", 
   accreditation, 
-  structure, 
-  rayons
+  structure
 )
 VALUES (
   'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b01'::uuid,
@@ -48,18 +45,7 @@ VALUES (
   'KGP',
   '-',
   'A',
-  '{"chairman": "-", "secretary": "-", "treasurer": "-", "period": "2026 - 2027"}'::jsonb,
-  '[
-    {"id": "ray-syariah", "name": "Rayon Syari''ah (Fakultas Syari''ah dan Hukum)", "memberCount": 0},
-    {"id": "ray-tarbiyah", "name": "Rayon Tarbiyah (FITK)", "memberCount": 0},
-    {"id": "ray-ushuluddin", "name": "Rayon Ushuluddin (FUHUM)", "memberCount": 0},
-    {"id": "ray-dakwah", "name": "Rayon Dakwah (FDK)", "memberCount": 0},
-    {"id": "ray-febi", "name": "Rayon FEBI (Ekonomi & Bisnis Islam)", "memberCount": 0},
-    {"id": "ray-fst", "name": "Rayon FST (Sains & Teknologi)", "memberCount": 0},
-    {"id": "ray-fpk", "name": "Rayon FPK (Psikologi & Kesehatan)", "memberCount": 0},
-    {"id": "ray-fisip", "name": "Rayon FISIP (Ilmu Sosial & Ilmu Politik)", "memberCount": 0},
-    {"id": "ray-pasca", "name": "Rayon Pascasarjana", "memberCount": 0}
-  ]'::jsonb
+  '{"chairman": "-", "secretary": "-", "treasurer": "-", "period": "2026 - 2027"}'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
@@ -70,11 +56,6 @@ ON CONFLICT (id) DO UPDATE SET
     WHEN komisariat.structure IS NULL OR komisariat.structure = '{}'::jsonb 
     THEN EXCLUDED.structure 
     ELSE komisariat.structure 
-  END,
-  rayons = CASE 
-    WHEN komisariat.rayons IS NULL OR komisariat.rayons = '[]'::jsonb 
-    THEN EXCLUDED.rayons 
-    ELSE komisariat.rayons 
   END;
 
 -- 4. DATA SEED KURIKULUM FORMAL NASIONAL PMII (MAPABA, PKD, PKL, PKN)

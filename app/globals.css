@@ -133,3 +133,86 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  /* Khusus sertifikat jika dicetak langsung dari halaman sertifikat */
+  body:has(#printable-certificate) * {
+    visibility: hidden !important;
+  }
+  body:has(#printable-certificate) #printable-certificate,
+  body:has(#printable-certificate) #printable-certificate * {
+    visibility: visible !important;
+  }
+  #printable-certificate {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Pastikan area cetak surat resmi selalu tampil jelas */
+  #custom-letter-print-area,
+  #custom-letter-print-area * {
+    visibility: visible !important;
+  }
+}
+
+/* Styling DOCX Preview agar persis tampilan Word asli */
+.docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+.docx-wrapper > section.docx {
+  background: white !important;
+  color: #111 !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08) !important;
+  margin-bottom: 24px !important;
+  border-radius: 2px !important;
+  box-sizing: border-box !important;
+}
+
+/* Styling fallback hanya untuk Canvas manual tanpa docx */
+#custom-letter-print-area:not(:has(.docx-wrapper)) {
+  font-family: "Arial Narrow", Arial, sans-serif !important;
+  color: #111 !important;
+  line-height: 1.35 !important;
+}
+
+#custom-letter-print-area:not(:has(.docx-wrapper)) p {
+  margin: 0 0 6px 0;
+  line-height: 1.35;
+}
+
+#custom-letter-print-area:not(:has(.docx-wrapper)) table {
+  border-collapse: collapse;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+#custom-letter-print-area:not(:has(.docx-wrapper)) table:not([data-borderless="true"]) {
+  border: 1px solid #111;
+}
+
+#custom-letter-print-area:not(:has(.docx-wrapper)) table:not([data-borderless="true"]) td,
+#custom-letter-print-area:not(:has(.docx-wrapper)) table:not([data-borderless="true"]) th {
+  border: 1px solid #111;
+  padding: 3px 6px;
+  vertical-align: top;
+}
+
+#custom-letter-print-area:not(:has(.docx-wrapper)) table[data-borderless="true"] td,
+#custom-letter-print-area:not(:has(.docx-wrapper)) table[data-borderless="true"] th {
+  border: none;
+  padding: 2px 4px;
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Calendar,
   Plus,
@@ -9,16 +10,18 @@ import {
   Check,
   Copy,
   Search,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { db, DEFAULT_EVENTS, DEFAULT_REGISTRATIONS } from "@/lib/db";
-import type { UserAccount } from "@/lib/db";
+import { db, DEFAULT_EVENTS, DEFAULT_REGISTRATIONS, getDefaultEventTimeline } from "@/lib/db";
+import type { UserAccount, EventStageTimeline } from "@/lib/db";
 import { isRecordInTenant, enforceTenantWrite } from "@/lib/tenancy";
 import { generateUUID } from "@/lib/utils";
+import { useFeedbackModal } from "@/components/ui/feedback-modal";
 
 import type { FormField, EventActivity, ParticipantRegistration } from "./_components/types";
 import { DEFAULT_EVENT_SESSIONS } from "./_components/types";
@@ -27,7 +30,8 @@ import DeleteEventModal from "./_components/DeleteEventModal";
 import ScreeningTab from "./_components/ScreeningTab";
 import ScreeningDetailModal from "./_components/ScreeningDetailModal";
 import AttendanceTab from "./_components/AttendanceTab";
-import GraduationTab from "./_components/GraduationTab";
+import AddParticipantModal from "./_components/AddParticipantModal";
+import TimelineTab, { ToggleSwitch } from "./_components/TimelineTab";
 
 export type { FormField, EventActivity, ParticipantRegistration };
 
@@ -53,15 +57,16 @@ export default function KomisariatKegiatanPage() {
   const [deleteEventName, setDeleteEventName] = useState("");
 
   const [screeningReg, setScreeningReg] = useState<ParticipantRegistration | null>(null);
+  const [showAddParticipantModal, setShowAddParticipantModal] = useState(false);
 
-  // Notifications & UI states
-  const [toastMessage, setToastMessage] = useState("");
+  const { showToast, FeedbackModalComponent } = useFeedbackModal();
   const [copiedId, setCopiedId] = useState<string>("");
-  const [selectedTab, setSelectedTab] = useState<"screening" | "absensi" | "kelulusan">("screening");
+  const [selectedTab, setSelectedTab] = useState<"timeline" | "screening" | "absensi">("timeline");
 
-  const showToast = (msg: string, duration = 3000) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(""), duration);
+  const handleUpdateTimelineEvent = async (updatedEvent: EventActivity) => {
+    const updatedEvents = events.map((e) => (e.id === updatedEvent.id ? updatedEvent : e));
+    setEvents(updatedEvents);
+    await db.saveEvents(updatedEvents);
   };
 
   const generateUniqueNTA = (cadresList: any[]): string => {
@@ -101,7 +106,7 @@ export default function KomisariatKegiatanPage() {
       }
 
       // Load activities
-      const fetchedEvents = await db.getEvents(DEFAULT_EVENTS);
+      const fetchedEvents = await db.getEvents([]);
       setEvents(fetchedEvents);
       if (fetchedEvents.length > 0) {
         setSelectedEventId(fetchedEvents[0].id);
@@ -149,6 +154,30 @@ export default function KomisariatKegiatanPage() {
     }
   };
 
+  const handleToggleEventStatus = async (checked: boolean) => {
+    if (!selectedEvent) return;
+    const newStatus = checked ? "OPEN" : "CLOSED";
+    const currentTimeline = selectedEvent.timeline || getDefaultEventTimeline(selectedEvent);
+    const updatedTimeline: EventStageTimeline = {
+      ...currentTimeline,
+      registration: {
+        ...currentTimeline.registration,
+        isOpen: checked
+      }
+    };
+    const updatedEvent: EventActivity = {
+      ...selectedEvent,
+      status: newStatus,
+      timeline: updatedTimeline
+    };
+    await handleUpdateTimelineEvent(updatedEvent);
+    showToast(
+      checked
+        ? "Kegiatan & pendaftaran dibuka untuk publik."
+        : "Kegiatan & pendaftaran ditutup."
+    );
+  };
+
   // Submit New Event
   const handleCreateEvent = async (eventData: {
     name: string;
@@ -156,6 +185,7 @@ export default function KomisariatKegiatanPage() {
     date: string;
     description?: string;
     sessions?: string[];
+    waGroupLink?: string;
   }) => {
     const newEvent: EventActivity = enforceTenantWrite(currentUser, {
       id: generateUUID(),
@@ -165,7 +195,8 @@ export default function KomisariatKegiatanPage() {
       commissariat: activeCampus,
       description: eventData.description || "",
       status: "OPEN",
-      sessions: eventData.sessions && eventData.sessions.length > 0 ? eventData.sessions : DEFAULT_EVENT_SESSIONS
+      sessions: eventData.sessions && eventData.sessions.length > 0 ? eventData.sessions : [],
+      waGroupLink: eventData.waGroupLink || ""
     });
 
     const updatedEvents = [newEvent, ...events];
@@ -184,6 +215,7 @@ export default function KomisariatKegiatanPage() {
     date: string;
     description?: string;
     sessions?: string[];
+    waGroupLink?: string;
   }) => {
     const updatedEvents = events.map((e) => {
       if (e.id === editEventId) {
@@ -193,7 +225,8 @@ export default function KomisariatKegiatanPage() {
           level: eventData.level,
           date: eventData.date,
           description: eventData.description || "",
-          sessions: eventData.sessions && eventData.sessions.length > 0 ? eventData.sessions : DEFAULT_EVENT_SESSIONS
+          sessions: eventData.sessions && eventData.sessions.length > 0 ? eventData.sessions : [],
+          waGroupLink: eventData.waGroupLink ?? e.waGroupLink ?? ""
         };
       }
       return e;
@@ -336,6 +369,194 @@ export default function KomisariatKegiatanPage() {
 
     setScreeningReg(null);
     showToast("Hasil screening disimpan.");
+  };
+
+  // Quick Approve a single registration
+  const handleQuickApprove = async (reg: ParticipantRegistration) => {
+    const eventKad = kaderisasiList.find(
+      (k) => k.nama === selectedEvent?.level || k.id === selectedEvent?.level
+    );
+    const formFields = eventKad?.formFields || selectedEvent?.formFields || [];
+    const allVerified: Record<string, boolean> = {};
+    formFields.forEach((f: any) => {
+      allVerified[f.id] = true;
+    });
+
+    await handleSaveScreeningResult(
+      reg.id,
+      "APPROVED",
+      "Pendaftaran disetujui langsung oleh Admin.",
+      allVerified
+    );
+    showToast(`Pendaftaran ${reg.cadreName} berhasil disetujui.`);
+  };
+
+  // Batch approve all pending registrations
+  const handleBatchApprove = async (pendingRegs: ParticipantRegistration[]) => {
+    if (!pendingRegs || pendingRegs.length === 0) return;
+
+    const eventKad = kaderisasiList.find(
+      (k) => k.nama === selectedEvent?.level || k.id === selectedEvent?.level
+    );
+    const formFields = eventKad?.formFields || selectedEvent?.formFields || [];
+    const allVerified: Record<string, boolean> = {};
+    formFields.forEach((f: any) => {
+      allVerified[f.id] = true;
+    });
+
+    const pendingIds = new Set(pendingRegs.map((r) => r.id));
+    const updatedRegs = registrations.map((r) => {
+      if (pendingIds.has(r.id)) {
+        return {
+          ...r,
+          status: "APPROVED" as const,
+          notes: "Pendaftaran disetujui otomatis oleh Admin.",
+          verificationStatus: allVerified
+        };
+      }
+      return r;
+    });
+
+    setRegistrations(updatedRegs);
+    await db.saveRegistrations(updatedRegs);
+
+    // Sync cadres for approved participants
+    try {
+      const cadresList = await db.getCadres();
+      let workingCadres = [...cadresList];
+
+      for (const reg of pendingRegs) {
+        const exists = workingCadres.some(
+          (c: any) =>
+            c.name.toLowerCase().includes(reg.cadreName.toLowerCase()) ||
+            (c.email && c.email.toLowerCase() === reg.cadreEmail.toLowerCase())
+        );
+
+        if (exists) {
+          workingCadres = workingCadres.map((c: any) => {
+            if (
+              c.name.toLowerCase().includes(reg.cadreName.toLowerCase()) ||
+              (c.email && c.email.toLowerCase() === reg.cadreEmail.toLowerCase())
+            ) {
+              return {
+                ...c,
+                status: selectedEvent?.level === "MAPABA" ? "AKTIF" : c.status,
+                isGraduated: selectedEvent?.level === "MAPABA" ? c.isGraduated || false : true
+              };
+            }
+            return c;
+          });
+        } else {
+          let extractedPhone = "";
+          let extractedAddress = "";
+          Object.keys(reg.answers || {}).forEach((fid) => {
+            const fieldObj = (formFields || []).find((ff: any) => ff.id === fid);
+            if (fieldObj) {
+              const labelLower = fieldObj.label.toLowerCase();
+              const val = reg.answers[fid];
+              if (labelLower.includes("hp") || labelLower.includes("telepon") || labelLower.includes("wa")) {
+                extractedPhone = val;
+              } else if (labelLower.includes("alamat")) {
+                extractedAddress = val;
+              }
+            }
+          });
+
+          const newCadre = {
+            id: `cadre-${Date.now()}-${Math.random()}`,
+            name: reg.cadreName,
+            level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
+            commissariat: activeCampus,
+            startDate: new Date().toISOString().split("T")[0],
+            status: "AKTIF" as const,
+            phone: extractedPhone,
+            email: reg.cadreEmail,
+            address: extractedAddress,
+            instagram: "",
+            submissions: [],
+            isGraduated: selectedEvent?.level !== "MAPABA",
+            registrationNumber:
+              reg.registrationNumber || `MAP-${Math.floor(100000 + Math.random() * 900000)}`
+          };
+          workingCadres.push(newCadre);
+        }
+      }
+
+      await db.saveCadres(workingCadres);
+    } catch (err) {
+      console.error("Failed to sync cadres on batch approval:", err);
+    }
+
+    showToast(`${pendingRegs.length} pendaftar berhasil disetujui sekaligus.`);
+  };
+
+  // Add participant directly and auto-approve
+  const handleAddParticipant = async (data: {
+    cadreName: string;
+    cadreEmail: string;
+    answers?: Record<string, string>;
+  }) => {
+    if (!selectedEvent) return;
+
+    const eventKad = kaderisasiList.find(
+      (k) => k.nama === selectedEvent.level || k.id === selectedEvent.level
+    );
+    const formFields = eventKad?.formFields || selectedEvent.formFields || [];
+    const allVerified: Record<string, boolean> = {};
+    formFields.forEach((f: any) => {
+      allVerified[f.id] = true;
+    });
+
+    const regNumber = `REG-${selectedEvent.level}-${Date.now().toString().slice(-4)}`;
+    const newReg: ParticipantRegistration = {
+      id: `reg-${Date.now()}`,
+      eventId: selectedEvent.id,
+      cadreName: data.cadreName,
+      cadreEmail: data.cadreEmail,
+      dateApplied: new Date().toISOString().slice(0, 10),
+      status: "APPROVED",
+      notes: "Ditambahkan dan disetujui langsung oleh Admin.",
+      answers: data.answers || {},
+      verificationStatus: allVerified,
+      registrationNumber: regNumber
+    };
+
+    const updated = [newReg, ...registrations];
+    setRegistrations(updated);
+    await db.saveRegistrations(updated);
+
+    // Sync cadre
+    try {
+      const cadresList = await db.getCadres();
+      const exists = cadresList.some(
+        (c: any) =>
+          c.name.toLowerCase().includes(data.cadreName.toLowerCase()) ||
+          (c.email && c.email.toLowerCase() === data.cadreEmail.toLowerCase())
+      );
+
+      if (!exists) {
+        const newCadre = {
+          id: `cadre-${Date.now()}`,
+          name: data.cadreName,
+          level: (selectedEvent.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
+          commissariat: activeCampus,
+          startDate: new Date().toISOString().split("T")[0],
+          status: "AKTIF" as const,
+          phone: data.answers?.["f-hp"] || "",
+          email: data.cadreEmail,
+          address: data.answers?.["f-alamat"] || `Komisariat ${activeCampus}`,
+          instagram: data.answers?.["f-ig"] || "",
+          submissions: [],
+          isGraduated: selectedEvent.level !== "MAPABA",
+          registrationNumber: regNumber
+        };
+        await db.saveCadres([...cadresList, newCadre]);
+      }
+    } catch (err) {
+      console.error("Failed to sync cadre on manual participant add:", err);
+    }
+
+    showToast(`${data.cadreName} berhasil didaftarkan dan langsung disetujui.`);
   };
 
   // Attendance scan code handler
@@ -559,17 +780,21 @@ export default function KomisariatKegiatanPage() {
   }
 
   return (
-    <div className="space-y-5 select-none pb-8">
-      {/* MINIMAL HEADER */}
+    <div className="space-y-4 select-none pb-8">
+      {/* BREADCRUMB & ACTION TOOLBAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
-            Kegiatan & Kaderisasi
-          </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Komisariat {activeCampus}
-          </p>
-        </div>
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <Link
+            href="/dashboard"
+            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
+            Dashboard
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+            Kegiatan
+          </span>
+        </nav>
 
         <div>
           <Button
@@ -582,13 +807,7 @@ export default function KomisariatKegiatanPage() {
         </div>
       </div>
 
-      {/* TOAST NOTIFICATION */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 px-3.5 py-2.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-medium rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 text-blue-500" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+
 
       {/* MAIN LAYOUT: SIDEBAR & WORKSPACE */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
@@ -636,9 +855,20 @@ export default function KomisariatKegiatanPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase">
-                        {evt.level}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase">
+                          {evt.level}
+                        </span>
+                        <span
+                          className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded ${
+                            evt.status === "OPEN"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500"
+                          }`}
+                        >
+                          {evt.status === "OPEN" ? "BUKA" : "TUTUP"}
+                        </span>
+                      </div>
                       <span className="text-[10px] font-mono text-zinc-400">
                         {evt.date}
                       </span>
@@ -686,6 +916,15 @@ export default function KomisariatKegiatanPage() {
                     <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-md">
                       {selectedEvent.level}
                     </Badge>
+                    <Badge
+                      className={
+                        selectedEvent.status === "OPEN"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-semibold px-2 py-0.5 rounded-md"
+                          : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[9px] font-semibold px-2 py-0.5 rounded-md"
+                      }
+                    >
+                      {selectedEvent.status === "OPEN" ? "DIBUKA" : "DITUTUP"}
+                    </Badge>
                     <span className="text-[10px] font-mono text-zinc-500 flex items-center gap-1">
                       <Calendar className="w-3 h-3" /> {selectedEvent.date}
                     </span>
@@ -696,7 +935,17 @@ export default function KomisariatKegiatanPage() {
                   </h2>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto">
+                <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto flex-wrap">
+                  <div className="flex items-center gap-2 bg-white dark:bg-zinc-800 px-2.5 h-8 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+                    <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 select-none">
+                      {selectedEvent.status === "OPEN" ? "Buka Kegiatan" : "Tutup Kegiatan"}
+                    </span>
+                    <ToggleSwitch
+                      checked={selectedEvent.status === "OPEN"}
+                      onChange={handleToggleEventStatus}
+                    />
+                  </div>
+
                   <Button
                     onClick={() => handleCopyLink(selectedEvent.id)}
                     size="sm"
@@ -739,6 +988,18 @@ export default function KomisariatKegiatanPage() {
               <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-6 pt-1">
                 <button
                   type="button"
+                  onClick={() => setSelectedTab("timeline")}
+                  className={`pb-2 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+                    selectedTab === "timeline"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  Alur & Timeline
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setSelectedTab("screening")}
                   className={`pb-2 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
                     selectedTab === "screening"
@@ -760,19 +1021,18 @@ export default function KomisariatKegiatanPage() {
                 >
                   Presensi & QR
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedTab("kelulusan")}
-                  className={`pb-2 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
-                    selectedTab === "kelulusan"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  Evaluasi Kelulusan
-                </button>
               </div>
+
+              {/* TAB 0: ALUR & TIMELINE */}
+              {selectedTab === "timeline" && (
+                <TimelineTab
+                  event={selectedEvent}
+                  onUpdateEvent={handleUpdateTimelineEvent}
+                  registrationsCount={activeRegistrations.length}
+                  approvedCount={activeRegistrations.filter((r) => r.status === "APPROVED").length}
+                  pendingCount={activeRegistrations.filter((r) => r.status === "PENDING").length}
+                />
+              )}
 
               {/* TAB 1: SCREENING BERKAS */}
               {selectedTab === "screening" && (
@@ -790,6 +1050,9 @@ export default function KomisariatKegiatanPage() {
                   }
                   registrations={activeRegistrations}
                   onOpenScreening={(reg) => setScreeningReg(reg)}
+                  onQuickApprove={handleQuickApprove}
+                  onBatchApprove={handleBatchApprove}
+                  onOpenAddParticipant={() => setShowAddParticipantModal(true)}
                 />
               )}
 
@@ -799,17 +1062,6 @@ export default function KomisariatKegiatanPage() {
                   event={selectedEvent}
                   registrations={activeRegistrations}
                   onScanCode={handleScanCode}
-                />
-              )}
-
-              {/* TAB 3: KELULUSAN & KTA */}
-              {selectedTab === "kelulusan" && (
-                <GraduationTab
-                  event={selectedEvent}
-                  registrations={activeRegistrations}
-                  onMarkGraduated={handleMarkGraduated}
-                  onRevokeGraduation={handleRevokeGraduation}
-                  onBatchGraduate={handleBatchGraduate}
                 />
               )}
             </Card>
@@ -879,6 +1131,19 @@ export default function KomisariatKegiatanPage() {
           onSave={handleSaveScreeningResult}
         />
       )}
+
+      {/* ADD PARTICIPANT MODAL */}
+      {showAddParticipantModal && selectedEvent && (
+        <AddParticipantModal
+          isOpen={showAddParticipantModal}
+          onClose={() => setShowAddParticipantModal(false)}
+          event={selectedEvent}
+          existingRegistrations={activeRegistrations}
+          onAddParticipant={handleAddParticipant}
+        />
+      )}
+
+      {FeedbackModalComponent}
     </div>
   );
 }

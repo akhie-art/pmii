@@ -4,9 +4,10 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db, Kaderisasi } from "@/lib/db";
-import type { UserRole } from "@/lib/db";
+import type { UserRole, UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { exportCardAsImage } from "@/lib/cardExporter";
+import QRCode from "qrcode";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -73,7 +74,6 @@ interface ParticipantRegistration {
   id: string;
   eventId: string;
   cadreName: string;
-  cadreRayon?: string;
   cadreEmail: string;
   dateApplied: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
@@ -98,10 +98,10 @@ interface CadreSubmission {
 
 interface CadreFollowUp {
   id: string;
+  user_id?: string;
   name: string;
   level: "MAPABA" | "PKD" | "PKL";
   commissariat: string;
-  rayon?: string;
   startDate: string;
   status: "AKTIF" | "SELESAI" | "REVISI";
   submissions: CadreSubmission[];
@@ -197,6 +197,26 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [registeredNumber, setRegisteredNumber] = useState("");
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (!registeredNumber) {
+      setQrCodeDataUrl("");
+      return;
+    }
+    QRCode.toDataURL(registeredNumber, {
+      width: 200,
+      margin: 1,
+      color: {
+        dark: "#090d16",
+        light: "#ffffff"
+      }
+    })
+      .then((url) => setQrCodeDataUrl(url))
+      .catch((err) => {
+        console.error("Local QR code generation error:", err);
+      });
+  }, [registeredNumber]);
 
   const handleGoogleRegister = async () => {
     setError("");
@@ -365,7 +385,6 @@ export default function RegisterPage() {
     if (!name.trim()) return setError("Nama Lengkap harus diisi.");
     if (!email.trim()) return setError("Alamat email harus diisi.");
     if (!phone.trim()) return setError("Nomor WhatsApp harus diisi.");
-    if (!commissariat) return setError("Pilih Komisariat.");
     if (!password) return setError("Kata sandi harus diisi.");
     if (password !== confirmPassword) return setError("Konfirmasi sandi tidak cocok dengan kata sandi.");
     if (password.length < 6) return setError("Kata sandi harus minimal 6 karakter.");
@@ -400,7 +419,6 @@ export default function RegisterPage() {
     if (!name.trim()) return setError("Nama Lengkap harus diisi.");
     if (!email.trim()) return setError("Alamat email harus diisi.");
     if (!phone.trim()) return setError("Nomor WhatsApp harus diisi.");
-    if (!commissariat) return setError("Pilih salah satu Komisariat / Universitas.");
     if (password !== confirmPassword) return setError("Konfirmasi sandi tidak cocok dengan kata sandi.");
     if (password.length < 6) return setError("Kata sandi harus minimal 6 karakter.");
 
@@ -428,54 +446,123 @@ export default function RegisterPage() {
       const regNo = hasEvent ? `${level.slice(0, 3).toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}` : undefined;
       if (regNo) {
         setRegisteredNumber(regNo);
+        try {
+          const generatedQr = await QRCode.toDataURL(regNo, {
+            width: 200,
+            margin: 1,
+            color: {
+              dark: "#090d16",
+              light: "#ffffff"
+            }
+          });
+          setQrCodeDataUrl(generatedQr);
+        } catch (qrErr) {
+          console.warn("Pre-generating QR code warning:", qrErr);
+        }
       }
 
       const formattedName = name.startsWith("Sahabat") ? name.trim() : `Sahabat ${name.trim()}`;
+      const userRole: UserRole = level !== "MAPABA" ? "anggota" : "peserta";
+
+      // 1. Sinkronisasi dengan Supabase Auth (auth.users sebagai Master Identity - Password aman terenkripsi)
+      let authUserId: string | undefined = undefined;
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: email.trim().toLowerCase(),
+            password: password,
+            options: {
+              data: {
+                full_name: formattedName,
+                commissariat: commissariat,
+                level: level,
+                role: userRole
+              }
+            }
+          });
+          if (authError && !authError.message?.toLowerCase().includes("already registered")) {
+            console.warn("Supabase Auth registration notice:", authError.message);
+          } else if (authData?.user) {
+            authUserId = authData.user.id;
+          }
+        } catch (authException) {
+          console.warn("Supabase Auth connection notice:", authException);
+        }
+      }
       
-      const newCadre: CadreFollowUp = {
-        id: `cadre-${Date.now()}`,
+      // 2. Simpan kredensial kata sandi ke credential store
+      db.setUserPassword([authUserId, email.trim().toLowerCase(), formattedName, regNo], password.trim());
+
+      // 3. Rekam akun pengguna di tabel users sistem dengan role sesuai level (peserta untuk MAPABA baru)
+      const existingUsers = await db.getUsers();
+      const newUserAccount: UserAccount = {
+        id: authUserId || `usr-${Date.now()}`,
+        user_id: authUserId,
         name: formattedName,
-        level: level,
-        commissariat: commissariat,
-        startDate: new Date().toISOString().split("T")[0],
-        status: "AKTIF",
-        submissions: [],
-        phone: phone.trim(),
         email: email.trim().toLowerCase(),
-        password: password,
-        address: `Komisariat ${commissariat}`,
-        isGraduated: level !== "MAPABA",
+        role: userRole,
+        commissariat: commissariat,
+        status: "AKTIF",
+        createdAt: new Date().toISOString()
+      };
+      await db.saveUsers([...existingUsers.filter(u => u.email?.toLowerCase() !== email.trim().toLowerCase()), newUserAccount]);
+
+      // 4. ATURAN ORGANISASI: Data pendaftar MAPABA BARU berstatus PESERTA dan BELUM masuk ke tabel anggota.
+      //    Data HANYA masuk ke tabel anggota jika pendaftar sudah dinyatakan LULUS MAPABA.
+      //    (Hanya level lanjutan seperti PKD/PKL atau kader senior yang langsung masuk tabel anggota).
+      if (level !== "MAPABA") {
+        const newCadre: CadreFollowUp = {
+          id: `cadre-${Date.now()}`,
+          user_id: authUserId,
+          name: formattedName,
+          level: level,
+          commissariat: commissariat,
+          startDate: new Date().toISOString().split("T")[0],
+          status: "AKTIF",
+          submissions: [],
+          phone: phone.trim(),
+          email: email.trim().toLowerCase(),
+          address: `Komisariat ${commissariat}`,
+          isGraduated: true,
+          registrationNumber: regNo,
+          role: "anggota"
+        };
+        const updatedList = [...cadresList, newCadre];
+        await db.saveCadres(updatedList);
+      }
+
+      // 5. Simpan data pendaftaran kegiatan (tabel pendaftaran)
+      const registrationsList = await db.getRegistrations();
+      const initialVerificationStatus: Record<string, boolean> = {};
+      if (eventDetails) {
+        (eventDetails.formFields || []).forEach((field) => {
+          initialVerificationStatus[field.id] = true;
+        });
+      }
+
+      let effectiveEventId = targetEventId;
+      if (!effectiveEventId) {
+        const events = await db.getEvents();
+        const mapabaEvent = events.find(e => e.level === "MAPABA");
+        effectiveEventId = mapabaEvent?.id || "act-mapaba";
+      }
+
+      const newRegistration: ParticipantRegistration = {
+        id: `reg-${Date.now()}`,
+        eventId: effectiveEventId,
+        cadreName: formattedName,
+        cadreEmail: email.trim().toLowerCase(),
+        dateApplied: new Date().toISOString().split("T")[0],
+        status: "APPROVED",
+        notes: "Pendaftaran calon peserta berhasil direkam.",
+        answers: customAnswers,
+        verificationStatus: initialVerificationStatus,
         registrationNumber: regNo,
-        role: level !== "MAPABA" ? "anggota" : "peserta"
+        attendance: [],
+        isGraduated: level !== "MAPABA"
       };
 
-      const updatedList = [...cadresList, newCadre];
-      await db.saveCadres(updatedList);
-
-      if (targetEventId && eventDetails) {
-        const registrationsList = await db.getRegistrations();
-        const initialVerificationStatus: Record<string, boolean> = {};
-        (eventDetails.formFields || []).forEach((field) => {
-          initialVerificationStatus[field.id] = false;
-        });
-
-        const newRegistration: ParticipantRegistration = {
-          id: `reg-${Date.now()}`,
-          eventId: targetEventId,
-          cadreName: formattedName,
-          cadreEmail: email.trim().toLowerCase(),
-          dateApplied: new Date().toISOString().split("T")[0],
-          status: "PENDING",
-          notes: "",
-          answers: customAnswers,
-          verificationStatus: initialVerificationStatus,
-          registrationNumber: regNo,
-          attendance: [],
-          isGraduated: false
-        };
-
-        await db.saveRegistrations([...registrationsList, newRegistration]);
-      }
+      await db.saveRegistrations([...registrationsList, newRegistration]);
 
       setLoading(false);
       setIsSuccessOpen(true);
@@ -576,32 +663,32 @@ export default function RegisterPage() {
             )}
 
             {eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 && (
-              <div className="flex items-center justify-center gap-4 py-2 border-b border-zinc-800/40 select-none">
+              <div className="flex items-center justify-center gap-4 py-2 border-b border-zinc-200 dark:border-zinc-800/40 select-none">
                 <div className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all duration-300 ${
                     step === 1 
                       ? "bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105" 
-                      : "bg-zinc-800 text-zinc-400"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-transparent"
                   }`}>
                     1
                   </div>
                   <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors duration-300 ${
-                    step === 1 ? "text-amber-500" : "text-zinc-500"
+                    step === 1 ? "text-amber-600 dark:text-amber-500" : "text-zinc-500 dark:text-zinc-400"
                   }`}>
                     Buat Akun
                   </span>
                 </div>
-                <div className="w-12 h-0.5 bg-zinc-800 rounded-full" />
+                <div className="w-12 h-0.5 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
                 <div className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all duration-300 ${
                     step === 2 
                       ? "bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105" 
-                      : "bg-zinc-800 text-zinc-400"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-transparent"
                   }`}>
                     2
                   </div>
                   <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors duration-300 ${
-                    step === 2 ? "text-amber-500" : "text-zinc-500"
+                    step === 2 ? "text-amber-600 dark:text-amber-500" : "text-zinc-500 dark:text-zinc-400"
                   }`}>
                     Persyaratan
                   </span>
@@ -611,48 +698,48 @@ export default function RegisterPage() {
 
             {/* EVENT DETAILS BANNER */}
             {eventDetails && (
-              <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl flex flex-col gap-2 shadow-sm">
-                <span className="text-[10px] font-extrabold text-amber-500 uppercase tracking-wider block">
+              <div className="p-4 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl flex flex-col gap-2 shadow-xs">
+                <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-500 uppercase tracking-wider block">
                   Kegiatan Yang Diikuti:
                 </span>
                 <div className="flex justify-between items-start gap-3">
-                  <h3 className="text-sm font-black text-white leading-snug">
+                  <h3 className="text-sm font-black text-zinc-900 dark:text-white leading-snug">
                     {eventDetails.name}
                   </h3>
                   <Badge className="bg-amber-500 hover:bg-amber-400 text-[#090d16] font-black text-[9px] uppercase py-1 px-3 rounded-lg border-none flex-shrink-0">
                     {eventDetails.level}
                   </Badge>
                 </div>
-                <p className="text-xs text-zinc-400 font-medium leading-relaxed">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed">
                   {eventDetails.description}
                 </p>
-                <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] font-semibold text-zinc-500 border-t border-zinc-800/50 pt-3">
-                  <span>Komisariat: <strong className="text-zinc-300">{eventDetails.commissariat}</strong></span>
+                <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 border-t border-amber-500/15 dark:border-zinc-800/50 pt-3">
+                  <span>Komisariat: <strong className="text-zinc-800 dark:text-zinc-200">{eventDetails.commissariat}</strong></span>
                   <span>•</span>
-                  <span>Pelaksanaan: <strong className="text-zinc-300">{eventDetails.date}</strong></span>
+                  <span>Pelaksanaan: <strong className="text-zinc-800 dark:text-zinc-200">{eventDetails.date}</strong></span>
                 </div>
 
                 {/* Modul & Silabus Section */}
                 {kaderisasiData && (kaderisasiData.syllabus || kaderisasiData.modul) && (
-                  <div className="mt-3 pt-3 border-t border-zinc-800/50 space-y-2.5">
-                    <span className="text-[9px] font-extrabold text-amber-500/80 uppercase tracking-widest block">
+                  <div className="mt-3 pt-3 border-t border-amber-500/15 dark:border-zinc-800/50 space-y-2.5">
+                    <span className="text-[9px] font-extrabold text-amber-600 dark:text-amber-500/80 uppercase tracking-widest block">
                       Materi & Kurikulum Kaderisasi:
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {kaderisasiData.syllabus && (
-                        <div className="flex items-center justify-between p-2.5 bg-zinc-950/60 border border-zinc-800/50 rounded-xl hover:border-zinc-700/60 transition-all">
+                        <div className="flex items-center justify-between p-2.5 bg-white dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/50 rounded-xl hover:border-zinc-300 dark:hover:border-zinc-700/60 shadow-xs transition-all">
                           <div className="flex items-center gap-2 min-w-0">
                             <FileText className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                             <div className="min-w-0">
-                              <span className="block text-[9px] text-zinc-400 font-bold uppercase tracking-wider leading-none">Silabus</span>
-                              <span className="block text-[8px] text-zinc-500 truncate mt-1 max-w-[120px]">{kaderisasiData.syllabus.fileName}</span>
+                              <span className="block text-[9px] text-zinc-700 dark:text-zinc-400 font-bold uppercase tracking-wider leading-none">Silabus</span>
+                              <span className="block text-[8px] text-zinc-500 dark:text-zinc-400 truncate mt-1 max-w-[120px]">{kaderisasiData.syllabus.fileName}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                             <button
                               type="button"
                               onClick={() => handlePreviewFile(kaderisasiData.syllabus!.fileUrl, `Silabus ${kaderisasiData.nama}`)}
-                              className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer"
                               title="Pertinjau Silabus"
                             >
                               <Eye className="w-3.5 h-3.5" />
@@ -660,7 +747,7 @@ export default function RegisterPage() {
                             <a
                               href={kaderisasiData.syllabus.fileUrl}
                               download
-                              className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer"
                               title="Download Silabus"
                               target="_blank"
                               rel="noopener noreferrer"
@@ -672,19 +759,19 @@ export default function RegisterPage() {
                       )}
 
                       {kaderisasiData.modul && (
-                        <div className="flex items-center justify-between p-2.5 bg-zinc-950/60 border border-zinc-800/50 rounded-xl hover:border-zinc-700/60 transition-all">
+                        <div className="flex items-center justify-between p-2.5 bg-white dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/50 rounded-xl hover:border-zinc-300 dark:hover:border-zinc-700/60 shadow-xs transition-all">
                           <div className="flex items-center gap-2 min-w-0">
                             <FileText className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                             <div className="min-w-0">
-                              <span className="block text-[9px] text-zinc-400 font-bold uppercase tracking-wider leading-none">Modul</span>
-                              <span className="block text-[8px] text-zinc-500 truncate mt-1 max-w-[120px]">{kaderisasiData.modul.fileName}</span>
+                              <span className="block text-[9px] text-zinc-700 dark:text-zinc-400 font-bold uppercase tracking-wider leading-none">Modul</span>
+                              <span className="block text-[8px] text-zinc-500 dark:text-zinc-400 truncate mt-1 max-w-[120px]">{kaderisasiData.modul.fileName}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                             <button
                               type="button"
                               onClick={() => handlePreviewFile(kaderisasiData.modul!.fileUrl, `Modul ${kaderisasiData.nama}`)}
-                              className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer"
                               title="Pertinjau Modul"
                             >
                               <Eye className="w-3.5 h-3.5" />
@@ -692,7 +779,7 @@ export default function RegisterPage() {
                             <a
                               href={kaderisasiData.modul.fileUrl}
                               download
-                              className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer"
                               title="Download Modul"
                               target="_blank"
                               rel="noopener noreferrer"
@@ -715,7 +802,7 @@ export default function RegisterPage() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium rounded-xl flex items-start gap-3"
+                  className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 dark:text-rose-400 text-xs font-medium rounded-xl flex items-start gap-3"
                 >
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-500" />
                   <div>{error}</div>
@@ -728,26 +815,26 @@ export default function RegisterPage() {
               {/* STEP 1: INFORMASI AKUN */}
               {step === 1 && (
                 <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Nama Lengkap</label>
+                    <div className="relative">
+                      <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+                      <Input
+                        required
+                        disabled={loading}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ahmad Fudholi"
+                        className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Nama Lengkap</label>
+                      <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Alamat Email</label>
                       <div className="relative">
-                        <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-                        <Input
-                          required
-                          disabled={loading}
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Ahmad Fudholi"
-                          className="text-sm pl-10 bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Alamat Email</label>
-                      <div className="relative">
-                        <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                         <Input
                           type="email"
                           required
@@ -755,66 +842,32 @@ export default function RegisterPage() {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="sahabat@domain.com"
-                          className="text-sm pl-10 bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                          className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                         />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Nomor WhatsApp</label>
+                      <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Nomor WhatsApp</label>
                       <div className="relative">
-                        <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                         <Input
                           required
                           disabled={loading}
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           placeholder="081234567890"
-                          className="text-sm pl-10 bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                          className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                         />
                       </div>
                     </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Jenjang Saat Ini</label>
-                      {eventDetails ? (
-                        <Input disabled value={level} className="text-sm bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-zinc-400 font-medium" />
-                      ) : (
-                        <Select value={level} onValueChange={(val) => val && setLevel(val)}>
-                          <SelectTrigger className="text-sm bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
-                            <SelectValue placeholder="Pilih jenjang" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-[#090d16] border-zinc-800 text-white">
-                            <SelectItem value="MAPABA">MAPABA (Masa Penerimaan Anggota Baru)</SelectItem>
-                            <SelectItem value="PKD">PKD (Pelatihan Kader Dasar)</SelectItem>
-                            <SelectItem value="PKL">PKL (Pelatihan Kader Lanjut)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Komisariat (Kampus)</label>
-                    <Select value={commissariat} onValueChange={(val) => val && setCommissariat(val)} disabled={!!eventDetails}>
-                      <SelectTrigger className="text-sm bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
-                        <SelectValue placeholder="Pilih Komisariat" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#090d16] border-zinc-800 text-white">
-                        {INDONESIA_UNIVERSITIES.map((uni) => (
-                          <SelectItem key={uni} value={uni}>{uni}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Kata Sandi</label>
+                      <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Kata Sandi</label>
                       <div className="relative">
-                        <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                         <Input
                           type={showPassword ? "text" : "password"}
                           required
@@ -822,12 +875,12 @@ export default function RegisterPage() {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Minimal 6 karakter"
-                          className="text-sm pl-10 pr-10 bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                          className="text-sm pl-10 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 focus:outline-none"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 focus:outline-none transition-colors cursor-pointer"
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -835,9 +888,9 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Konfirmasi Sandi</label>
+                      <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Konfirmasi Sandi</label>
                       <div className="relative">
-                        <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                         <Input
                           type={showConfirmPassword ? "text" : "password"}
                           required
@@ -845,12 +898,12 @@ export default function RegisterPage() {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="Ulangi kata sandi"
-                          className="text-sm pl-10 pr-10 bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                          className="text-sm pl-10 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                         />
                         <button
                           type="button"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 focus:outline-none"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 focus:outline-none transition-colors cursor-pointer"
                         >
                           {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -858,7 +911,7 @@ export default function RegisterPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-zinc-800/50">
+                  <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/50">
                     <Button
                       type="submit"
                       disabled={loading}
@@ -890,7 +943,7 @@ export default function RegisterPage() {
 
                       return (
                         <div key={field.id} className="space-y-2">
-                          <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider block">
+                          <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider block">
                             {field.label} {field.required && <span className="text-rose-500">*</span>}
                           </label>
 
@@ -901,15 +954,20 @@ export default function RegisterPage() {
                               value={value}
                               onChange={(e) => handleChange(e.target.value)}
                               placeholder={`Ketik ${field.label.toLowerCase()}...`}
-                              className="w-full text-sm p-4 bg-zinc-950/50 border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl h-28 text-white placeholder-zinc-600 resize-none"
+                              className="w-full text-sm p-4 bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl h-28 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 resize-none transition-colors"
                             />
                           ) : field.type === "select" ? (
                             <Select value={value} onValueChange={handleChange}>
-                              <SelectTrigger className="text-sm bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
+                              <SelectTrigger className="text-sm bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors">
                                 <SelectValue placeholder={`Pilih ${field.label}...`} />
                               </SelectTrigger>
-                              <SelectContent className="bg-[#090d16] border-zinc-800 text-white">
-                                {(field.options || []).map((opt) => (
+                              <SelectContent className="bg-white dark:bg-[#090d16] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow-xl">
+                                {((field.options && field.options.length > 0)
+                                  ? field.options
+                                  : (field.label || "").toLowerCase().includes("kelamin")
+                                  ? ["Laki-laki", "Perempuan"]
+                                  : []
+                                ).map((opt) => (
                                   <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -917,14 +975,14 @@ export default function RegisterPage() {
                           ) : field.type === "file" ? (
                             <div className="space-y-2">
                               {value ? (
-                                <div className="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800/80 rounded-xl">
+                                <div className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
                                       <FileText className="w-5 h-5 text-amber-500" />
                                     </div>
                                     <div className="flex flex-col min-w-0">
-                                      <span className="text-xs font-bold text-white truncate">{fileNames[field.id] || "Berkas Terunggah"}</span>
-                                      <a href={value} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-amber-500 hover:underline">Lihat Berkas ↗</a>
+                                      <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{fileNames[field.id] || "Berkas Terunggah"}</span>
+                                      <a href={value} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-amber-600 dark:text-amber-500 hover:underline">Lihat Berkas ↗</a>
                                     </div>
                                   </div>
                                   <Button
@@ -941,18 +999,18 @@ export default function RegisterPage() {
                                   </Button>
                                 </div>
                               ) : (
-                                <label className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-zinc-800 hover:border-zinc-600 bg-zinc-950/30 hover:bg-zinc-950/50 rounded-xl cursor-pointer transition-all">
+                                <label className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-950/30 hover:bg-zinc-100/50 dark:hover:bg-zinc-950/50 rounded-xl cursor-pointer transition-all">
                                   <div className="flex flex-col items-center justify-center space-y-2 text-center px-4">
                                     {uploadingFields[field.id] ? (
                                       <>
                                         <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                                        <p className="text-xs font-medium text-zinc-400">Mengunggah berkas...</p>
+                                        <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Mengunggah berkas...</p>
                                       </>
                                     ) : (
                                       <>
-                                        <UploadCloud className="w-8 h-8 text-zinc-500" />
-                                        <p className="text-xs font-bold text-zinc-300">Pilih Dokumen / File</p>
-                                        <p className="text-[10px] text-zinc-500 font-medium">PDF, JPG, PNG (Maks. 2MB)</p>
+                                        <UploadCloud className="w-8 h-8 text-zinc-400 dark:text-zinc-500" />
+                                        <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Pilih Dokumen / File</p>
+                                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">PDF, JPG, PNG (Maks. 2MB)</p>
                                       </>
                                     )}
                                   </div>
@@ -974,7 +1032,7 @@ export default function RegisterPage() {
                               value={value}
                               onChange={(e) => handleChange(e.target.value)}
                               placeholder={`Masukkan ${field.label.toLowerCase()}...`}
-                              className="text-sm bg-zinc-950/50 border-zinc-800/80 rounded-xl h-11 text-white placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                              className="text-sm bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                             />
                           )}
                         </div>
@@ -982,12 +1040,12 @@ export default function RegisterPage() {
                     })}
                   </div>
 
-                  <div className="flex items-center gap-4 pt-4 border-t border-zinc-800/50">
+                  <div className="flex items-center gap-4 pt-4 border-t border-zinc-200 dark:border-zinc-800/50">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setStep(1)}
-                      className="flex-1 bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl h-12 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                      className="flex-1 bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white rounded-xl h-12 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4" /> Sebelumnya
                     </Button>
@@ -1026,14 +1084,14 @@ export default function RegisterPage() {
             {/* Header Text */}
             <div className="text-center space-y-3 mt-2">
               <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 mx-auto shadow-inner">
-                <CheckCircle className="w-7 h-7 text-emerald-400" />
+                <CheckCircle className="w-7 h-7 text-emerald-500 dark:text-emerald-400" />
               </div>
               <div className="space-y-1">
-                <DialogTitle className="text-sm font-black text-white uppercase tracking-widest">
+                <DialogTitle className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-widest">
                   Registrasi Berhasil!
                 </DialogTitle>
-                <DialogDescription className="text-xs text-zinc-400 font-medium text-center leading-relaxed px-2">
-                  Berkas pendaftaran <span className="text-zinc-200 font-bold">{name}</span> telah masuk. Simpan Kartu Peserta di bawah untuk keperluan absensi via QR Code.
+                <DialogDescription className="text-xs text-zinc-600 dark:text-zinc-400 font-medium text-center leading-relaxed px-2">
+                  Berkas pendaftaran <span className="text-zinc-900 dark:text-zinc-200 font-bold">{name}</span> telah masuk. Simpan Kartu Peserta di bawah untuk keperluan absensi via QR Code.
                 </DialogDescription>
               </div>
             </div>
@@ -1072,7 +1130,7 @@ export default function RegisterPage() {
                     <div className="flex flex-col items-center gap-2">
                       <div className="p-1.5 bg-white rounded-xl shadow-sm">
                         <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${registeredNumber}`} 
+                          src={qrCodeDataUrl || `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${registeredNumber}`} 
                           alt="QR Code Absensi" 
                           className="w-[72px] h-[72px] object-contain rounded-lg"
                         />
@@ -1139,7 +1197,7 @@ export default function RegisterPage() {
                         });
                       }
                     }}
-                    className="w-full h-10 text-xs font-bold bg-zinc-900/50 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white rounded-xl transition-colors gap-2"
+                    className="w-full h-10 text-xs font-bold bg-zinc-100 dark:bg-zinc-900/50 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white rounded-xl transition-colors gap-2 cursor-pointer shadow-xs"
                   >
                     <Download className="w-4 h-4" /> Download Kartu
                   </Button>
@@ -1150,7 +1208,7 @@ export default function RegisterPage() {
             <div className="w-full pt-2">
               <Button 
                 onClick={handleSuccessClose} 
-                className="w-full bg-amber-500 hover:bg-amber-400 text-[#090d16] font-black text-sm h-12 rounded-xl transition-all shadow-lg shadow-amber-500/20"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-[#090d16] font-black text-sm h-12 rounded-xl transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
               >
                 Saya Mengerti, Masuk Sekarang
               </Button>
@@ -1164,12 +1222,12 @@ export default function RegisterPage() {
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl sm:max-w-[720px] w-[95vw] p-6 overflow-hidden flex flex-col">
           
-          <DialogHeader className="pb-3 border-b border-zinc-800/65 flex flex-row items-center justify-between">
+          <DialogHeader className="pb-3 border-b border-zinc-200 dark:border-zinc-800/65 flex flex-row items-center justify-between">
             <div>
-              <DialogTitle className="text-sm font-black text-white uppercase tracking-widest">
+              <DialogTitle className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-widest">
                 Pertinjau Dokumen
               </DialogTitle>
-              <DialogDescription className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
+              <DialogDescription className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase mt-1">
                 {previewTitle}
               </DialogDescription>
             </div>
@@ -1180,7 +1238,7 @@ export default function RegisterPage() {
               previewUrl.toLowerCase().endsWith(".pdf") || previewUrl.includes("materials/") ? (
                 <iframe 
                   src={`https://docs.google.com/gview?url=${encodeURIComponent(previewUrl)}&embedded=true`}
-                  className="w-full h-[55vh] border border-zinc-800 rounded-xl bg-zinc-950" 
+                  className="w-full h-[55vh] border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-100 dark:bg-zinc-950" 
                   title={previewTitle}
                 />
               ) : previewUrl.match(/\.(jpg|jpeg|png|gif|webp)/i) || previewUrl.startsWith("data:image/") ? (
@@ -1188,12 +1246,12 @@ export default function RegisterPage() {
                 <img 
                   src={previewUrl} 
                   alt={previewTitle} 
-                  className="max-w-full max-h-[55vh] object-contain rounded-xl border border-zinc-800"
+                  className="max-w-full max-h-[55vh] object-contain rounded-xl border border-zinc-200 dark:border-zinc-800"
                 />
               ) : (
                 <iframe 
                   src={previewUrl} 
-                  className="w-full h-[55vh] border border-zinc-800 rounded-xl bg-zinc-950" 
+                  className="w-full h-[55vh] border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-100 dark:bg-zinc-950" 
                   title={previewTitle}
                 />
               )
@@ -1202,15 +1260,15 @@ export default function RegisterPage() {
             )}
           </div>
 
-          <DialogFooter className="pt-3 border-t border-zinc-800/65 justify-end">
+          <DialogFooter className="pt-3 border-t border-zinc-200 dark:border-zinc-800/65 justify-end">
             <DialogClose render={
               <Button 
                 variant="outline" 
-                className="text-xs border-zinc-800 bg-transparent text-zinc-300 hover:text-white hover:bg-zinc-800 h-9 rounded-xl px-4 cursor-pointer"
-              />
-            }>
-              Tutup
-            </DialogClose>
+                className="text-xs border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 h-9 rounded-xl px-4 cursor-pointer"
+              >
+                Tutup
+              </Button>
+            } />
           </DialogFooter>
         </DialogContent>
       </Dialog>

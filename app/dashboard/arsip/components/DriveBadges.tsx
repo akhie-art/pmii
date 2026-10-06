@@ -7,37 +7,29 @@ import { DocumentItem } from "@/types/drive";
 export const CategoryIcon = ({ category, className = "w-4 h-4" }: { category: string; className?: string }) => {
   switch (category.toLowerCase()) {
     case "sk kepengurusan": return <FileCheck className={`${className} text-emerald-500`} />;
-    case "modul kaderisasi": return <BookOpen className={`${className} text-pmii-blue dark:text-sky-400`} />;
+    case "modul kaderisasi": return <BookOpen className={`${className} text-blue-600 dark:text-blue-400`} />;
     case "ketetapan rapat": return <FileText className={`${className} text-amber-500`} />;
     case "sertifikat & template":
     case "sertifikat": return <ShieldCheck className={`${className} text-purple-500`} />;
     case "publikasi & riset":
     case "publikasi": return <FileText className={`${className} text-rose-500`} />;
-    default: return <Folder className={`${className} text-pmii-gold`} />;
+    default: return <Folder className={`${className} text-amber-500`} />;
   }
 };
 
 export const AccessBadge = ({ access }: { access: DocumentItem["access"] }) => {
-  switch (access) {
-    case "Public":
-      return (
-        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-black text-[9px] uppercase tracking-wider rounded-md shadow-none px-2 py-0.5 flex items-center gap-1 w-fit">
-          <Globe className="w-2.5 h-2.5" /> Publik
-        </Badge>
-      );
-    case "Confidential":
-      return (
-        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-black text-[9px] uppercase tracking-wider rounded-md shadow-none px-2 py-0.5 flex items-center gap-1 w-fit">
-          <Lock className="w-2.5 h-2.5" /> Rahasia
-        </Badge>
-      );
-    default:
-      return (
-        <Badge className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-black text-[9px] uppercase tracking-wider rounded-md shadow-none px-2 py-0.5 flex items-center gap-1 w-fit">
-          <Lock className="w-2.5 h-2.5" /> Internal
-        </Badge>
-      );
+  if (access === "Public") {
+    return (
+      <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-semibold text-[9px] uppercase tracking-wider rounded-md shadow-none px-2 py-0.5 flex items-center gap-1 w-fit">
+        <Globe className="w-2.5 h-2.5" /> Publik
+      </Badge>
+    );
   }
+  return (
+    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-semibold text-[9px] uppercase tracking-wider rounded-md shadow-none px-2 py-0.5 flex items-center gap-1 w-fit">
+      <Lock className="w-2.5 h-2.5" /> Internal
+    </Badge>
+  );
 };
 
 export const CategoryBadge = ({ category }: { category: string }) => {

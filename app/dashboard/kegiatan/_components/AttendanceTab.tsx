@@ -31,9 +31,9 @@ export default function AttendanceTab({
   onScanCode
 }: AttendanceTabProps) {
   const availableSessions =
-    event.sessions && event.sessions.length > 0 ? event.sessions : DEFAULT_EVENT_SESSIONS;
+    event.sessions && event.sessions.length > 0 ? event.sessions : [];
 
-  const [selectedSession, setSelectedSession] = useState<string>(availableSessions[0] || "Sesi Registrasi Awal");
+  const [selectedSession, setSelectedSession] = useState<string>(availableSessions[0] || "");
   const [isWebcamOn, setIsWebcamOn] = useState(false);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [manualScanCode, setManualScanCode] = useState("");

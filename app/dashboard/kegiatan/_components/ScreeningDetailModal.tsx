@@ -207,54 +207,6 @@ export default function ScreeningDetailModal({
               })}
             </div>
 
-            {/* Decision Status */}
-            <div className="space-y-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-              <span className="text-[10px] font-semibold uppercase text-zinc-500">
-                Keputusan
-              </span>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStatus("APPROVED")}
-                  className={`p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${
-                    status === "APPROVED"
-                      ? "bg-blue-50 dark:bg-blue-950/40 border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
-                      : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                  }`}
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Lolos Berkas</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStatus("REJECTED")}
-                  className={`p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${
-                    status === "REJECTED"
-                      ? "bg-rose-50 dark:bg-rose-950/40 border-rose-600 text-rose-600 dark:text-rose-400 font-semibold"
-                      : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                  }`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Tolak</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase text-zinc-500">
-                Catatan (Opsional)
-              </span>
-              <Input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Keterangan..."
-                className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-              />
-            </div>
           </div>
 
           {/* Footer */}
@@ -265,14 +217,14 @@ export default function ScreeningDetailModal({
               onClick={onClose}
               className="text-xs h-8 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer"
             >
-              Batal
+              Tutup
             </Button>
 
             <Button
               type="submit"
               className="text-xs font-medium px-4 h-8 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer"
             >
-              Simpan
+              Simpan Verifikasi
             </Button>
           </div>
         </form>

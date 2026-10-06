@@ -2,7 +2,6 @@ import { UserAccount } from "./db";
 
 export interface TenantScoped {
   commissariat?: string;
-  rayon?: string;
   komisariat?: string; // mapped representation in some parts of the app
 }
 
@@ -14,7 +13,7 @@ function normalizeName(name: string | undefined): string {
   if (!name) return "";
   return name
     .toLowerCase()
-    .replace(/komisariat|rayon|perguruan\s+tinggi/gi, "")
+    .replace(/komisariat|perguruan\s+tinggi/gi, "")
     .replace(/&/g, "dan")
     .replace(/[\s\-_]/g, "")
     .trim();

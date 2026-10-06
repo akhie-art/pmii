@@ -41,71 +41,99 @@ function drawRoundedRect(
   if (stroke) ctx.stroke();
 }
 
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 export async function exportCardAsImage(data: CardExportData): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    try {
-      if (typeof window === "undefined") {
-        resolve(false);
-        return;
-      }
+  if (typeof window === "undefined") return false;
 
-      // Create a canvas element (2x resolution for super crisp export)
-      const canvas = document.createElement("canvas");
-      canvas.width = 720;
-      canvas.height = 480;
-      const ctx = canvas.getContext("2d");
+  try {
+    // Create a canvas element (2x resolution for super crisp export)
+    const canvas = document.createElement("canvas");
+    canvas.width = 720;
+    canvas.height = 480;
+    const ctx = canvas.getContext("2d");
 
-      if (!ctx) {
-        throw new Error("Could not acquire 2D context");
-      }
+    if (!ctx) {
+      throw new Error("Could not acquire 2D context");
+    }
 
-      // Enable high-quality image smoothing
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
+    // Enable high-quality image smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
-      // 1. Draw Background: Premium Deep Dark Black/Blue (#0c101a)
-      const bgGradient = ctx.createLinearGradient(0, 0, 720, 480);
-      bgGradient.addColorStop(0, "#0c101a");
-      bgGradient.addColorStop(1, "#090d16");
-      ctx.fillStyle = bgGradient;
-      ctx.fillRect(0, 0, 720, 480);
+    // Preload logo and QR code in parallel
+    const qrData = data.idNumber || data.name || "PMII";
+    const [logoImg, qrDataUrl] = await Promise.all([
+      loadImage("/image/logo_komsat.png"),
+      QRCode.toDataURL(qrData, {
+        width: 280,
+        margin: 1,
+        color: {
+          dark: "#090d16",
+          light: "#ffffff"
+        }
+      }).catch(() => null)
+    ]);
 
-      // Draw subtle radial glow in top right
-      const glow = ctx.createRadialGradient(600, 80, 0, 600, 80, 300);
-      glow.addColorStop(0, "rgba(245, 158, 11, 0.12)");
-      glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, 720, 480);
+    const qrImg = qrDataUrl ? await loadImage(qrDataUrl) : null;
 
-      // 2. Draw outer border: Gold/Amber with 0.3 opacity
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(245, 158, 11, 0.3)";
-      drawRoundedRect(ctx, 24, 24, 672, 432, 32, false, true);
+    // 1. Draw Background: Premium Deep Dark Black/Blue (#0c101a)
+    const bgGradient = ctx.createLinearGradient(0, 0, 720, 480);
+    bgGradient.addColorStop(0, "#0c101a");
+    bgGradient.addColorStop(1, "#090d16");
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, 720, 480);
 
-      // 3. Draw Watermark background text
-      ctx.save();
-      ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
-      ctx.font = "900 180px sans-serif";
-      ctx.textAlign = "right";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(data.level.toUpperCase(), 690, 440);
-      ctx.restore();
+    // Draw subtle radial glow in top right
+    const glow = ctx.createRadialGradient(600, 80, 0, 600, 80, 300);
+    glow.addColorStop(0, "rgba(245, 158, 11, 0.12)");
+    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 720, 480);
 
-      // 4. Header Section
-      // Draw Logo Box (PM logo)
-      ctx.save();
-      ctx.fillStyle = "#f59e0b"; // gold/amber
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-      ctx.lineWidth = 1;
-      drawRoundedRect(ctx, 48, 48, 56, 56, 12, true, true);
+    // 2. Draw outer border: Gold/Amber with 0.3 opacity
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(245, 158, 11, 0.3)";
+    drawRoundedRect(ctx, 24, 24, 672, 432, 32, false, true);
 
-      // Draw logo initials
+    // 3. Draw Watermark background text
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
+    ctx.font = "900 180px sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(data.level.toUpperCase(), 690, 440);
+    ctx.restore();
+
+    // 4. Header Section: Draw Official Logo
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "rgba(245, 158, 11, 0.4)";
+    ctx.lineWidth = 1.5;
+    drawRoundedRect(ctx, 48, 48, 58, 58, 14, true, true);
+
+    if (logoImg) {
+      // Draw official PMII logo inside container
+      ctx.drawImage(logoImg, 53, 53, 48, 48);
+    } else {
+      // Fallback
+      ctx.fillStyle = "#f59e0b";
+      drawRoundedRect(ctx, 48, 48, 58, 58, 14, true, false);
       ctx.fillStyle = "#090d16";
-      ctx.font = "900 22px sans-serif";
+      ctx.font = "900 20px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("KGP", 76, 76);
-      ctx.restore();
+      ctx.fillText("KGP", 77, 77);
+    }
+    ctx.restore();
 
       // Header Titles
       ctx.save();
@@ -223,74 +251,24 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
       ctx.fillText(footerText, 360, 442);
       ctx.restore();
 
-      // 8. Generate QR Code locally via QRCode library (100% offline-safe)
-      const qrData = data.idNumber || data.name || "PMII";
-      QRCode.toDataURL(qrData, {
-        width: 280,
-        margin: 1,
-        color: {
-          dark: "#090d16",
-          light: "#ffffff"
-        }
-      })
-        .then((qrDataUrl) => {
-          const img = new Image();
-          img.onload = () => {
-            // Draw the QR Code image inside white rounded rect (x:48 + padding:15 = 63, y:156 + padding:15 = 171)
-            ctx.drawImage(img, 63, 171, 150, 150);
-
-            // Convert canvas to image file and trigger download
-            try {
-              const dataUrl = canvas.toDataURL("image/png");
-              const link = document.createElement("a");
-              link.download = data.type === "peserta"
-                ? `Kartu-Peserta-${data.name.replace(/\s+/g, "-")}.png`
-                : `KTA-Digital-${data.name.replace(/\s+/g, "-")}.png`;
-              link.href = dataUrl;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              resolve(true);
-            } catch (exportError) {
-              console.error("Canvas export failed:", exportError);
-              reject(exportError);
-            }
-          };
-
-          img.onerror = () => {
-            // Fallback export even if image fails
-            try {
-              const dataUrl = canvas.toDataURL("image/png");
-              const link = document.createElement("a");
-              link.download = `Kartu-${data.name.replace(/\s+/g, "-")}.png`;
-              link.href = dataUrl;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              resolve(true);
-            } catch (exportError) {
-              reject(exportError);
-            }
-          };
-
-          img.src = qrDataUrl;
-        })
-        .catch((qrErr) => {
-          console.error("Local QR Code generation failed:", qrErr);
-          // Export without QR if generation fails
-          const dataUrl = canvas.toDataURL("image/png");
-          const link = document.createElement("a");
-          link.download = `Kartu-${data.name.replace(/\s+/g, "-")}.png`;
-          link.href = dataUrl;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          resolve(true);
-        });
-
-    } catch (err) {
-      console.error("Error drawing card:", err);
-      reject(err);
+      // 8. Draw QR Code
+    if (qrImg) {
+      ctx.drawImage(qrImg, 63, 171, 150, 150);
     }
-  });
+
+    // Convert canvas to image file and trigger download
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = data.type === "peserta"
+      ? `Kartu-Peserta-${data.name.replace(/\s+/g, "-")}.png`
+      : `KTA-Digital-${data.name.replace(/\s+/g, "-")}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
+  } catch (err) {
+    console.error("Error drawing card:", err);
+    throw err;
+  }
 }

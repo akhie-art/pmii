@@ -12,11 +12,13 @@ import {
   User
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function KaderDashboardPage() {
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [cadre, setCadre] = useState<CadreFollowUp | null>(null);
 
@@ -93,6 +95,9 @@ export default function KaderDashboardPage() {
     show: { opacity: 1, transition: { staggerChildren: 0.08 } }
   } as const;
 
+  const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
+  const rolePrefix = match ? `/${match[1]}` : (cadre?.role ? `/${cadre.role.toLowerCase()}` : "/peserta");
+
   return (
     <motion.div
       variants={containerVariants}
@@ -136,7 +141,7 @@ export default function KaderDashboardPage() {
             </div>
 
             <div className="pt-4">
-              <Link href="/kader/materi">
+              <Link href={`${rolePrefix}/materi`}>
                 <Button className="w-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs h-8 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 transition-colors">
                   Buka Silabus <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
@@ -163,7 +168,7 @@ export default function KaderDashboardPage() {
             </div>
 
             <div className="pt-4">
-              <Link href="/kader/kegiatan">
+              <Link href={`${rolePrefix}/kegiatan`}>
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs h-8 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 transition-colors">
                   Lihat Kegiatan <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
@@ -181,18 +186,18 @@ export default function KaderDashboardPage() {
               </div>
               <div>
                 <CardTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                  Laporan RKTL
+                  Tugas RTL Kegiatan
                 </CardTitle>
                 <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed line-clamp-2">
-                  Kirimkan resume buku, risalah kajian mandiri, dan berkas tindak lanjut.
+                  Pantau tahapan kegiatan dan kumpulkan tugas RTL langsung pada alur agenda Anda.
                 </CardDescription>
               </div>
             </div>
 
             <div className="pt-4">
-              <Link href="/kader/laporan">
+              <Link href={`${rolePrefix}/kegiatan`}>
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs h-8 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 transition-colors">
-                  Buat Laporan <ArrowRight className="w-3.5 h-3.5" />
+                  Buka Kegiatan & RTL <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
               </Link>
             </div>
@@ -217,7 +222,7 @@ export default function KaderDashboardPage() {
             </div>
 
             <div className="pt-4">
-              <Link href="/kader/profil">
+              <Link href={`${rolePrefix}/profil`}>
                 <Button className="w-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs h-8 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 transition-colors">
                   Lihat Profil <ArrowRight className="w-3.5 h-3.5" />
                 </Button>

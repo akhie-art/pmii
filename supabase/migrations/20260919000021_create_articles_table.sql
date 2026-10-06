@@ -106,7 +106,7 @@ INSERT INTO articles (
   'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23'::uuid,
   'Modernisasi Persuratan Digital: Efisiensi Birokrasi Menuju Organisasi Adaptif',
   'Tata Kelola',
-  'Transformasi pengelolaan arsip, nomor surat digital, dan verifikasi sertifikat mempercepat akselerasi kerja-kerja organisasi di tingkat komisariat dan rayon.',
+  'Transformasi pengelolaan arsip, nomor surat digital, dan verifikasi sertifikat mempercepat akselerasi kerja-kerja organisasi di tingkat komisariat.',
   '["Era digital mengharuskan organisasi pergerakan untuk mereformasi tata kelola administrasinya. Ketertiban surat-menyurat dan keabsahan dokumen adalah cerminan profesionalisme sebuah organisasi kader yang maju.", "Dengan implementasi portal digital terpadu di PK PMII Ki Ageng Getas Pendawa, proses penerbitan nomor surat resmi, legalisir sertifikat pelatihan, dan pencatatan inventaris kini dapat diselesaikan secara terverifikasi dalam hitungan menit.", "Sistem ini tidak hanya menghemat penggunaan kertas dan ruang arsip fisik, namun juga menghadirkan keterbukaan data riwayat kader yang transparan dan akuntabel bagi seluruh pengurus."]'::jsonb,
   '08 Sep 2026',
   '4 mnt baca',

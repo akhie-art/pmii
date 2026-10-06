@@ -1,23 +1,16 @@
--- ============================================================================
--- SUPABASE MIGRATE: FRESH (DROP ALL + RECREATE + RLS + STORAGE + SEED)
--- Project: PK PMII Ki Ageng Getas Pendawa
--- ============================================================================
+-- =============================================================
+-- PORTAL DIGITAL TERPADU PMII - COMPLETE FRESH DATABASE SCHEMA
+-- Target Database: Supabase PostgreSQL (PostgREST Compatible)
+-- Architecture: Supabase Auth (auth.users) as Master Identity
+-- =============================================================
 
 -- -------------------------------------------------------------
--- 0. FRESH RESET (DROP & RECREATE PUBLIC SCHEMA)
+-- 0. EXTENSIONS & PREREQUISITES
 -- -------------------------------------------------------------
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
-
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT ALL ON SCHEMA public TO anon;
-GRANT ALL ON SCHEMA public TO authenticated;
-GRANT ALL ON SCHEMA public TO service_role;
-
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- -------------------------------------------------------------
--- 1. CREATE ALL TABLES (WITH UUID PRIMARY KEYS)
+-- 1. BASE DOMAIN TABLES
 -- -------------------------------------------------------------
 
 -- Table: komisariat
@@ -25,13 +18,12 @@ CREATE TABLE komisariat (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   university TEXT NOT NULL,
-  "establishedDate" DATE,
+  "establishedDate" DATE DEFAULT CURRENT_DATE,
   status TEXT NOT NULL DEFAULT 'AKTIF',
-  "logoInitial" TEXT,
+  "logoInitial" TEXT DEFAULT 'KGP',
   "contactEmail" TEXT,
-  accreditation TEXT NOT NULL DEFAULT 'A',
-  structure JSONB DEFAULT '{}'::jsonb,
-  rayons JSONB DEFAULT '[]'::jsonb,
+  accreditation TEXT DEFAULT 'A',
+  structure JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -44,17 +36,82 @@ CREATE TABLE persyaratan (
   type TEXT DEFAULT 'FILE',
   category TEXT,
   "minSubmissions" INTEGER DEFAULT 1,
+  deadline TEXT,
+  "eventId" TEXT,
+  "fileName" TEXT,
+  "fileSize" TEXT,
+  "fileUrl" TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Table: pengurus
+-- Table: kader (Database Anggota & Kader PMII - Profil Master)
+CREATE TABLE kader (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  level TEXT DEFAULT 'MAPABA',
+  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
+  "startDate" DATE DEFAULT CURRENT_DATE,
+  status TEXT NOT NULL DEFAULT 'AKTIF',
+  submissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  phone TEXT,
+  email TEXT,
+  role TEXT DEFAULT 'anggota',
+  address TEXT,
+  instagram TEXT,
+  "isGraduated" BOOLEAN DEFAULT false,
+  nta TEXT,
+  nipa TEXT,
+  "registrationNumber" TEXT,
+  angkatan TEXT,
+  "memberStatus" TEXT DEFAULT 'Aktif',
+  jabatan TEXT,
+  gender TEXT,
+  history JSONB DEFAULT '[]'::jsonb,
+  provinsi TEXT,
+  kabupaten TEXT,
+  kecamatan TEXT,
+  nik TEXT,
+  "ktpName" TEXT,
+  "ktpFileUrl" TEXT,
+  "tempatLahir" TEXT,
+  "tanggalLahir" TEXT,
+  "alamatRumah" TEXT,
+  "alamatDomisili" TEXT,
+  "pendidikanSD" TEXT,
+  "pendidikanSMP" TEXT,
+  "pendidikanSMA" TEXT,
+  "perguruanTinggi" TEXT,
+  fakultas TEXT,
+  jurusan TEXT,
+  "ktmName" TEXT,
+  "ktmFileUrl" TEXT,
+  twitter TEXT,
+  facebook TEXT,
+  "pasFotoName" TEXT,
+  avatar TEXT,
+  "riwayatPenyakit" TEXT,
+  "golonganDarah" TEXT,
+  "organisasiSD" TEXT,
+  "organisasiSMP" TEXT,
+  "organisasiSMA" TEXT,
+  "organisasiPT" TEXT,
+  "orientasiProfetik" TEXT,
+  "minatPassion" TEXT,
+  "motivasiMapaba" TEXT,
+  "careerProfile" JSONB DEFAULT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Table: pengurus (Struktur Kepengurusan - Relasi ke auth.users dan kader)
 CREATE TABLE pengurus (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  kader_id UUID REFERENCES kader(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   role TEXT DEFAULT 'pengurus',
   position TEXT,
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT DEFAULT '',
   period TEXT NOT NULL,
   phone TEXT,
   email TEXT,
@@ -73,6 +130,7 @@ CREATE TABLE kegiatan (
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
   description TEXT,
   status TEXT NOT NULL DEFAULT 'OPEN',
+  "waGroupLink" TEXT,
   sessions JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -80,9 +138,8 @@ CREATE TABLE kegiatan (
 -- Table: pendaftaran
 CREATE TABLE pendaftaran (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "eventId" UUID NOT NULL,
+  "eventId" TEXT NOT NULL,
   "cadreName" TEXT NOT NULL,
-  "cadreRayon" TEXT DEFAULT '',
   "cadreEmail" TEXT NOT NULL,
   "dateApplied" DATE DEFAULT CURRENT_DATE,
   status TEXT NOT NULL DEFAULT 'PENDING',
@@ -95,78 +152,6 @@ CREATE TABLE pendaftaran (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Table: kader
-CREATE TABLE kader (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  level TEXT DEFAULT 'MAPABA',
-  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT DEFAULT '',
-  "startDate" DATE DEFAULT CURRENT_DATE,
-  status TEXT NOT NULL DEFAULT 'AKTIF',
-  submissions JSONB NOT NULL DEFAULT '[]'::jsonb,
-  phone TEXT,
-  email TEXT,
-  password TEXT,
-  role TEXT DEFAULT 'anggota',
-  address TEXT,
-  instagram TEXT,
-  "isGraduated" BOOLEAN DEFAULT false,
-  nta TEXT,
-  nipa TEXT,
-  "registrationNumber" TEXT,
-  angkatan TEXT,
-  "memberStatus" TEXT DEFAULT 'Aktif',
-  jabatan TEXT,
-  gender TEXT,
-  history JSONB DEFAULT '[]'::jsonb,
-  provinsi TEXT,
-  kabupaten TEXT,
-  kecamatan TEXT,
-  nik TEXT,
-  "ktpName" TEXT,
-  "tempatLahir" TEXT,
-  "tanggalLahir" TEXT,
-  "alamatRumah" TEXT,
-  "alamatDomisili" TEXT,
-  "pendidikanSD" TEXT,
-  "pendidikanSMP" TEXT,
-  "pendidikanSMA" TEXT,
-  "perguruanTinggi" TEXT,
-  fakultas TEXT,
-  jurusan TEXT,
-  "ktmName" TEXT,
-  twitter TEXT,
-  facebook TEXT,
-  "pasFotoName" TEXT,
-  avatar TEXT,
-  "riwayatPenyakit" TEXT,
-  "golonganDarah" TEXT,
-  "organisasiSD" TEXT,
-  "organisasiSMP" TEXT,
-  "organisasiSMA" TEXT,
-  "organisasiPT" TEXT,
-  "orientasiProfetik" TEXT,
-  "minatPassion" TEXT,
-  "motivasiMapaba" TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Table: pengguna
-CREATE TABLE pengguna (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  password TEXT,
-  role TEXT NOT NULL DEFAULT 'peserta',
-  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT,
-  avatar TEXT,
-  status TEXT NOT NULL DEFAULT 'AKTIF',
-  "allowedMenus" TEXT[] DEFAULT '{}',
-  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
 -- Table: kaderisasi
 CREATE TABLE kaderisasi (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -174,6 +159,7 @@ CREATE TABLE kaderisasi (
   tipe TEXT NOT NULL,
   "formFields" JSONB NOT NULL DEFAULT '[]'::jsonb,
   "materi" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "certificateTemplate" TEXT,
   "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -203,7 +189,19 @@ CREATE TABLE surat (
   "senderLocation" TEXT,
   "dateIndo" TEXT,
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Table: surat_templates
+CREATE TABLE surat_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  classification TEXT DEFAULT 'Instruksi',
+  content TEXT NOT NULL,
+  "senderTitle" TEXT,
+  "senderLocation" TEXT,
+  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -218,12 +216,13 @@ CREATE TABLE arsip (
   access TEXT NOT NULL,
   "uploadedDate" TEXT NOT NULL,
   uploader TEXT NOT NULL,
+  "uploaderAvatar" TEXT,
+  parent TEXT,
   downloads INTEGER DEFAULT 0 NOT NULL,
   description TEXT,
   "isStarred" BOOLEAN DEFAULT false NOT NULL,
   url TEXT,
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -248,16 +247,50 @@ CREATE TABLE articles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Table: evaluations (Penilaian Peserta Kaderisasi - Role Instruktur)
+CREATE TABLE evaluations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "activityId" TEXT NOT NULL,
+  "activityName" TEXT NOT NULL,
+  "cadreId" TEXT,
+  "participantName" TEXT NOT NULL,
+  gender TEXT DEFAULT 'Laki-laki',
+  commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
+  university TEXT,
+  level TEXT DEFAULT 'MAPABA',
+  "sessionScores" JSONB NOT NULL DEFAULT '{}'::jsonb,
+  kognitif NUMERIC(5,2) DEFAULT 0,
+  afektif NUMERIC(5,2) DEFAULT 0,
+  psikomotorik NUMERIC(5,2) DEFAULT 0,
+  "finalScore" NUMERIC(5,2) DEFAULT 0,
+  grade TEXT DEFAULT 'E',
+  status TEXT NOT NULL DEFAULT 'BELUM_DINILAI',
+  "evaluatorId" TEXT,
+  "evaluatorName" TEXT,
+  notes TEXT,
+  "preTestAverage" NUMERIC(5,2),
+  "postTestAverage" NUMERIC(5,2),
+  "quizResults" JSONB DEFAULT '{}'::jsonb,
+  "careerAssessment" JSONB DEFAULT NULL,
+  "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 CREATE INDEX idx_articles_slug ON articles(slug);
 
 -- -------------------------------------------------------------
 -- 2. INDEXES & PERFORMANCE OPTIMIZATIONS
 -- -------------------------------------------------------------
-CREATE INDEX idx_kader_commissariat_rayon ON kader(commissariat, rayon);
-CREATE INDEX idx_kegiatan_commissariat ON kegiatan(commissariat);
-CREATE INDEX idx_pengguna_email ON pengguna(email);
-CREATE INDEX idx_pendaftaran_event ON pendaftaran("eventId");
+CREATE INDEX idx_kader_user_id ON kader(user_id);
+CREATE INDEX idx_kader_email ON kader(email);
+CREATE INDEX idx_kader_name ON kader(name);
+CREATE INDEX idx_kader_nik ON kader(nik);
+CREATE INDEX idx_kader_commissariat ON kader(commissariat);
+CREATE INDEX idx_pengurus_user_id ON pengurus(user_id);
+CREATE INDEX idx_pengurus_kader_id ON pengurus(kader_id);
 CREATE INDEX idx_pengurus_commissariat ON pengurus(commissariat);
+CREATE INDEX idx_kegiatan_commissariat ON kegiatan(commissariat);
+CREATE INDEX idx_pendaftaran_event ON pendaftaran("eventId");
 CREATE INDEX idx_persyaratan_level ON persyaratan(level);
 CREATE INDEX idx_kurikulum_id ON kurikulum(id);
 CREATE INDEX idx_surat_commissariat ON surat(commissariat);
@@ -299,8 +332,6 @@ CREATE TRIGGER trg_surat_created_at BEFORE INSERT ON surat FOR EACH ROW EXECUTE 
 CREATE TRIGGER trg_arsip_created_at BEFORE INSERT ON arsip FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
 CREATE TRIGGER trg_kurikulum_created_at BEFORE INSERT ON kurikulum FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
 CREATE TRIGGER trg_articles_created_at BEFORE INSERT ON articles FOR EACH ROW EXECUTE FUNCTION set_default_created_at();
-
-CREATE TRIGGER trg_pengguna_created_at BEFORE INSERT ON pengguna FOR EACH ROW EXECUTE FUNCTION set_default_created_at_camel();
 CREATE TRIGGER trg_kaderisasi_created_at BEFORE INSERT ON kaderisasi FOR EACH ROW EXECUTE FUNCTION set_default_created_at_camel();
 
 -- -------------------------------------------------------------
@@ -312,11 +343,11 @@ ALTER TABLE pengurus ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kegiatan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pendaftaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kader ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pengguna ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kaderisasi ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kurikulum ENABLE ROW LEVEL SECURITY;
 ALTER TABLE surat ENABLE ROW LEVEL SECURITY;
 ALTER TABLE arsip ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "allow_select" ON komisariat FOR SELECT USING (true);
 CREATE POLICY "allow_insert" ON komisariat FOR INSERT WITH CHECK (true);
@@ -348,11 +379,6 @@ CREATE POLICY "allow_insert" ON kader FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_update" ON kader FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "allow_delete" ON kader FOR DELETE USING (true);
 
-CREATE POLICY "allow_select" ON pengguna FOR SELECT USING (true);
-CREATE POLICY "allow_insert" ON pengguna FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_update" ON pengguna FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "allow_delete" ON pengguna FOR DELETE USING (true);
-
 CREATE POLICY "allow_select" ON kaderisasi FOR SELECT USING (true);
 CREATE POLICY "allow_insert" ON kaderisasi FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_update" ON kaderisasi FOR UPDATE USING (true) WITH CHECK (true);
@@ -368,17 +394,20 @@ CREATE POLICY "allow_insert" ON surat FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_update" ON surat FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "allow_delete" ON surat FOR DELETE USING (true);
 
+CREATE POLICY "allow_select" ON surat_templates FOR SELECT USING (true);
+CREATE POLICY "allow_insert" ON surat_templates FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update" ON surat_templates FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "allow_delete" ON surat_templates FOR DELETE USING (true);
+
 CREATE POLICY "allow_select" ON arsip FOR SELECT USING (true);
 CREATE POLICY "allow_insert" ON arsip FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_update" ON arsip FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "allow_delete" ON arsip FOR DELETE USING (true);
 
-ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "allow_select" ON articles FOR SELECT USING (true);
-CREATE POLICY "allow_insert" ON articles FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_update" ON articles FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "allow_delete" ON articles FOR DELETE USING (true);
+CREATE POLICY "allow_select" ON evaluations FOR SELECT USING (true);
+CREATE POLICY "allow_insert" ON evaluations FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update" ON evaluations FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "allow_delete" ON evaluations FOR DELETE USING (true);
 
 GRANT ALL ON TABLE komisariat TO anon, authenticated;
 GRANT ALL ON TABLE persyaratan TO anon, authenticated;
@@ -386,12 +415,13 @@ GRANT ALL ON TABLE pengurus TO anon, authenticated;
 GRANT ALL ON TABLE kegiatan TO anon, authenticated;
 GRANT ALL ON TABLE pendaftaran TO anon, authenticated;
 GRANT ALL ON TABLE kader TO anon, authenticated;
-GRANT ALL ON TABLE pengguna TO anon, authenticated;
 GRANT ALL ON TABLE kaderisasi TO anon, authenticated;
 GRANT ALL ON TABLE kurikulum TO anon, authenticated;
 GRANT ALL ON TABLE surat TO anon, authenticated;
+GRANT ALL ON TABLE surat_templates TO anon, authenticated;
 GRANT ALL ON TABLE arsip TO anon, authenticated;
 GRANT ALL ON TABLE articles TO anon, authenticated;
+GRANT ALL ON TABLE evaluations TO anon, authenticated;
 
 -- -------------------------------------------------------------
 -- 5. STORAGE BUCKETS CONFIGURATION
@@ -414,19 +444,14 @@ CREATE POLICY "Public Delete Materials" ON storage.objects FOR DELETE USING (buc
 -- 6. SEED DATA (OFFICIAL INITIAL DATA)
 -- -------------------------------------------------------------
 
--- 6.1. AKUN SEED BERDASARKAN 4 ROLE RESMI
-INSERT INTO pengguna (id, name, email, password, role, commissariat, rayon, status)
+-- 6.1. AKUN KADER & ADMIN RESMI (Password dikelola secara aman oleh Supabase Auth / auth.users)
+INSERT INTO kader (id, name, email, role, commissariat, status, level)
 VALUES 
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid, 'Admin PK PMII Ki Ageng Getas Pendawa', 'admin@pmii.org', 'password', 'admin', 'Ki Ageng Getas Pendawa', 'Komisariat', 'AKTIF'),
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12'::uuid, 'Pengurus PK PMII Ki Ageng Getas Pendawa', 'pengurus@pmii.org', 'password', 'pengurus', 'Ki Ageng Getas Pendawa', 'Komisariat', 'AKTIF'),
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13'::uuid, 'Sahabat Anggota (Kader Resmi)', 'anggota@pmii.org', 'password', 'anggota', 'Ki Ageng Getas Pendawa', 'Tarbiyah', 'AKTIF'),
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14'::uuid, 'Calon Anggota (Peserta MAPABA)', 'peserta@pmii.org', 'password', 'peserta', 'Ki Ageng Getas Pendawa', 'Syari''ah', 'AKTIF')
-ON CONFLICT (email) DO UPDATE SET
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid, 'Admin PK PMII Ki Ageng Getas Pendawa', 'admin@pmii.org', 'admin', 'Ki Ageng Getas Pendawa', 'AKTIF', 'PKL')
+ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
-  password = EXCLUDED.password,
   role = EXCLUDED.role,
   commissariat = EXCLUDED.commissariat,
-  rayon = EXCLUDED.rayon,
   status = EXCLUDED.status;
 
 -- 6.2. DATA RESMI KOMISARIAT
@@ -439,8 +464,7 @@ INSERT INTO komisariat (
   "logoInitial", 
   "contactEmail", 
   accreditation, 
-  structure, 
-  rayons
+  structure
 )
 VALUES (
   'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b01'::uuid,
@@ -451,67 +475,14 @@ VALUES (
   'KGP',
   '-',
   'A',
-  '{"chairman": "-", "secretary": "-", "treasurer": "-", "period": "2026 - 2027"}'::jsonb,
-  '[
-    {"id": "ray-syariah", "name": "Rayon Syari''ah (Fakultas Syari''ah dan Hukum)", "memberCount": 0},
-    {"id": "ray-tarbiyah", "name": "Rayon Tarbiyah (FITK)", "memberCount": 0},
-    {"id": "ray-ushuluddin", "name": "Rayon Ushuluddin (FUHUM)", "memberCount": 0},
-    {"id": "ray-dakwah", "name": "Rayon Dakwah (FDK)", "memberCount": 0},
-    {"id": "ray-febi", "name": "Rayon FEBI (Ekonomi & Bisnis Islam)", "memberCount": 0},
-    {"id": "ray-fst", "name": "Rayon FST (Sains & Teknologi)", "memberCount": 0},
-    {"id": "ray-fpk", "name": "Rayon FPK (Psikologi & Kesehatan)", "memberCount": 0},
-    {"id": "ray-fisip", "name": "Rayon FISIP (Ilmu Sosial & Ilmu Politik)", "memberCount": 0},
-    {"id": "ray-pasca", "name": "Rayon Pascasarjana", "memberCount": 0}
-  ]'::jsonb
+  '{"chairman": "-", "secretary": "-", "treasurer": "-", "period": "2026 - 2027"}'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   university = EXCLUDED.university,
-  "logoInitial" = COALESCE(komisariat."logoInitial", EXCLUDED."logoInitial"),
-  "contactEmail" = COALESCE(komisariat."contactEmail", EXCLUDED."contactEmail"),
-  structure = CASE 
-    WHEN komisariat.structure IS NULL OR komisariat.structure = '{}'::jsonb 
-    THEN EXCLUDED.structure 
-    ELSE komisariat.structure 
-  END,
-  rayons = CASE 
-    WHEN komisariat.rayons IS NULL OR komisariat.rayons = '[]'::jsonb 
-    THEN EXCLUDED.rayons 
-    ELSE komisariat.rayons 
-  END;
+  status = EXCLUDED.status;
 
--- 6.3. DATA SEED KURIKULUM FORMAL NASIONAL PMII
-INSERT INTO kurikulum (
-  id,
-  name,
-  syllabus,
-  materials,
-  quiz
-)
-VALUES
-  ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c01'::uuid, 'MAPABA', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb),
-  ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02'::uuid, 'PKD', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb),
-  ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c03'::uuid, 'PKL', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb),
-  ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c04'::uuid, 'PKN', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb)
-ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  syllabus = CASE 
-    WHEN kurikulum.syllabus IS NULL OR kurikulum.syllabus = '[]'::jsonb 
-    THEN EXCLUDED.syllabus 
-    ELSE kurikulum.syllabus 
-  END,
-  materials = CASE 
-    WHEN kurikulum.materials IS NULL OR kurikulum.materials = '[]'::jsonb 
-    THEN EXCLUDED.materials 
-    ELSE kurikulum.materials 
-  END,
-  quiz = CASE 
-    WHEN kurikulum.quiz IS NULL OR kurikulum.quiz = '[]'::jsonb 
-    THEN EXCLUDED.quiz 
-    ELSE kurikulum.quiz 
-  END;
-
--- 8. SEED DATA ARTIKEL
+-- 6.3. DATA ARTIKEL RESMI KADERISASI & GERAKAN
 INSERT INTO articles (
   id,
   title,
@@ -557,7 +528,6 @@ INSERT INTO articles (
   '["Aswaja", "Ideologi", "Kebangsaan"]'::jsonb,
   'DITAMPILKAN',
   520,
-  64,
   'Ki Ageng Getas Pendawa',
   '2026-09-12 09:30:00+00'
 ),
@@ -565,7 +535,7 @@ INSERT INTO articles (
   'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23'::uuid,
   'Modernisasi Persuratan Digital: Efisiensi Birokrasi Menuju Organisasi Adaptif',
   'Tata Kelola',
-  'Transformasi pengelolaan arsip, nomor surat digital, dan verifikasi sertifikat mempercepat akselerasi kerja-kerja organisasi di tingkat komisariat dan rayon.',
+  'Transformasi pengelolaan arsip, nomor surat digital, dan verifikasi sertifikat mempercepat akselerasi kerja-kerja organisasi di tingkat komisariat.',
   '["Era digital mengharuskan organisasi pergerakan untuk mereformasi tata kelola administrasinya. Ketertiban surat-menyurat dan keabsahan dokumen adalah cerminan profesionalisme sebuah organisasi kader yang maju.", "Dengan implementasi portal digital terpadu di PK PMII Ki Ageng Getas Pendawa, proses penerbitan nomor surat resmi, legalisir sertifikat pelatihan, dan pencatatan inventaris kini dapat diselesaikan secara terverifikasi dalam hitungan menit.", "Sistem ini tidak hanya menghemat penggunaan kertas dan ruang arsip fisik, namun juga menghadirkan keterbukaan data riwayat kader yang transparan dan akuntabel bagi seluruh pengurus."]'::jsonb,
   'Siti Rahmawati',
   'Sekretaris Komisariat',
@@ -574,9 +544,7 @@ INSERT INTO articles (
   '["Digitalisasi", "Administrasi", "Tata Kelola"]'::jsonb,
   'DITAMPILKAN',
   285,
-  35,
   'Ki Ageng Getas Pendawa',
   '2026-09-08 14:15:00+00'
 )
 ON CONFLICT (id) DO NOTHING;
-

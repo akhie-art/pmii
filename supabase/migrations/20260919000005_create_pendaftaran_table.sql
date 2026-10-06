@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS pendaftaran (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "eventId" UUID NOT NULL,
   "cadreName" TEXT NOT NULL,
-  "cadreRayon" TEXT DEFAULT '',
   "cadreEmail" TEXT NOT NULL,
   "dateApplied" DATE DEFAULT CURRENT_DATE,
   status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'

@@ -11,5 +11,10 @@ CREATE TABLE IF NOT EXISTS persyaratan (
   type TEXT DEFAULT 'FILE',
   category TEXT,
   "minSubmissions" INTEGER DEFAULT 1,
+  deadline TEXT,
+  "eventId" TEXT,
+  "fileName" TEXT,
+  "fileSize" TEXT,
+  "fileUrl" TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

@@ -1,5 +1,5 @@
 -- Migration: Create komisariat table
--- Description: Profil Komisariat & Rayon Binaan dengan ID UUID
+-- Description: Profil Komisariat dengan ID UUID
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -13,6 +13,5 @@ CREATE TABLE IF NOT EXISTS komisariat (
   "contactEmail" TEXT,
   accreditation TEXT NOT NULL DEFAULT 'A', -- 'A', 'B', 'C', 'Belum Akreditasi'
   structure JSONB DEFAULT '{}'::jsonb, -- { chairman, secretary, treasurer, period }
-  rayons JSONB DEFAULT '[]'::jsonb, -- [{ id, name, memberCount }]
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

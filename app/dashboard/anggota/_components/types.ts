@@ -12,7 +12,6 @@ export interface Member {
   name: string;
   level: "MAPABA" | "PKD" | "PKL" | "PKN";
   komisariat: string;
-  rayon?: string;
   angkatan: string;
   status: "Aktif" | "Alumni" | "Pasif";
   email: string;
@@ -63,7 +62,6 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     name: c.name,
     level: (c.level as any) || "MAPABA",
     komisariat,
-    rayon: c.rayon || "",
     angkatan: c.angkatan || "2024",
     status: (c.memberStatus as any) || (c.status === "SELESAI" ? "Alumni" : "Aktif"),
     email: c.email || "",
@@ -115,7 +113,6 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     name: m.name,
     level: m.level as any,
     commissariat,
-    rayon: m.rayon || "",
     startDate: m.history && m.history[0] ? m.history[0].date : "",
     status: m.status === "Alumni" ? "SELESAI" : "AKTIF",
     submissions: [],

@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS kader (
   name TEXT NOT NULL,
   level TEXT DEFAULT 'MAPABA', -- 'MAPABA', 'PKD', 'PKL'
   commissariat TEXT DEFAULT 'Ki Ageng Getas Pendawa',
-  rayon TEXT DEFAULT '',
   "startDate" DATE DEFAULT CURRENT_DATE,
   status TEXT NOT NULL DEFAULT 'AKTIF', -- 'AKTIF', 'SELESAI', 'REVISI'
   submissions JSONB NOT NULL DEFAULT '[]'::jsonb,

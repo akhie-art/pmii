@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { db, type CadreFollowUp, type Requirement } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
@@ -62,12 +62,15 @@ interface CadreSubmission {
 
 export default function LaporanPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
   
   // State from Database
   const [cadres, setCadres] = useState<CadreFollowUp[]>([]);
+  const [allRequirements, setAllRequirements] = useState<Requirement[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [selectedLevel, setSelectedLevel] = useState<string>("MAPABA");
   const [currentCadre, setCurrentCadre] = useState<CadreFollowUp | null>(null);
 
   // Tab State: "form" (Buat Laporan) | "history" (Riwayat Laporan)
@@ -107,18 +110,49 @@ export default function LaporanPage() {
                    (loggedInUser ? allCadres.find(c => c.id === loggedInUser.id || (c.email && c.email.toLowerCase() === loggedInUser.email?.toLowerCase())) : null) || 
                    allCadres[0] || null;
       
-      const allReqs = await db.getRequirements([]);
-
+      const allReqs = await db.getRequirements();
+      setAllRequirements(allReqs);
       setCadres(allCadres);
-      if (mine) {
-        setRequirements(allReqs.filter(r => r.level === mine.level));
+
+      let targetLevel = mine?.level || "MAPABA";
+      let targetReqId = "";
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const qLevel = params.get("level");
+        const qReqId = params.get("reqId");
+        if (qLevel) targetLevel = qLevel as any;
+        if (qReqId) targetReqId = qReqId;
       }
+
+      setSelectedLevel(targetLevel);
+      const filtered = allReqs.filter(r => r.level?.toUpperCase() === targetLevel.toUpperCase());
+      const activeReqs = filtered.length > 0 ? filtered : allReqs;
+      setRequirements(activeReqs);
+
+      if (targetReqId && activeReqs.some(r => r.id === targetReqId)) {
+        setSelectedReqId(targetReqId);
+      } else if (activeReqs.length > 0) {
+        setSelectedReqId(activeReqs[0].id);
+      }
+
       setCurrentCadre(mine);
       setDate(new Date().toISOString().split("T")[0]);
       setMounted(true);
     };
     loadData();
   }, []);
+
+  const handleLevelChange = (lvl: string) => {
+    setSelectedLevel(lvl);
+    const filtered = allRequirements.filter(r => r.level?.toUpperCase() === lvl.toUpperCase());
+    const activeReqs = filtered.length > 0 ? filtered : allRequirements;
+    setRequirements(activeReqs);
+    if (activeReqs.length > 0) {
+      setSelectedReqId(activeReqs[0].id);
+    } else {
+      setSelectedReqId("");
+    }
+  };
 
   const readFileAsDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -296,12 +330,15 @@ export default function LaporanPage() {
 
   const selectedRequirement = requirements.find(r => r.id === selectedReqId);
 
+  const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
+  const rolePrefix = match ? `/${match[1]}` : (currentCadre?.role ? `/${currentCadre.role.toLowerCase()}` : "/peserta");
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto text-zinc-900 dark:text-zinc-100 font-sans pb-12">
       
       {/* 1. TOP NAVIGATION & BREADCRUMB */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/kader">
+        <Link href={rolePrefix}>
           <Button variant="outline" size="sm" className="h-8.5 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 font-medium text-xs flex items-center gap-1.5 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800">
             <ArrowLeft className="w-3.5 h-3.5" /> Kembali ke Dashboard
           </Button>
@@ -416,13 +453,36 @@ export default function LaporanPage() {
               <CardContent className="p-5 sm:p-6">
                 <form onSubmit={handleSubmit} className="space-y-4">
                   
+                  {/* LEVEL SWITCHER PILLS */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      Jenjang Tugas RTL
+                    </label>
+                    <div className="flex gap-2">
+                      {["MAPABA", "PKD", "PKL"].map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => handleLevelChange(lvl)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors border ${
+                            selectedLevel === lvl
+                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                              : "bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300"
+                          }`}
+                        >
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* REQUIREMENT DROPDOWN */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
-                      <span>Kategori Syarat RKTL <span className="text-rose-500">*</span></span>
+                      <span>Kategori Tugas RTL ({selectedLevel}) <span className="text-rose-500">*</span></span>
                       {requirements.length === 0 && (
                         <span className="text-[11px] text-amber-600 dark:text-amber-400 font-normal">
-                          Belum ada daftar syarat khusus untuk level {currentCadre.level}
+                          Belum ada daftar tugas khusus untuk jenjang {selectedLevel}
                         </span>
                       )}
                     </label>
@@ -459,9 +519,23 @@ export default function LaporanPage() {
                         <p className="text-[11px] text-zinc-600 dark:text-zinc-400 pl-5 leading-relaxed">
                           {selectedRequirement.description}
                         </p>
-                        {selectedRequirement.minSubmissions && (
-                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 pl-5 pt-0.5">
-                            Target Minimal: <span className="font-semibold">{selectedRequirement.minSubmissions} laporan</span>
+                        {selectedRequirement.deadline && (
+                          <div className="text-[11px] text-amber-700 dark:text-amber-400 pl-5 pt-0.5 flex items-center gap-1 font-semibold">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Batas Waktu: {new Date(selectedRequirement.deadline).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })} WIB</span>
+                          </div>
+                        )}
+                        {selectedRequirement.fileUrl && (
+                          <div className="pl-5 pt-1.5">
+                            <a
+                              href={selectedRequirement.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-semibold hover:underline bg-white dark:bg-zinc-900 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-900/60"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Unduh Berkas Panduan / Soal ({selectedRequirement.fileName || "Lampiran"})</span>
+                            </a>
                           </div>
                         )}
                       </div>
@@ -832,7 +906,7 @@ export default function LaporanPage() {
               type="button"
               onClick={() => {
                 setIsSuccessOpen(false);
-                router.push("/kader");
+                router.push(rolePrefix);
               }}
               className="w-full sm:w-1/2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-8.5 cursor-pointer"
             >

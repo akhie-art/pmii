@@ -8,11 +8,11 @@ import { db } from "@/lib/db";
 import {
   LayoutDashboard,
   Calendar,
-  Upload,
   BookOpen,
   Sun,
   Moon,
-  LogOut
+  LogOut,
+  ArrowLeft
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ export default function KaderLayout({
   const [darkMode, setDarkMode] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [activeCadre, setActiveCadre] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>("peserta");
+  const [isStaffUser, setIsStaffUser] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -54,23 +56,71 @@ export default function KaderLayout({
         return;
       }
 
+      let detectedRole = "peserta";
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          const r = (parsed?.role || "").toLowerCase();
+          if (r === "admin" || r === "pengurus" || r === "komisariat") {
+            setIsStaffUser(true);
+            router.replace("/dashboard");
+            return;
+          } else if (r) {
+            detectedRole = r;
+          }
+        } catch (e) {}
+      }
+      setUserRole(detectedRole);
+
+      // Routing rule: URL must dynamically match the user's role
+      const path = window.location.pathname;
+      if (path === "/kader" || path.startsWith("/kader/")) {
+        const target = path.replace(/^\/kader/, `/${detectedRole}`);
+        router.replace(target + window.location.search);
+        return;
+      }
+
+      // If user is at /peserta but role is anggota (or vice versa), redirect to their actual role URL
+      const matchRole = path.match(/^\/(peserta|anggota)/);
+      if (matchRole && matchRole[1] !== detectedRole && (detectedRole === "peserta" || detectedRole === "anggota")) {
+        const target = path.replace(/^\/(peserta|anggota)/, `/${detectedRole}`);
+        router.replace(target + window.location.search);
+        return;
+      }
+
       const savedTheme = localStorage.getItem("PMII_THEME") || "dark";
       setDarkMode(savedTheme === "dark");
 
       const loadCadre = async () => {
         const cadres = await db.getCadres([]);
-        const found = cadres.find(c => c.id === activeCadreId);
+        let found = null;
+        let parsedUser: any = null;
+        if (savedUser) {
+          try {
+            parsedUser = JSON.parse(savedUser);
+            if (parsedUser?.email) {
+              found = cadres.find(c => c.email && c.email.trim().toLowerCase() === parsedUser.email.trim().toLowerCase());
+            }
+          } catch (e) {}
+        }
+        if (!found && activeCadreId) {
+          found = cadres.find(c => c.id === activeCadreId);
+        }
         if (found) {
           setActiveCadre(found);
-        } else if (savedUser) {
-          try {
-            const parsed = JSON.parse(savedUser);
-            setActiveCadre({
-              name: parsed.name || "Kader PMII",
-              level: "MAPABA",
-              commissariat: parsed.commissariat || "Ki Ageng Getas Pendawa"
-            });
-          } catch (e) {}
+          localStorage.setItem("PMII_ACTIVE_CADRE_ID", found.id);
+          if (found.role) {
+            setUserRole(found.role.toLowerCase());
+          }
+        } else if (parsedUser) {
+          setActiveCadre({
+            id: parsedUser.id || "cadre-user",
+            name: parsedUser.name || "Kader PMII",
+            email: parsedUser.email || "",
+            level: "MAPABA",
+            commissariat: parsedUser.commissariat || "Ki Ageng Getas Pendawa",
+            role: parsedUser.role || detectedRole
+          });
         }
         setMounted(true);
       };
@@ -96,11 +146,13 @@ export default function KaderLayout({
     router.push("/login");
   };
 
+  const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
+  const rolePrefix = match ? `/${match[1]}` : `/${userRole || "peserta"}`;
+
   const menuItems = [
-    { name: "Dashboard", href: "/kader", icon: LayoutDashboard },
-    { name: "Kegiatan", href: "/kader/kegiatan", icon: Calendar },
-    { name: "Upload Laporan", href: "/kader/laporan", icon: Upload },
-    { name: "Materi Kaderisasi", href: "/kader/materi", icon: BookOpen },
+    { name: "Dashboard", href: rolePrefix, icon: LayoutDashboard },
+    { name: "Kegiatan", href: `${rolePrefix}/kegiatan`, icon: Calendar },
+    { name: "Materi Kaderisasi", href: `${rolePrefix}/materi`, icon: BookOpen },
   ];
 
   if (!mounted) {
@@ -124,12 +176,34 @@ export default function KaderLayout({
         
         {/* SIDEBAR */}
         <Sidebar collapsible="icon" className="border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 z-40">
+          <SidebarHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs">
+                <Image
+                  src="/image/logo_komsat.png"
+                  alt="Logo"
+                  width={28}
+                  height={28}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                  Portal {userRole === "anggota" ? "Anggota" : "Peserta"}
+                </h3>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                  PK PMII Ki Ageng Getas Pendawa
+                </p>
+              </div>
+            </div>
+          </SidebarHeader>
+
           <SidebarContent className="px-3 py-4 space-y-1 overflow-y-auto">
             <SidebarGroup className="p-0">
               <SidebarGroupContent>
                 <SidebarMenu>
                   {menuItems.map((item) => {
-                    const isActive = pathname === item.href || (item.href !== "/kader" && pathname.startsWith(item.href + "/"));
+                    const isActive = pathname === item.href || (item.href !== rolePrefix && pathname.startsWith(item.href + "/"));
                     const Icon = item.icon;
 
                     return (
@@ -177,6 +251,18 @@ export default function KaderLayout({
           <header className="h-16 flex items-center justify-between px-6 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-30 w-full transition-colors duration-200">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-white cursor-pointer" />
+              {isStaffUser && (
+                <Link href="/dashboard">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 font-medium border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer shadow-none"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Kembali ke Dashboard</span>
+                  </Button>
+                </Link>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -190,13 +276,13 @@ export default function KaderLayout({
                 {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-600" />}
               </Button>
 
-              <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
+              <div className="h-5 w-px bg-zinc-200 dark:border-zinc-800 hidden sm:block" />
 
               {/* USER INFO IN NAVBAR */}
               <Link
-                href="/kader/profil"
+                href={`${rolePrefix}/profil`}
                 className="flex items-center gap-2.5 p-1 -mr-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-                title="Lihat Profil Kader"
+                title="Lihat Profil Saya"
               >
                 <Avatar className="w-8 h-8 border border-zinc-200 dark:border-zinc-800 flex-shrink-0">
                   {activeCadre?.avatar && (
@@ -207,9 +293,14 @@ export default function KaderLayout({
                   </AvatarFallback>
                 </Avatar>
                 
-                <span className="hidden sm:inline-block text-xs font-bold truncate max-w-[160px] text-zinc-900 dark:text-zinc-100">
-                  {activeCadre?.name || "Sahabat Kader"}
-                </span>
+                <div className="hidden sm:flex flex-col text-left">
+                  <span className="text-xs font-bold truncate max-w-[160px] text-zinc-900 dark:text-zinc-100">
+                    {activeCadre?.name || "Sahabat"}
+                  </span>
+                  <span className="text-[10px] uppercase font-semibold text-blue-600 dark:text-amber-400">
+                    {activeCadre?.role || userRole || "Peserta"}
+                  </span>
+                </div>
               </Link>
             </div>
           </header>

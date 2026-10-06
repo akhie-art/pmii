@@ -6,9 +6,10 @@ export interface DocumentItem {
   category: string;
   year: string;
   size: string;
-  access: "Public" | "Internal" | "Confidential";
+  access: "Public" | "Internal";
   uploadedDate: string;
   uploader: string;
+  uploaderAvatar?: string;
   downloads: number;
   description: string;
   isStarred: boolean;

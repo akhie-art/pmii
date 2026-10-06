@@ -31,7 +31,7 @@ export default function GraduationTab({
   const totalSessions =
     event.sessions && event.sessions.length > 0
       ? event.sessions.length
-      : DEFAULT_EVENT_SESSIONS.length;
+      : 0;
 
   const approvedRegistrations = registrations.filter((r) => r.status === "APPROVED");
 
