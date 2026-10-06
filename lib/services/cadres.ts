@@ -46,3 +46,10 @@ export async function saveCadres(cadresList: CadreFollowUp[]): Promise<boolean> 
 // Aliases for Anggota
 export const getAnggota = getCadres;
 export const saveAnggota = saveCadres;
+
+export async function deleteCadre(id: string): Promise<boolean> {
+  const { deleteTableRow } = await import("./core");
+  return deleteTableRow("anggota", id, KEYS.CADRES);
+}
+
+export const deleteAnggota = deleteCadre;

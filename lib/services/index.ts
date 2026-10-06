@@ -1,4 +1,4 @@
-import { getCadres, saveCadres, getAnggota, saveAnggota } from "./cadres";
+import { getCadres, saveCadres, getAnggota, saveAnggota, deleteCadre, deleteAnggota } from "./cadres";
 import { getEvents, saveEvents, getDefaultEventTimeline } from "./events";
 import { getRegistrations, saveRegistrations } from "./registrations";
 import { getRequirements, saveRequirements } from "./requirements";
@@ -27,7 +27,7 @@ import {
   createAuthUser,
   updateAuthUser
 } from "./credentials";
-import { normalizeKomisariat, normalizeDateString } from "./core";
+import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow } from "./core";
 
 // Unified db facade for 100% backward compatibility
 export const db = {
@@ -36,6 +36,10 @@ export const db = {
   saveCadres,
   getAnggota,
   saveAnggota,
+  deleteCadre,
+  deleteAnggota,
+  deleteTableRow,
+  upsertTableRow,
 
   // Events / Kegiatan
   getEvents,
@@ -113,6 +117,10 @@ export {
   formatArticleDate,
   normalizeKomisariat,
   normalizeDateString,
+  deleteTableRow,
+  upsertTableRow,
+  deleteCadre,
+  deleteAnggota,
   getUserCredentials,
   setUserPassword,
   getUserPassword,

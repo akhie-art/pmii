@@ -195,19 +195,97 @@ export async function getTableData<T>(
 /**
  * Generic Write with Safe Upsert, Storage File Cleanup, and Schema Self-Healing
  */
+export interface SaveTableOptions {
+  scopeCommissariat?: string;
+  allowDeletion?: boolean;
+  forceWipeAll?: boolean;
+}
+
+export async function deleteTableRow(
+  tableName: string,
+  id: string,
+  localStorageKey?: string
+): Promise<boolean> {
+  const effectiveTable = await getEffectiveTableName(tableName);
+
+  // Update local cache
+  if (localStorageKey && typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(localStorageKey);
+      if (stored) {
+        const list = JSON.parse(stored) as any[];
+        const filtered = list.filter((item) => String(item.id) !== String(id));
+        localStorage.setItem(localStorageKey, JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.error(`Error updating local cache for ${localStorageKey}:`, e);
+    }
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // Clean up files before deleting record
+      if (effectiveTable === "anggota" || effectiveTable === "kader") {
+        const { data: c } = await supabase
+          .from(effectiveTable)
+          .select('id, avatar, "ktpFileUrl", "ktmFileUrl"')
+          .eq("id", id)
+          .single();
+        if (c) {
+          if (c.avatar) await deleteStorageFile(c.avatar);
+          if (c.ktpFileUrl) await deleteStorageFile(c.ktpFileUrl);
+          if (c.ktmFileUrl) await deleteStorageFile(c.ktmFileUrl);
+        }
+      } else if (effectiveTable === "arsip") {
+        const { data: doc } = await supabase
+          .from("arsip")
+          .select("id, description, url")
+          .eq("id", id)
+          .single();
+        if (doc) {
+          if (doc.url) await deleteStorageFile(doc.url);
+          if (doc.description) {
+            try {
+              const parsed = JSON.parse(doc.description);
+              if (parsed.fileUrl) await deleteStorageFile(parsed.fileUrl);
+            } catch {}
+          }
+        }
+      }
+
+      const { error } = await supabase.from(effectiveTable).delete().eq("id", id);
+      if (error) {
+        console.error(`Supabase error deleting ${id} from ${effectiveTable}:`, error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`Error deleting ${id} from ${effectiveTable}:`, err);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export async function upsertTableRow<T extends { id: string | number }>(
+  tableName: string,
+  localStorageKey: string,
+  record: T
+): Promise<boolean> {
+  return saveTableData(tableName, localStorageKey, [record], { allowDeletion: false });
+}
+
 export async function saveTableData<T extends { id: string | number }>(
   tableName: string,
   localStorageKey: string,
   dataList: T[],
-  options?: {
-    scopeCommissariat?: string;
-    allowDeletion?: boolean;
-  }
+  options?: SaveTableOptions
 ): Promise<boolean> {
   const effectiveTable = await getEffectiveTableName(tableName);
 
   // Guarantee UUID consistency
-  const sanitizedList = dataList.map(item => ({
+  const sanitizedList = dataList.map((item) => ({
     ...item,
     id: isValidUUID(String(item.id)) ? String(item.id) : generateUUID()
   })) as T[];
@@ -219,11 +297,15 @@ export async function saveTableData<T extends { id: string | number }>(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const newIds = sanitizedList.map(item => String(item.id));
-      const allowDeletion = options?.allowDeletion ?? true;
+      const newIds = sanitizedList.map((item) => String(item.id));
+      // Safe default: NEVER delete records unless explicitly opted-in AND scoped/forced
+      const allowDeletion = options?.allowDeletion === true;
 
-      if (allowDeletion) {
-        const formattedIds = newIds.length > 0 ? `(${newIds.map(id => `"${id}"`).join(",")})` : '("00000000-0000-0000-0000-000000000000")';
+      if (allowDeletion && (options?.scopeCommissariat || options?.forceWipeAll)) {
+        const formattedIds =
+          newIds.length > 0
+            ? `(${newIds.map((id) => `"${id}"`).join(",")})`
+            : '("00000000-0000-0000-0000-000000000000")';
 
         // Auto-cleanup storage files for arsip
         if (effectiveTable === "arsip") {
@@ -242,7 +324,10 @@ export async function saveTableData<T extends { id: string | number }>(
                     const parsed = JSON.parse(doc.description);
                     if (parsed.fileUrl) urls.push(parsed.fileUrl);
                   } catch {}
-                } else if (doc.description && (doc.description.startsWith("http://") || doc.description.startsWith("https://"))) {
+                } else if (
+                  doc.description &&
+                  (doc.description.startsWith("http://") || doc.description.startsWith("https://"))
+                ) {
                   urls.push(doc.description);
                 }
                 for (const u of urls) {
@@ -307,8 +392,7 @@ export async function saveTableData<T extends { id: string | number }>(
           if (deleteError) {
             console.warn(`Supabase sync delete notice on ${effectiveTable}:`, deleteError.message);
           }
-        } else {
-          // When array is empty, wipe all records for this table/commissariat
+        } else if (options?.forceWipeAll) {
           let deleteQuery = supabase
             .from(effectiveTable)
             .delete()

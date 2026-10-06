@@ -37,22 +37,12 @@ export function LetterNumberingBoxes({
   firstNomor,
   lastNomor
 }: LetterNumberingBoxesProps) {
-  const boxRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null)
-  ];
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleInputChange = (index: number, value: string, maxLength: number) => {
     onBoxChange(index, value);
     if (value.length >= maxLength && index < 8) {
-      boxRefs[index + 1]?.current?.focus();
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
@@ -74,7 +64,7 @@ export function LetterNumberingBoxes({
         }`}
       >
         <Input
-          ref={boxRefs[0]}
+          ref={(el) => { inputRefs.current[0] = el; }}
           maxLength={3}
           placeholder="001"
           value={boxes[0]}
@@ -85,7 +75,7 @@ export function LetterNumberingBoxes({
           title="1. Nomor Urut Surat"
         />
         <Input
-          ref={boxRefs[1]}
+          ref={(el) => { inputRefs.current[1] = el; }}
           maxLength={2}
           placeholder="PK"
           value={boxes[1]}
@@ -94,7 +84,7 @@ export function LetterNumberingBoxes({
           title="2. Jenis & Tingkat Kepengurusan"
         />
         <Input
-          ref={boxRefs[2]}
+          ref={(el) => { inputRefs.current[2] = el; }}
           maxLength={4}
           placeholder="XI"
           value={boxes[2]}
@@ -103,7 +93,7 @@ export function LetterNumberingBoxes({
           title="3. Periode / Wilayah"
         />
         <Input
-          ref={boxRefs[3]}
+          ref={(el) => { inputRefs.current[3] = el; }}
           maxLength={5}
           placeholder="Z-03"
           value={boxes[3]}
@@ -112,7 +102,7 @@ export function LetterNumberingBoxes({
           title="4. Kode Klasifikasi"
         />
         <Input
-          ref={boxRefs[4]}
+          ref={(el) => { inputRefs.current[4] = el; }}
           maxLength={2}
           placeholder="01"
           value={boxes[4]}
@@ -121,7 +111,7 @@ export function LetterNumberingBoxes({
           title="5. Kode Wilayah"
         />
         <Input
-          ref={boxRefs[5]}
+          ref={(el) => { inputRefs.current[5] = el; }}
           maxLength={3}
           placeholder="010"
           value={boxes[5]}
@@ -130,7 +120,7 @@ export function LetterNumberingBoxes({
           title="6. Kode Cabang"
         />
         <Input
-          ref={boxRefs[6]}
+          ref={(el) => { inputRefs.current[6] = el; }}
           maxLength={4}
           placeholder="B-II"
           value={boxes[6]}
@@ -139,7 +129,7 @@ export function LetterNumberingBoxes({
           title="7. Kode Intern / Ekstern"
         />
         <Input
-          ref={boxRefs[7]}
+          ref={(el) => { inputRefs.current[7] = el; }}
           maxLength={2}
           placeholder="12"
           value={boxes[7]}
@@ -148,7 +138,7 @@ export function LetterNumberingBoxes({
           title="8. Bulan Hijri / Masehi"
         />
         <Input
-          ref={boxRefs[8]}
+          ref={(el) => { inputRefs.current[8] = el; }}
           maxLength={4}
           placeholder="2026"
           value={boxes[8]}

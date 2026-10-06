@@ -276,7 +276,7 @@ export default function LengkapiDataPage() {
 
       // 1. Simpan ke Supabase tabel anggota secara langsung (dengan fallback kader)
       if (isSupabaseConfigured && supabase) {
-        let { error: dbError } = await supabase
+        const { error: dbError } = await supabase
           .from("anggota")
           .update(updatedCadre)
           .eq("id", memberId);

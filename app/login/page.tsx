@@ -229,11 +229,8 @@ export default function LoginPage() {
       const isAuthValid =
         supabaseAuthVerified ||
         (Boolean(customPassword) && password === customPassword) ||
-        password === "admin123" ||
-        password === "pmii1960" ||
-        password === "password" ||
-        (matchedKader?.nik && password === matchedKader.nik) ||
-        (birthdateDigits && password === birthdateDigits);
+        (Boolean(matchedKader) && !customPassword && Boolean(matchedKader?.nik) && password === matchedKader?.nik) ||
+        (Boolean(matchedKader) && !customPassword && Boolean(birthdateDigits) && password === birthdateDigits);
 
       if (matchedKader && isAuthValid) {
         // Auto-provision ke Supabase Users Authentication jika belum terdaftar di auth.users

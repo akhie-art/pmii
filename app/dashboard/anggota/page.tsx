@@ -278,9 +278,9 @@ export default function AnggotaPage() {
       const updatedMembers = members.filter((m) => !selectedMemberIds.includes(m.id));
       setMembers(updatedMembers);
 
-      const dbCadres = await db.getCadres([]);
-      const updatedCadres = dbCadres.filter((c) => !selectedMemberIds.includes(c.id));
-      await db.saveCadres(updatedCadres);
+      for (const id of selectedMemberIds) {
+        await db.deleteCadre(id);
+      }
 
       // Also clean up corresponding user accounts in users and Supabase Auth
       try {
@@ -409,7 +409,7 @@ export default function AnggotaPage() {
 
     const remaining = members.filter((m) => m.id !== deletingMember.id);
     setMembers(remaining);
-    await db.saveCadres(remaining.map((m) => mapMemberToCadre(m)));
+    await db.deleteCadre(deletingMember.id);
 
     // Sinkronkan penghapusan akun ke Supabase Auth
     await db.deleteUserFromAuth({
@@ -690,7 +690,7 @@ export default function AnggotaPage() {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    let bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
     let primaryColor = "#F7C738";
     let secondaryColor = "#0A2A5C";
 
@@ -773,7 +773,7 @@ export default function AnggotaPage() {
     ctx.arc(avatarX, avatarY, avatarR + 6, 0, Math.PI * 2);
     ctx.fill();
 
-    let avatarGrad = ctx.createLinearGradient(
+    const avatarGrad = ctx.createLinearGradient(
       avatarX - avatarR,
       avatarY - avatarR,
       avatarX + avatarR,

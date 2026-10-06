@@ -37,6 +37,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   activeCadre,
   kaderisasiList
 }) => {
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
   if (!event) return null;
 
   const matchedKaderisasi = kaderisasiList.find(
@@ -168,7 +170,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     formatIndonesianDate(event.date) ||
     formatIndonesianDate(new Date());
 
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const getPdfFont = (fontFamilyStr?: string): "helvetica" | "times" | "courier" => {
     if (!fontFamilyStr) return "helvetica";

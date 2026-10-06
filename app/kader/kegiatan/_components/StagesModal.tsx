@@ -276,7 +276,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
       try {
         if (!activeCadre || !event?.id) return;
         const allEvals = await db.getEvaluations([]);
-        let participantEval = allEvals.find(
+        const participantEval = allEvals.find(
           (e) => e.activityId === event.id && (e.cadreId === activeCadre.id || e.id === activeCadre.id)
         );
 

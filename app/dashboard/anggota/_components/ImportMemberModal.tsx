@@ -491,7 +491,7 @@ export default function ImportMemberModal({
         const jabatan = String(getColVal("jabatan") || "").trim() || "Anggota";
 
         // Kontak
-        let email = String(getColVal("email") || "").trim();
+        const email = String(getColVal("email") || "").trim();
         let phone = String(getColVal("phone") || "").trim().replace(/[^\d+]/g, "");
         if (phone.startsWith("62")) phone = "0" + phone.slice(2);
 
