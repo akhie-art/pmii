@@ -56,7 +56,39 @@ export const DEFAULT_COMMISSARIATS: CommissariatList[] = [];
 
 export const DEFAULT_BOARDS: BoardMember[] = [];
 
-export const DEFAULT_USERS: UserAccount[] = [];
+export const DEFAULT_USERS: UserAccount[] = [
+  {
+    id: "75228d23-a7f6-4bb8-9d3e-16eec5f23926",
+    user_id: "75228d23-a7f6-4bb8-9d3e-16eec5f23926",
+    name: "Super Administrator PMII",
+    email: "admin@pmii.org",
+    role: "superadmin",
+    role_id: "b0000000-0000-0000-0000-000000000001",
+    role_name: "superadmin",
+    status: "AKTIF",
+    commissariat: "Pengurus Cabang Grobogan",
+    komisariat_id: "f9fd547e-117e-4d39-b8cc-2ff9a818a8d9",
+    tenant_id: "f9fd547e-117e-4d39-b8cc-2ff9a818a8d9",
+    allowedMenus: [
+      "/admin",
+      "/admin/kegiatan",
+      "/admin/anggota",
+      "/admin/kaderisasi",
+      "/admin/pengurus",
+      "/admin/surat",
+      "/admin/arsip",
+      "/admin/artikel",
+      "/admin/penilaian",
+      "/admin/rekap-nilai",
+      "/admin/verifikasi",
+      "/admin/pengguna",
+      "/admin/komisariat",
+      "/admin/pengaturan",
+      "/admin/profil"
+    ],
+    createdAt: "2026-10-15T15:39:01.939562+00:00"
+  }
+];
 
 export const DEFAULT_EVALUATIONS: ParticipantEvaluation[] = [];
 export const DEFAULT_KADERISASI: Kaderisasi[] = [];
