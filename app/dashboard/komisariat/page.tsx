@@ -77,14 +77,17 @@ export default function KomisariatPage() {
     else setRefreshing(true);
 
     try {
-      const [commList, cadreList, boardList] = await Promise.all([
-        db.getCommissariats(),
-        db.getCadres().catch(() => []),
-        db.getBoards().catch(() => []),
-      ]);
-      setKomisariats(commList);
-      setCadres(cadreList);
-      setBoardMembers(boardList);
+      const commPromise = db.getCommissariats();
+      const cadrePromise = db.getCadres().catch(() => []);
+      const boardPromise = db.getBoards().catch(() => []);
+
+      const commList = await commPromise;
+      setKomisariats(commList || []);
+      setLoading(false);
+
+      const [cadreList, boardList] = await Promise.all([cadrePromise, boardPromise]);
+      setCadres(cadreList || []);
+      setBoardMembers(boardList || []);
     } catch (err) {
       console.error("Gagal memuat data komisariat:", err);
       showError("Gagal Memuat Data", "Terjadi gangguan saat mengambil data dari database.");
@@ -116,10 +119,11 @@ export default function KomisariatPage() {
         setActiveTenant(e.detail?.activeTenant || "ALL");
       };
       window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
+      loadData();
+
       return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
     }
-
-    loadData();
   }, [pathname]);
 
   // Sync URL dynamically based on Superadmin role
