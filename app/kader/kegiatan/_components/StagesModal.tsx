@@ -1780,19 +1780,19 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     >
       <DialogContent
         showCloseButton={false}
-        className="!fixed !inset-0 !top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-screen !max-w-none !max-h-none !rounded-none !m-0 p-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950 border-none shadow-none flex flex-col z-50 focus:outline-none"
+        className="!fixed !inset-0 !top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !max-h-none !rounded-none !m-0 !p-0 !gap-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950 border-none shadow-none !flex !flex-col z-[60] focus:outline-none"
       >
         {/* Header */}
-        <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200/80 dark:border-zinc-800 px-4 sm:px-6 py-3.5 shrink-0 shadow-xs">
-          <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                <HelpCircle className="w-5 h-5" />
+        <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200/80 dark:border-zinc-800 px-4 sm:px-6 py-2.5 sm:py-3.5 shrink-0 shadow-xs">
+          <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <Badge
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                    className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded font-bold border ${
                       activeQuizType === "PRE"
                         ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
                         : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
@@ -1800,16 +1800,16 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                   >
                     {activeQuizType === "PRE" ? "Pre-Test" : "Post-Test"}
                   </Badge>
-                  <DialogTitle className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
-                    <span>{activeQuizSubject || activeQuizSession}</span>
+                  <DialogTitle className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
+                    <span className="truncate">{activeQuizSubject || activeQuizSession}</span>
                     {isQuizSubmitted && (
-                      <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs px-2 py-0.5 font-bold shrink-0">
+                      <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 font-bold shrink-0">
                         Nilai: {quizScore}
                       </Badge>
                     )}
                   </DialogTitle>
                 </div>
-                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                <DialogDescription className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
                   Evaluasi {activeQuizType === "PRE" ? "Awal (Pre-Test)" : "Kelulusan (Post-Test)"} materi kegiatan {event.name} ({activeQuizQuestions.length} Butir Soal)
                 </DialogDescription>
               </div>
@@ -1820,7 +1820,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               variant="ghost"
               size="icon"
               onClick={() => setActiveQuizSession(null)}
-              className="h-8.5 w-8.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
+              className="h-8 w-8 sm:h-8.5 sm:w-8.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
             >
               <X className="w-4 h-4" />
               <span className="sr-only">Tutup</span>
@@ -1829,8 +1829,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         </div>
 
         {/* Body: Questions */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="max-w-4xl mx-auto w-full px-3.5 sm:px-6 py-4 sm:py-6 space-y-4">
           {/* Status banner jika sudah dikumpulkan dengan Hasil Nilai */}
           {isQuizSubmitted && (
             <div className="p-4 sm:p-5 rounded-2xl border border-emerald-200/90 dark:border-emerald-900/70 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-teal-50/40 dark:from-emerald-950/40 dark:via-emerald-950/20 dark:to-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
@@ -1991,21 +1991,28 @@ export const StagesModal: React.FC<StagesModalProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200/80 dark:border-zinc-800 px-4 sm:px-6 py-3.5 shrink-0">
-          <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-3">
-            <span className="text-xs text-zinc-500">
-              {isQuizSubmitted
-                ? `Hasil: ${quizScore}/100 • ${correctAnswersCount} dari ${activeQuizQuestions.length} soal benar`
-                : `${Object.keys(userAnswers).length} dari ${activeQuizQuestions.length} soal dijawab`}
-            </span>
+        {/* Footer (Mobile & Desktop Responsive) */}
+        <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200/80 dark:border-zinc-800 px-4 sm:px-6 py-2.5 sm:py-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0 shadow-lg sm:shadow-none z-10">
+          <div className="max-w-4xl mx-auto w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-center justify-between sm:justify-start gap-2">
+              <span className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">
+                {isQuizSubmitted
+                  ? `Hasil: ${quizScore}/100 • ${correctAnswersCount} dari ${activeQuizQuestions.length} soal benar`
+                  : `${Object.keys(userAnswers).length} dari ${activeQuizQuestions.length} soal dijawab`}
+              </span>
+              {!isQuizSubmitted && activeQuizQuestions.length > 0 && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/40 sm:hidden">
+                  {Math.round((Object.keys(userAnswers).length / activeQuizQuestions.length) * 100)}%
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setActiveQuizSession(null)}
-                className="h-8.5 text-xs border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                className="h-9 sm:h-8.5 text-xs border-zinc-200 dark:border-zinc-800 cursor-pointer flex-1 sm:flex-initial"
               >
                 {isQuizSubmitted ? "Tutup" : "Batal"}
               </Button>
@@ -2015,7 +2022,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                   type="button"
                   onClick={handleSubmitActiveQuiz}
                   disabled={Object.keys(userAnswers).length === 0}
-                  className="h-8.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 cursor-pointer shadow-xs border-none"
+                  className="h-9 sm:h-8.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 sm:px-5 cursor-pointer shadow-xs border-none flex-2 sm:flex-initial transition-all"
                 >
                   Kumpulkan Jawaban
                 </Button>
