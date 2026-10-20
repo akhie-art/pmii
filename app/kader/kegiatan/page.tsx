@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { Search, Calendar } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { db } from "@/lib/db";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { db, ensureEvaluationForRegistration } from "@/lib/db";
+import { supabase, isSupabaseConfigured, clearSupabaseStorage } from "@/lib/supabase";
 import type {
   EventActivity,
   ParticipantRegistration,
@@ -81,8 +81,13 @@ export default function KaderKegiatanPage() {
       // 2. Jika ada Supabase Auth session, prioritaskan email user yang terautentikasi
       if (isSupabaseConfigured && supabase) {
         try {
-          const { data: authData } = await supabase.auth.getUser();
-          if (authData?.user?.email) {
+          const { data: authData, error: authErr } = await supabase.auth.getUser();
+          if (authErr) {
+            const errStr = authErr.message?.toLowerCase() || "";
+            if (errStr.includes("refresh token") || errStr.includes("invalid_grant")) {
+              clearSupabaseStorage();
+            }
+          } else if (authData?.user?.email) {
             const authEmail = authData.user.email.toLowerCase();
             if (!loggedInUser || loggedInUser.email?.toLowerCase() !== authEmail) {
               loggedInUser = {
@@ -359,12 +364,20 @@ export default function KaderKegiatanPage() {
       notes: "Pendaftaran otomatis disetujui sistem.",
       answers,
       verificationStatus: initialVerificationStatus,
-      registrationNumber: regNumber
+      registrationNumber: regNumber,
+      commissariat: activeCadre.commissariat,
+      komisariat_id: activeCadre.komisariat_id || null
     };
 
     const updated = [newReg, ...registrations];
     setRegistrations(updated);
     await db.saveRegistrations(updated);
+
+    try {
+      await ensureEvaluationForRegistration(newReg, selectedEvent, activeCadre);
+    } catch (evalErr) {
+      console.warn("Auto-sync evaluation on register error:", evalErr);
+    }
 
     setIsRegisterModalOpen(false);
     setSuccessMessage(

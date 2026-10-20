@@ -9,7 +9,7 @@ interface CardExportData {
   type: "peserta" | "kta";
   name: string;
   idNumber: string; // registrationNumber or NTA
-  commissariat: string;
+  commissariat?: string;
   level: string;
   eventName?: string; // only for peserta
   eventDate?: string; // only for peserta
@@ -141,7 +141,7 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
       ctx.font = "900 21px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
-      ctx.fillText(`PMII ${data.commissariat}`, 120, 50);
+      ctx.fillText(`PMII ${data.commissariat || "Cabang Grobogan"}`, 120, 50);
 
       // Subheader
       ctx.fillStyle = "#f59e0b"; // gold
@@ -226,7 +226,7 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
         // KTA details
         drawInfoField("Nama Lengkap", data.name, 260, 156);
         // Commission
-        drawInfoField("Komisariat", data.commissariat, 260, 224);
+        drawInfoField("Komisariat", data.commissariat || "PMII Grobogan", 260, 224);
         // NTA
         drawInfoField("NTA Keanggotaan", data.idNumber, 260, 292);
       }

@@ -57,15 +57,17 @@ import {
 import { toast } from "sonner";
 
 interface TemplateManagerDialogProps {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onTemplatesUpdated?: () => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onTemplatesUpdated?: (count?: number) => void;
+  inline?: boolean;
 }
 
 export function TemplateManagerDialog({
-  isOpen,
-  onOpenChange,
-  onTemplatesUpdated
+  isOpen = false,
+  onOpenChange = () => {},
+  onTemplatesUpdated,
+  inline = false
 }: TemplateManagerDialogProps) {
   const [templates, setTemplates] = useState<SuratTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -101,7 +103,7 @@ export function TemplateManagerDialog({
   const [previewTemplate, setPreviewTemplate] = useState<SuratTemplate | null>(null);
 
   // Delete Confirmation Modal State
-  const [templateToDelete, setTemplateToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<{ id: string; name: string; fileUrl?: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Load templates from database
@@ -111,6 +113,7 @@ export function TemplateManagerDialog({
       const data = await db.getSuratTemplates();
       if (Array.isArray(data)) {
         setTemplates(data);
+        if (onTemplatesUpdated) onTemplatesUpdated(data.length);
       }
     } catch (e) {
       console.error("Gagal memuat template surat:", e);
@@ -121,10 +124,10 @@ export function TemplateManagerDialog({
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (inline || isOpen) {
       loadTemplates();
     }
-  }, [isOpen]);
+  }, [isOpen, inline]);
 
   // Render ulang preview dokumen Word saat modal editor dibuka
   useEffect(() => {
@@ -221,18 +224,21 @@ export function TemplateManagerDialog({
 
   // Delete Template Handlers
   const handleDeleteClick = (id: string, name: string) => {
-    setTemplateToDelete({ id, name });
+    const tmpl = templates.find((t) => t.id === id);
+    const parsed = tmpl ? parseTemplateContent(tmpl.content) : null;
+    const fileUrl = tmpl?.fileUrl || parsed?.fileUrl;
+    setTemplateToDelete({ id, name, fileUrl });
   };
 
   const confirmDeleteTemplate = async () => {
     if (!templateToDelete) return;
     setIsDeleting(true);
     try {
+      await db.deleteSuratTemplate(templateToDelete.id, templateToDelete.fileUrl);
       const updated = templates.filter((t) => t.id !== templateToDelete.id);
-      await db.saveSuratTemplates(updated);
       setTemplates(updated);
       toast.success(`Template "${templateToDelete.name}" berhasil dihapus.`);
-      if (onTemplatesUpdated) onTemplatesUpdated();
+      if (onTemplatesUpdated) onTemplatesUpdated(updated.length);
       setTemplateToDelete(null);
     } catch (e) {
       console.error("Gagal menghapus template:", e);
@@ -426,69 +432,15 @@ export function TemplateManagerDialog({
       await db.saveSuratTemplates(updated);
       setTemplates(updated);
       setIsEditorOpen(false);
-      if (onTemplatesUpdated) onTemplatesUpdated();
+      if (onTemplatesUpdated) onTemplatesUpdated(updated.length);
     } catch (e) {
       console.error("Gagal menyimpan template:", e);
       toast.error("Gagal menyimpan template ke database.");
     }
   };
 
-  return (
-    <>
-      {/* MODAL UTAMA: DAFTAR TEMPLATE SURAT RESMI */}
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent
-          showCloseButton={false}
-          className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none bg-white dark:bg-zinc-900 border-none rounded-none ring-0 shadow-none p-0 gap-0 flex flex-col overflow-hidden z-50"
-          style={{ transform: "none", translate: "none" }}
-        >
-          {/* Top Bar Header */}
-          <DialogHeader className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
-            <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto w-full">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-800/80 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-xs">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                      Kelola Template Surat Resmi
-                    </DialogTitle>
-                    <Badge variant="outline" className="text-[10px] bg-blue-50/50 text-blue-700 dark:text-blue-300 border-blue-200">
-                      DOCX Engine Active
-                    </Badge>
-                  </div>
-                  <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Unggah template Word master (.docx) berisi placeholder seperti <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-[11px] font-mono text-blue-600 dark:text-blue-400">{"{{nama}}"}</code>. Tata letak, tabel, dan logo tetap 100% utuh sesuai Word asli.
-                  </DialogDescription>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <Button
-                  type="button"
-                  onClick={handleAddNew}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg h-9 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer border-none"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Template DOCX</span>
-                </Button>
-
-                <DialogClose render={
-                  <button
-                    type="button"
-                    className="w-9 h-9 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors border-none cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                } />
-              </div>
-            </div>
-          </DialogHeader>
-
-          {/* Body Konten: Filter & List Template */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-50/50 dark:bg-zinc-950/50">
-            <div className="max-w-7xl mx-auto space-y-4">
+  const renderList = () => (
+    <div className="space-y-4">
               {/* Filter Bar */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
                 <div className="relative w-full sm:w-80">
@@ -501,24 +453,35 @@ export function TemplateManagerDialog({
                   />
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-xs text-zinc-500 font-medium shrink-0">Klasifikasi:</span>
-                  <Select
-                    value={selectedClassification}
-                    onValueChange={(val: any) => setSelectedClassification(val)}
+                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500 font-medium shrink-0">Klasifikasi:</span>
+                    <Select
+                      value={selectedClassification}
+                      onValueChange={(val: any) => setSelectedClassification(val)}
+                    >
+                      <SelectTrigger className="h-9 text-xs w-full sm:w-44 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                        <SelectValue placeholder="Pilih Klasifikasi" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-200 dark:border-zinc-800">
+                        <SelectItem value="ALL">Semua Klasifikasi</SelectItem>
+                        <SelectItem value="Permohonan">Permohonan</SelectItem>
+                        <SelectItem value="Undangan">Undangan</SelectItem>
+                        <SelectItem value="Instruksi">Instruksi</SelectItem>
+                        <SelectItem value="Keputusan">Keputusan</SelectItem>
+                        <SelectItem value="Rekomendasi">Rekomendasi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleAddNew}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg h-9 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer border-none shrink-0"
                   >
-                    <SelectTrigger className="h-9 text-xs w-full sm:w-44 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
-                      <SelectValue placeholder="Pilih Klasifikasi" />
-                    </SelectTrigger>
-                    <SelectContent className="border-zinc-200 dark:border-zinc-800">
-                      <SelectItem value="ALL">Semua Klasifikasi</SelectItem>
-                      <SelectItem value="Permohonan">Permohonan</SelectItem>
-                      <SelectItem value="Undangan">Undangan</SelectItem>
-                      <SelectItem value="Instruksi">Instruksi</SelectItem>
-                      <SelectItem value="Keputusan">Keputusan</SelectItem>
-                      <SelectItem value="Rekomendasi">Rekomendasi</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Template</span>
+                  </Button>
                 </div>
               </div>
 
@@ -690,9 +653,72 @@ export function TemplateManagerDialog({
                 </div>
               )}
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+  );
+
+  return (
+    <>
+      {inline ? (
+        renderList()
+      ) : (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+          <DialogContent
+            showCloseButton={false}
+            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none bg-white dark:bg-zinc-900 border-none rounded-none ring-0 shadow-none p-0 gap-0 flex flex-col overflow-hidden z-50"
+            style={{ transform: "none", translate: "none" }}
+          >
+            {/* Top Bar Header */}
+            <DialogHeader className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
+              <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto w-full">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-800/80 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-xs">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                        Kelola Template Surat Resmi
+                      </DialogTitle>
+                      <Badge variant="outline" className="text-[10px] bg-blue-50/50 text-blue-700 dark:text-blue-300 border-blue-200">
+                        DOCX Engine Active
+                      </Badge>
+                    </div>
+                    <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Unggah template Word master (.docx) berisi placeholder seperti <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-[11px] font-mono text-blue-600 dark:text-blue-400">{"{{nama}}"}</code>. Tata letak, tabel, dan logo tetap 100% utuh sesuai Word asli.
+                    </DialogDescription>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <Button
+                    type="button"
+                    onClick={handleAddNew}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg h-9 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer border-none"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Template DOCX</span>
+                  </Button>
+
+                  <DialogClose render={
+                    <button
+                      type="button"
+                      className="w-9 h-9 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors border-none cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  } />
+                </div>
+              </div>
+            </DialogHeader>
+
+            {/* Body Konten: Filter & List Template */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-50/50 dark:bg-zinc-950/50">
+              <div className="max-w-7xl mx-auto">
+                {renderList()}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* MODAL EDITOR: TAMBAH / EDIT TEMPLATE DENGAN KONSEP PENGISI TEMPLATE DOCX */}
       <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>

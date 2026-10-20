@@ -25,3 +25,9 @@ export async function saveRegistrations(regsList: ParticipantRegistration[]): Pr
   }));
   return saveTableData<ParticipantRegistration>("pendaftaran", KEYS.REGISTRATIONS, normalized);
 }
+
+export async function deleteRegistration(id: string): Promise<boolean> {
+  const { deleteTableRow } = await import("./core");
+  return deleteTableRow("pendaftaran", id, KEYS.REGISTRATIONS);
+}
+

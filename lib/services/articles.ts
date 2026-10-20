@@ -1,6 +1,6 @@
 import { Article } from "./types";
 import { KEYS, DEFAULT_ARTICLES } from "./defaults";
-import { getTableData, saveTableData } from "./core";
+import { getTableData, saveTableData, deleteTableRow } from "./core";
 
 export function formatArticleDate(input?: any): string {
   let dateVal: any = input;
@@ -69,6 +69,10 @@ export async function saveArticles(articles: Article[]): Promise<boolean> {
   return saveTableData<Article>("articles", KEYS.ARTICLES, sanitized);
 }
 
+export async function deleteArticle(articleId: string): Promise<boolean> {
+  return deleteTableRow("articles", articleId, KEYS.ARTICLES);
+}
+
 export async function likeArticle(articleId: string): Promise<number> {
   const articles = await getTableData<Article>("articles", KEYS.ARTICLES, DEFAULT_ARTICLES);
   let newLikes = 0;
@@ -82,3 +86,4 @@ export async function likeArticle(articleId: string): Promise<number> {
   await saveTableData<Article>("articles", KEYS.ARTICLES, updated);
   return newLikes;
 }
+

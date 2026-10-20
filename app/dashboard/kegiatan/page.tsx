@@ -17,9 +17,27 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { db, DEFAULT_EVENTS, DEFAULT_REGISTRATIONS, getDefaultEventTimeline } from "@/lib/db";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { db, DEFAULT_EVENTS, DEFAULT_REGISTRATIONS, getDefaultEventTimeline, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserAccount, EventStageTimeline } from "@/lib/db";
-import { isRecordInTenant, enforceTenantWrite } from "@/lib/tenancy";
+import {
+  isRecordInTenant,
+  enforceTenantWrite,
+  getActiveTenant,
+  setActiveTenant as setGlobalActiveTenant,
+  isCabangOrAdmin,
+  DEFAULT_KOMISARIAT_LIST,
+  TENANT_CHANGED_EVENT,
+  getKomisariatIdByName,
+  getTenantIdByName,
+  CABANG_TENANT_ID
+} from "@/lib/tenancy";
 import { generateUUID } from "@/lib/utils";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 
@@ -37,11 +55,13 @@ export type { FormField, EventActivity, ParticipantRegistration };
 
 export default function KomisariatKegiatanPage() {
   const [mounted, setMounted] = useState(false);
-  const [activeCampus, setActiveCampus] = useState("UIN Walisongo");
+  const [commissariats, setCommissariats] = useState<any[]>([]);
+  const [activeCampus, setActiveCampus] = useState("Pengurus Cabang Grobogan");
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [events, setEvents] = useState<EventActivity[]>([]);
   const [registrations, setRegistrations] = useState<ParticipantRegistration[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [kaderisasiList, setKaderisasiList] = useState<any[]>([]);
 
   // Search filter
@@ -87,14 +107,32 @@ export default function KomisariatKegiatanPage() {
         const storedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
         if (storedUser) {
           try {
-            setCurrentUser(JSON.parse(storedUser));
+            const parsed = JSON.parse(storedUser);
+            if (!parsed.commissariat) {
+              const activeComm = localStorage.getItem("PMII_ACTIVE_COMMISSARIAT");
+              if (activeComm && !activeComm.toUpperCase().includes("CABANG")) {
+                parsed.commissariat = activeComm;
+              }
+            }
+            if (!parsed.komisariat_id && parsed.commissariat) {
+              parsed.komisariat_id = getKomisariatIdByName(parsed.commissariat);
+            }
+            setCurrentUser(parsed);
           } catch (e) {
             console.error("Error parsing user session:", e);
           }
         }
       }
-      const storedCampus = localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || "UIN Walisongo";
-      setActiveCampus(storedCampus);
+
+      // Load commissariats
+      try {
+        const commList = await db.getCommissariats();
+        setCommissariats(commList);
+        const storedCampus = localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || (commList[0]?.name || "Pengurus Cabang Grobogan");
+        setActiveCampus(storedCampus);
+      } catch (cErr) {
+        console.error("Error loading commissariats:", cErr);
+      }
 
       // Load kaderisasi list
       let parsedKaderisasi: any[] = [];
@@ -120,14 +158,30 @@ export default function KomisariatKegiatanPage() {
       setMounted(true);
     };
 
+    setActiveTenant(getActiveTenant() || "ALL");
+    const handleTenant = (e: any) => {
+      const nextTenant = e.detail?.activeTenant || "ALL";
+      setActiveTenant(nextTenant);
+      if (nextTenant !== "ALL") {
+        setActiveCampus(nextTenant);
+      }
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
     loadData();
+
+    return () => {
+      window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    };
   }, []);
 
-  // Filter events belonging to active campus
+  // Filter events: periksa foreign key tenant_id / komisariat_id dan nama komisariat
   const campusEvents = events.filter((e) =>
     isRecordInTenant(currentUser, {
-      commissariat: e.commissariat
-    })
+      commissariat: e.commissariat,
+      komisariat_id: e.komisariat_id,
+      tenant_id: e.tenant_id || e.komisariat_id
+    }, activeTenant)
   );
 
   const filteredCampusEvents = campusEvents.filter((e) =>
@@ -140,8 +194,10 @@ export default function KomisariatKegiatanPage() {
     .filter((r) => r.eventId === (selectedEvent?.id || selectedEventId))
     .filter((r) =>
       isRecordInTenant(currentUser, {
-        commissariat: selectedEvent?.commissariat
-      })
+        commissariat: selectedEvent?.commissariat,
+        komisariat_id: selectedEvent?.komisariat_id,
+        tenant_id: selectedEvent?.tenant_id || selectedEvent?.komisariat_id
+      }, activeTenant)
     );
 
   const handleCopyLink = (eventId: string) => {
@@ -186,13 +242,21 @@ export default function KomisariatKegiatanPage() {
     description?: string;
     sessions?: string[];
     waGroupLink?: string;
+    commissariat?: string;
+    komisariat_id?: string | null;
+    tenant_id?: string | null;
   }) => {
+    const tid = eventData.tenant_id ?? eventData.komisariat_id;
+    const isCabang = tid === CABANG_TENANT_ID || (eventData.commissariat && eventData.commissariat.includes("Cabang"));
+    const assignedId = isCabang ? CABANG_TENANT_ID : (tid ?? undefined);
     const newEvent: EventActivity = enforceTenantWrite(currentUser, {
       id: generateUUID(),
       name: eventData.name,
       level: eventData.level,
       date: eventData.date,
-      commissariat: activeCampus,
+      commissariat: isCabang ? "Pengurus Cabang Grobogan" : (eventData.commissariat || activeCampus),
+      komisariat_id: assignedId,
+      tenant_id: assignedId,
       description: eventData.description || "",
       status: "OPEN",
       sessions: eventData.sessions && eventData.sessions.length > 0 ? eventData.sessions : [],
@@ -216,14 +280,23 @@ export default function KomisariatKegiatanPage() {
     description?: string;
     sessions?: string[];
     waGroupLink?: string;
+    commissariat?: string;
+    komisariat_id?: string | null;
+    tenant_id?: string | null;
   }) => {
+    const tid = eventData.tenant_id ?? eventData.komisariat_id;
+    const isCabang = tid === CABANG_TENANT_ID || (eventData.commissariat && eventData.commissariat.includes("Cabang"));
     const updatedEvents = events.map((e) => {
       if (e.id === editEventId) {
+        const assignedId = isCabang ? CABANG_TENANT_ID : (tid !== undefined ? tid : (e.tenant_id || e.komisariat_id));
         return {
           ...e,
           name: eventData.name,
           level: eventData.level,
           date: eventData.date,
+          commissariat: isCabang ? "Pengurus Cabang Grobogan" : (eventData.commissariat || e.commissariat),
+          komisariat_id: assignedId,
+          tenant_id: assignedId,
           description: eventData.description || "",
           sessions: eventData.sessions && eventData.sessions.length > 0 ? eventData.sessions : [],
           waGroupLink: eventData.waGroupLink ?? e.waGroupLink ?? ""
@@ -244,25 +317,32 @@ export default function KomisariatKegiatanPage() {
   const confirmDeleteEvent = async () => {
     if (!deleteEventId) return;
 
-    const remainingEvents = events.filter((e) => e.id !== deleteEventId);
-    setEvents(remainingEvents);
-    await db.saveEvents(remainingEvents);
+    try {
+      // 1. Hapus permanen dari Supabase & bersihkan pendaftaran terkait
+      await db.deleteEvent(deleteEventId);
 
-    const remainingRegistrations = registrations.filter((r) => r.eventId !== deleteEventId);
-    setRegistrations(remainingRegistrations);
-    await db.saveRegistrations(remainingRegistrations);
+      // 2. Perbarui state lokal
+      const remainingEvents = events.filter((e) => e.id !== deleteEventId);
+      setEvents(remainingEvents);
 
-    if (selectedEventId === deleteEventId) {
-      const nextEvent = remainingEvents.find((e) =>
-        isRecordInTenant(currentUser, { commissariat: e.commissariat })
-      );
-      setSelectedEventId(nextEvent ? nextEvent.id : "");
+      const remainingRegistrations = registrations.filter((r) => r.eventId !== deleteEventId);
+      setRegistrations(remainingRegistrations);
+
+      if (selectedEventId === deleteEventId) {
+        const nextEvent = remainingEvents.find((e) =>
+          isRecordInTenant(currentUser, { commissariat: e.commissariat, komisariat_id: e.komisariat_id }, activeTenant)
+        );
+        setSelectedEventId(nextEvent ? nextEvent.id : "");
+      }
+
+      setShowDeleteConfirmModal(false);
+      setDeleteEventId("");
+      setDeleteEventName("");
+      showToast("Kegiatan berhasil dihapus.");
+    } catch (err: any) {
+      console.error("Error deleting event:", err);
+      showToast("Gagal menghapus kegiatan.");
     }
-
-    setShowDeleteConfirmModal(false);
-    setDeleteEventId("");
-    setDeleteEventName("");
-    showToast("Kegiatan berhasil dihapus.");
   };
 
   // Save Screening Result
@@ -364,6 +444,12 @@ export default function KomisariatKegiatanPage() {
         await db.saveCadres(updatedCadresList);
       } catch (err) {
         console.error("Failed to sync cadre on screening approval:", err);
+      }
+
+      try {
+        await ensureEvaluationForRegistration(targetReg, selectedEvent);
+      } catch (evalErr) {
+        console.warn("Failed to sync evaluation on screening approval:", evalErr);
       }
     }
 
@@ -487,6 +573,14 @@ export default function KomisariatKegiatanPage() {
       console.error("Failed to sync cadres on batch approval:", err);
     }
 
+    try {
+      for (const reg of pendingRegs) {
+        await ensureEvaluationForRegistration(reg, selectedEvent);
+      }
+    } catch (evalErr) {
+      console.warn("Failed to sync evaluations on batch approval:", evalErr);
+    }
+
     showToast(`${pendingRegs.length} pendaftar berhasil disetujui sekaligus.`);
   };
 
@@ -554,6 +648,12 @@ export default function KomisariatKegiatanPage() {
       }
     } catch (err) {
       console.error("Failed to sync cadre on manual participant add:", err);
+    }
+
+    try {
+      await ensureEvaluationForRegistration(newReg, selectedEvent);
+    } catch (evalErr) {
+      console.warn("Failed to sync evaluation on manual participant add:", evalErr);
     }
 
     showToast(`${data.cadreName} berhasil didaftarkan dan langsung disetujui.`);
@@ -819,6 +919,32 @@ export default function KomisariatKegiatanPage() {
             </span>
           </div>
 
+          {/* Komisariat / Tenant Filter */}
+          {isCabangOrAdmin(currentUser) && (
+            <Select
+              value={activeTenant}
+              onValueChange={(val) => {
+                if (val) {
+                  setActiveTenant(val);
+                  setGlobalActiveTenant(val);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg w-full">
+                <SelectValue placeholder="Semua Komisariat" />
+              </SelectTrigger>
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+                <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+                <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+                {DEFAULT_KOMISARIAT_LIST.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs">
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {/* Minimal Search Input */}
           {campusEvents.length > 2 && (
             <div className="relative">
@@ -878,6 +1004,18 @@ export default function KomisariatKegiatanPage() {
                       {evt.name}
                     </h4>
 
+                    <div className="flex items-center gap-1 mt-1">
+                      {evt.komisariat_id === null || (evt.commissariat && evt.commissariat.toLowerCase().includes("cabang")) ? (
+                        <span className="text-[8.5px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40">
+                          🏛️ Tingkat Cabang
+                        </span>
+                      ) : (
+                        <span className="text-[8.5px] text-zinc-500 dark:text-zinc-400 truncate max-w-[170px]">
+                          🎓 {evt.commissariat}
+                        </span>
+                      )}
+                    </div>
+
                     <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
                       <span>{evtRegs.length} Pendaftar</span>
                       <div className="flex items-center gap-1.5">
@@ -916,6 +1054,15 @@ export default function KomisariatKegiatanPage() {
                     <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-md">
                       {selectedEvent.level}
                     </Badge>
+                    {selectedEvent.komisariat_id === null || (selectedEvent.commissariat && selectedEvent.commissariat.toLowerCase().includes("cabang")) ? (
+                      <Badge className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 text-[9px] font-semibold px-2 py-0.5 rounded-md">
+                        🏛️ Tingkat Cabang (PC Grobogan)
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 text-[9px] font-semibold px-2 py-0.5 rounded-md">
+                        🎓 {selectedEvent.commissariat || "Komisariat"}
+                      </Badge>
+                    )}
                     <Badge
                       className={
                         selectedEvent.status === "OPEN"
@@ -1080,6 +1227,8 @@ export default function KomisariatKegiatanPage() {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateEvent}
           kaderisasiList={kaderisasiList}
+          currentUser={currentUser}
+          commissariats={commissariats}
         />
       )}
 
@@ -1094,6 +1243,8 @@ export default function KomisariatKegiatanPage() {
           event={events.find((e) => e.id === editEventId)}
           onSubmit={handleUpdateEvent}
           kaderisasiList={kaderisasiList}
+          currentUser={currentUser}
+          commissariats={commissariats}
         />
       )}
 

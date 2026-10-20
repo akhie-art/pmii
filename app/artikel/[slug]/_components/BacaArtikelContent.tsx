@@ -397,16 +397,18 @@ export function BacaArtikelContent() {
               </div>
 
               {/* Featured Cover Image */}
-              <div className="relative aspect-[16/9] w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 shadow-md">
-                <Image
-                  src={article.image}
-                  alt={article.title}
-                  width={1200}
-                  height={675}
-                  priority
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              {article.image && (
+                <div className="relative aspect-[16/9] w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 shadow-md">
+                  <Image
+                    src={article.image}
+                    alt={article.title}
+                    width={1200}
+                    height={675}
+                    priority
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
 
               {/* Main Article Body */}
               <div className="pt-2">

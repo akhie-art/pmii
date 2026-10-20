@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   db,
+  syncEvaluationsWithRegistrations,
   type ParticipantEvaluation,
   type EventActivity,
   type ParticipantRegistration,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { isRecordInTenant, isCabangRecord, getActiveTenant, TENANT_CHANGED_EVENT } from "@/lib/tenancy";
 
 import { LeaderboardPodium } from "./_components/LeaderboardPodium";
 import { YudisiumFilters } from "./_components/YudisiumFilters";
@@ -28,6 +30,7 @@ export default function RekapNilaiPage() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [events, setEvents] = useState<EventActivity[]>([]);
   const [registrations, setRegistrations] = useState<ParticipantRegistration[]>([]);
   const [evaluations, setEvaluations] = useState<ParticipantEvaluation[]>([]);
@@ -92,22 +95,19 @@ export default function RekapNilaiPage() {
         }
         setRegistrations(cleanRegs);
 
-        // Deduplicate evaluations before setting state
-        const dedupMap = new Map<string, typeof cleanEvals[0]>();
-        for (const item of cleanEvals) {
-          const key = `${item.activityId}__${(item.cadreId || item.participantName).trim().toLowerCase()}`;
-          const existing = dedupMap.get(key);
-          if (!existing) {
-            dedupMap.set(key, item);
-          } else {
-            const existingCount = Object.keys(existing.sessionScores || {}).length;
-            const newCount = Object.keys(item.sessionScores || {}).length;
-            if (newCount > existingCount || (newCount === existingCount && (item.updatedAt || "") > (existing.updatedAt || ""))) {
-              dedupMap.set(key, item);
-            }
-          }
+        // Comprehensive sync of all registered participants across all events
+        const { synced, hasChanges } = syncEvaluationsWithRegistrations(
+          cleanEvals,
+          cleanRegs,
+          cleanEvents,
+          cadresData || []
+        );
+
+        if (hasChanges || cleanEvals.length !== evalsData.length || synced.length !== cleanEvals.length) {
+          await db.saveEvaluations(synced);
         }
-        setEvaluations(Array.from(dedupMap.values()));
+
+        setEvaluations(synced);
       } catch (err) {
         console.error("Error loading evaluation data:", err);
       } finally {
@@ -117,21 +117,41 @@ export default function RekapNilaiPage() {
 
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+      let uObj: any = null;
       if (stored) {
         try {
-          setCurrentUser(JSON.parse(stored));
+          uObj = JSON.parse(stored);
+          setCurrentUser(uObj);
         } catch (e) {
           console.error("User parse error:", e);
         }
       }
-    }
+      const curTenant = getActiveTenant(uObj) || "ALL";
+      setActiveTenant(curTenant);
 
-    loadData();
+      const handleTenant = (e: any) => {
+        setActiveTenant(e.detail?.activeTenant || "ALL");
+      };
+      window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
+      loadData();
+
+      return () => {
+        window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      };
+    } else {
+      loadData();
+    }
   }, []);
 
+  // Filtered Events by Tenant
+  const tenantEvents = useMemo(() => {
+    return events.filter((e) => isRecordInTenant(currentUser, e, activeTenant));
+  }, [events, currentUser, activeTenant]);
+
   const currentActivity = useMemo(() => {
-    return events.find((e) => e.id === selectedActivityId) || events[0] || null;
-  }, [events, selectedActivityId]);
+    return tenantEvents.find((e) => e.id === selectedActivityId) || tenantEvents[0] || null;
+  }, [tenantEvents, selectedActivityId]);
 
   const getParticipantAvatar = (item: ParticipantEvaluation): string | undefined => {
     if (item.avatar && typeof item.avatar === "string" && (item.avatar.startsWith("http") || item.avatar.startsWith("data:") || item.avatar.startsWith("/"))) {
@@ -151,9 +171,16 @@ export default function RekapNilaiPage() {
   // All evaluations for current activity sorted by score descending
   const currentActivityEvals = useMemo(() => {
     return evaluations
-      .filter((e) => e.activityId === selectedActivityId)
+      .filter((e) => {
+        const matchAct = e.activityId === selectedActivityId;
+        const isCabangEvent = currentActivity && isCabangRecord(currentActivity);
+        const matchTenant = isCabangEvent
+          ? true
+          : isRecordInTenant(currentUser, e, activeTenant);
+        return matchAct && matchTenant;
+      })
       .sort((a, b) => b.finalScore - a.finalScore);
-  }, [evaluations, selectedActivityId]);
+  }, [evaluations, selectedActivityId, currentUser, activeTenant]);
 
   // Top 3 Leaderboard
   const topThree = useMemo(() => {
@@ -306,7 +333,7 @@ export default function RekapNilaiPage() {
 
       {/* 4. CONTROLS BAR */}
       <YudisiumFilters
-        events={events}
+        events={tenantEvents}
         selectedActivityId={selectedActivityId}
         setSelectedActivityId={setSelectedActivityId}
         currentActivityName={currentActivity?.name}

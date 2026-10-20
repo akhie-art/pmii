@@ -1,4 +1,4 @@
-import { ParticipantEvaluation, SessionScore } from "./types";
+import { ParticipantEvaluation, SessionScore, ParticipantRegistration, EventActivity, CadreFollowUp } from "./types";
 import { KEYS, DEFAULT_EVALUATIONS } from "./defaults";
 import { getTableData, saveTableData } from "./core";
 import { supabase, isSupabaseConfigured } from "../supabase";
@@ -292,5 +292,226 @@ export async function saveEvaluations(evalList: ParticipantEvaluation[]): Promis
     }
   }
 
-  return saveTableData<ParticipantEvaluation>("evaluations", KEYS.EVALUATIONS, normalized);
+  const cleaned = normalized.map((item) => {
+    const copy = { ...item };
+    delete (copy as any).created_at;
+    delete (copy as any).createdAt;
+    return copy;
+  });
+
+  return saveTableData<ParticipantEvaluation>("evaluations", KEYS.EVALUATIONS, cleaned);
 }
+
+/**
+ * Sinkronisasi pendaftaran kegiatan (registrations) dengan daftar evaluasi (evaluations).
+ * Memastikan setiap peserta yang terdaftar otomatis terdaftar di halaman Penilaian dan Rekap Nilai.
+ */
+export function syncEvaluationsWithRegistrations(
+  currentEvals: ParticipantEvaluation[],
+  regs: ParticipantRegistration[],
+  events: EventActivity[],
+  cadres: CadreFollowUp[] = []
+): { synced: ParticipantEvaluation[]; hasChanges: boolean } {
+  let hasChanges = false;
+  const syncedList = [...(currentEvals || [])];
+
+  // 1. Lengkapi evaluasi yang sudah ada jika profilnya (avatar/commissariat/university/gender) masih kosong
+  for (let i = 0; i < syncedList.length; i++) {
+    const item = syncedList[i];
+    const matchedCadre = cadres.find(
+      (c) =>
+        (c.id && item.cadreId && c.id === item.cadreId) ||
+        (c.name && item.participantName && c.name.trim().toLowerCase() === item.participantName.trim().toLowerCase())
+    );
+
+    if (matchedCadre) {
+      let itemChanged = false;
+      if (!item.avatar && matchedCadre.avatar) {
+        item.avatar = matchedCadre.avatar;
+        itemChanged = true;
+      }
+      if (!item.commissariat && matchedCadre.commissariat) {
+        item.commissariat = matchedCadre.commissariat;
+        itemChanged = true;
+      }
+      if (!item.university && matchedCadre.perguruanTinggi) {
+        item.university = matchedCadre.perguruanTinggi;
+        itemChanged = true;
+      }
+      if (!item.gender && matchedCadre.gender) {
+        item.gender = matchedCadre.gender;
+        itemChanged = true;
+      }
+      if (itemChanged) {
+        hasChanges = true;
+      }
+    }
+  }
+
+  // 2. Petakan seluruh pendaftaran aktif ke dalam evaluasi per kegiatan
+  for (const reg of regs || []) {
+    // Lewati jika pendaftaran berstatus REJECTED
+    if (reg.status === "REJECTED") continue;
+    if (!reg.eventId) continue;
+
+    const event = events.find((e) => e.id === reg.eventId);
+    const matchedCadre = cadres.find(
+      (c) =>
+        (c.id && reg.cadreId && c.id === reg.cadreId) ||
+        (c.name && reg.cadreName && c.name.trim().toLowerCase() === reg.cadreName.trim().toLowerCase()) ||
+        (c.email && reg.cadreEmail && c.email.trim().toLowerCase() === reg.cadreEmail.trim().toLowerCase())
+    );
+
+    const regCadreId = matchedCadre?.id || reg.cadreId || reg.id;
+    const regCleanName = (reg.cadreName || reg.name || matchedCadre?.name || "").trim();
+    if (!regCleanName) continue;
+
+    const alreadyInEval = syncedList.some((e) => {
+      if (e.activityId !== reg.eventId) return false;
+      const evalCleanName = (e.participantName || "").trim().toLowerCase();
+      const evalCadreId = (e.cadreId || "").trim().toLowerCase();
+      return (
+        (regCadreId && evalCadreId && (evalCadreId === regCadreId.toLowerCase() || (matchedCadre?.id && evalCadreId === matchedCadre.id.toLowerCase()))) ||
+        (regCleanName && evalCleanName && evalCleanName === regCleanName.toLowerCase())
+      );
+    });
+
+    if (!alreadyInEval) {
+      hasChanges = true;
+      const resolvedComm =
+        matchedCadre?.commissariat ||
+        reg.commissariat ||
+        (reg.answers?.commissariat as string) ||
+        (reg.answers?.komisariat as string) ||
+        (event as any)?.commissariat ||
+        "";
+
+      const resolvedUniv =
+        matchedCadre?.perguruanTinggi ||
+        reg.university ||
+        (reg.answers?.university as string) ||
+        (reg.answers?.kampus as string) ||
+        "";
+
+      const resolvedGender =
+        (matchedCadre?.gender as any) ||
+        reg.gender ||
+        (reg.answers?.gender as string) ||
+        "";
+
+      syncedList.push({
+        id: generateUUID(),
+        activityId: reg.eventId,
+        activityName: event?.name || event?.title || "Kegiatan Kaderisasi",
+        cadreId: regCadreId,
+        participantName: regCleanName,
+        avatar: matchedCadre?.avatar || reg.avatar || "",
+        gender: resolvedGender,
+        commissariat: resolvedComm,
+        university: resolvedUniv,
+        level: event?.level || "MAPABA",
+        sessionScores: {},
+        kognitif: 0,
+        afektif: 0,
+        psikomotorik: 0,
+        finalScore: 0,
+        grade: "E",
+        status: "BELUM_DINILAI",
+        evaluatorId: "",
+        evaluatorName: "",
+        notes: "",
+        updatedAt: new Date().toISOString()
+      });
+    }
+  }
+
+  const deduped = deduplicateEvaluations(syncedList);
+  return { synced: deduped, hasChanges: hasChanges || deduped.length !== (currentEvals || []).length };
+}
+
+/**
+ * Memastikan satu pendaftaran langsung memiliki entri di evaluations.
+ * Berguna saat kader mendaftar atau admin menyetujui pendaftaran kegiatan.
+ */
+export async function ensureEvaluationForRegistration(
+  reg: ParticipantRegistration,
+  event?: EventActivity | null,
+  cadre?: CadreFollowUp | null
+): Promise<ParticipantEvaluation | null> {
+  if (!reg || !reg.eventId || reg.status === "REJECTED") return null;
+
+  try {
+    const evals = await getEvaluations([]);
+    const regCadreId = cadre?.id || reg.cadreId || reg.id;
+    const regCleanName = (reg.cadreName || reg.name || cadre?.name || "").trim();
+    if (!regCleanName) return null;
+
+    const existing = evals.find((e) => {
+      if (e.activityId !== reg.eventId) return false;
+      const evalCleanName = (e.participantName || "").trim().toLowerCase();
+      const evalCadreId = (e.cadreId || "").trim().toLowerCase();
+      return (
+        (regCadreId && evalCadreId && (evalCadreId === regCadreId.toLowerCase() || (cadre?.id && evalCadreId === cadre.id.toLowerCase()))) ||
+        (evalCleanName === regCleanName.toLowerCase())
+      );
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const resolvedComm =
+      cadre?.commissariat ||
+      reg.commissariat ||
+      (reg.answers?.commissariat as string) ||
+      (reg.answers?.komisariat as string) ||
+      (event as any)?.commissariat ||
+      "";
+
+    const resolvedUniv =
+      cadre?.perguruanTinggi ||
+      reg.university ||
+      (reg.answers?.university as string) ||
+      (reg.answers?.kampus as string) ||
+      "";
+
+    const resolvedGender =
+      (cadre?.gender as any) ||
+      reg.gender ||
+      (reg.answers?.gender as string) ||
+      "";
+
+    const newEval: ParticipantEvaluation = {
+      id: generateUUID(),
+      activityId: reg.eventId,
+      activityName: event?.name || event?.title || "Kegiatan Kaderisasi",
+      cadreId: regCadreId,
+      participantName: regCleanName,
+      avatar: cadre?.avatar || reg.avatar || "",
+      gender: resolvedGender,
+      commissariat: resolvedComm,
+      komisariat_id: cadre?.komisariat_id || reg.komisariat_id || (event as any)?.komisariat_id || null,
+      university: resolvedUniv,
+      level: event?.level || "MAPABA",
+      sessionScores: {},
+      kognitif: 0,
+      afektif: 0,
+      psikomotorik: 0,
+      finalScore: 0,
+      grade: "E",
+      status: "BELUM_DINILAI",
+      evaluatorId: "",
+      evaluatorName: "",
+      notes: "",
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedList = [newEval, ...evals];
+    await saveEvaluations(updatedList);
+    return newEval;
+  } catch (err) {
+    console.error("Gagal auto-create evaluation for registration:", err);
+    return null;
+  }
+}
+

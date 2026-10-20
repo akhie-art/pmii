@@ -4,13 +4,16 @@ import React, { useState, useEffect } from "react";
 import {
   X,
   BookOpen,
-  FileText
+  FileText,
+  Building,
+  GraduationCap
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { EventActivity } from "./types";
 import { DEFAULT_EVENT_SESSIONS } from "./types";
+import { isCabangOrAdmin, isCabangRecord, getKomisariatIdByName, getTenantIdByName, CABANG_TENANT_ID } from "@/lib/tenancy";
 
 interface EventFormModalProps {
   isOpen: boolean;
@@ -23,8 +26,13 @@ interface EventFormModalProps {
     description?: string;
     sessions?: string[];
     waGroupLink?: string;
+    commissariat?: string;
+    komisariat_id?: string | null;
+    tenant_id?: string | null;
   }) => void;
   kaderisasiList: any[];
+  currentUser?: any;
+  commissariats?: any[];
 }
 
 export default function EventFormModal({
@@ -32,9 +40,12 @@ export default function EventFormModal({
   onClose,
   event,
   onSubmit,
-  kaderisasiList
+  kaderisasiList,
+  currentUser,
+  commissariats = []
 }: EventFormModalProps) {
   const isEdit = Boolean(event);
+  const isCabangUser = isCabangOrAdmin(currentUser);
 
   const [activeTab, setActiveTab] = useState<"info" | "sessions" | "form">("info");
   const [formName, setFormName] = useState("");
@@ -42,8 +53,24 @@ export default function EventFormModal({
   const [formDate, setFormDate] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formWaGroupLink, setFormWaGroupLink] = useState("");
-
   const [sessions, setSessions] = useState<string[]>(DEFAULT_EVENT_SESSIONS);
+
+  const userComm = currentUser?.commissariat || (currentUser as any)?.komisariat || "";
+  const hasCampusComm = Boolean(userComm) && !userComm.toLowerCase().includes("cabang") && !userComm.toLowerCase().includes("pc pmii");
+  const resolvedKomId = currentUser?.komisariat_id || getKomisariatIdByName(userComm) || null;
+
+  // Jika user punya nama komisariat kampus, maka pasti Tingkat Komisariat (bukan Cabang)
+  const organizerIsCabang = event
+    ? isCabangRecord(event)
+    : (!hasCampusComm && Boolean(isCabangUser));
+
+  const organizerName = event
+    ? (isCabangRecord(event) ? "Pengurus Cabang Grobogan" : (event.commissariat || "Komisariat"))
+    : (organizerIsCabang ? "Pengurus Cabang Grobogan" : (userComm || "Komisariat Anda"));
+
+  const organizerKomisariatId = event
+    ? (isCabangRecord(event) ? CABANG_TENANT_ID : (event.tenant_id || event.komisariat_id || getTenantIdByName(event.commissariat) || null))
+    : (organizerIsCabang ? CABANG_TENANT_ID : (currentUser?.tenant_id || currentUser?.komisariat_id || resolvedKomId));
 
   useEffect(() => {
     if (!isOpen) return;
@@ -120,7 +147,10 @@ export default function EventFormModal({
       date: formDate,
       description: formDescription.trim(),
       sessions: sessions.length > 0 ? sessions : DEFAULT_EVENT_SESSIONS,
-      waGroupLink: formWaGroupLink.trim() || undefined
+      waGroupLink: formWaGroupLink.trim() || undefined,
+      commissariat: organizerName,
+      komisariat_id: organizerKomisariatId,
+      tenant_id: organizerKomisariatId
     });
   };
 
@@ -187,6 +217,34 @@ export default function EventFormModal({
             {/* TAB 1: INFORMASI */}
             {activeTab === "info" && (
               <div className="space-y-3">
+                {/* Penyelenggara Otomatis Sesuai Akun Login */}
+                <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-900/60 flex items-center justify-center shrink-0">
+                      {organizerIsCabang ? (
+                        <Building className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <GraduationCap className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                        Penyelenggara Kegiatan
+                      </p>
+                      <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                        {organizerName}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    organizerIsCabang
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                      : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                  }`}>
+                    {organizerIsCabang ? "🏛️ Tingkat Cabang" : "🎓 Tingkat Komisariat"}
+                  </span>
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
                     Nama Kegiatan *

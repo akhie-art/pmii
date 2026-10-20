@@ -11,6 +11,9 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 
+import type { Role } from "@/lib/db";
+import { formatRoleName } from "./types";
+
 interface UserFiltersProps {
   searchQuery: string;
   setSearchQuery: (val: string) => void;
@@ -18,6 +21,11 @@ interface UserFiltersProps {
   setRoleFilter: (val: string) => void;
   statusFilter: string;
   setStatusFilter: (val: string) => void;
+  tenantFilter?: string;
+  setTenantFilter?: (val: string) => void;
+  availableKomisariats?: string[];
+  isCabang?: boolean;
+  availableRoles?: Role[];
   onOpenCreate: () => void;
 }
 
@@ -28,13 +36,18 @@ export const UserFilters: React.FC<UserFiltersProps> = ({
   setRoleFilter,
   statusFilter,
   setStatusFilter,
+  tenantFilter = "ALL",
+  setTenantFilter,
+  availableKomisariats = [],
+  isCabang = false,
+  availableRoles,
   onOpenCreate,
 }) => {
   return (
     <Card className="p-3 sm:p-4 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl">
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto flex-1">
-          <div className="relative w-full sm:w-72">
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto flex-1 flex-wrap">
+          <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               type="text"
@@ -45,23 +58,51 @@ export const UserFilters: React.FC<UserFiltersProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
             <Select value={roleFilter} onValueChange={(val) => { if (val) setRoleFilter(val); }}>
               <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[120px]">
                 <SelectValue placeholder="Semua Peran" />
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
                 <SelectItem value="ALL" className="text-xs">Semua Peran</SelectItem>
-                <SelectItem value="admin" className="text-xs">Admin</SelectItem>
-                <SelectItem value="pengurus" className="text-xs">Pengurus</SelectItem>
-                <SelectItem value="instruktur" className="text-xs">Instruktur</SelectItem>
-                <SelectItem value="anggota" className="text-xs">Anggota</SelectItem>
-                <SelectItem value="peserta" className="text-xs">Peserta</SelectItem>
+                {availableRoles && availableRoles.length > 0 ? (
+                  availableRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.code.toLowerCase()} className="text-xs">
+                      {formatRoleName(r.code)}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <>
+                    <SelectItem value="superadmin" className="text-xs">Superadmin</SelectItem>
+                    <SelectItem value="admin" className="text-xs">Pengurus Cabang</SelectItem>
+                    <SelectItem value="pengurus" className="text-xs">Pengurus Komisariat</SelectItem>
+                    <SelectItem value="instruktur" className="text-xs">Instruktur</SelectItem>
+                    <SelectItem value="anggota" className="text-xs">Anggota</SelectItem>
+                    <SelectItem value="peserta" className="text-xs">Peserta</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
 
+            {isCabang && setTenantFilter && (
+              <Select value={tenantFilter} onValueChange={(val) => { if (val) setTenantFilter(val); }}>
+                <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[140px]">
+                  <SelectValue placeholder="Semua Komisariat" />
+                </SelectTrigger>
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+                  <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+                  <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+                  {availableKomisariats.map((c) => (
+                    <SelectItem key={c} value={c} className="text-xs">
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             <Select value={statusFilter} onValueChange={(val) => { if (val) setStatusFilter(val); }}>
-              <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[120px]">
+              <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[110px]">
                 <SelectValue placeholder="Semua Status" />
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">

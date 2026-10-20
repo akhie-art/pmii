@@ -1,6 +1,7 @@
 import { Kaderisasi } from "./types";
 import { KEYS } from "./defaults";
 import { supabase, isSupabaseConfigured, deleteStorageFile } from "../supabase";
+import { CABANG_TENANT_ID, getTenantIdByName, getTenantNameById } from "../tenancy";
 
 export async function getKaderisasi(): Promise<Kaderisasi[]> {
   let supabaseList: Kaderisasi[] = [];
@@ -11,13 +12,19 @@ export async function getKaderisasi(): Promise<Kaderisasi[]> {
         .select("*")
         .order("createdAt", { ascending: false });
       if (!error && data) {
-        supabaseList = data.map((d: any) => ({
-          ...d,
-          formFields: d.formFields || d.formfields || [],
-          materi: d.materi || [],
-          certificateTemplate: d.certificateTemplate || d.certificatetemplate || undefined,
-          certificateConfig: d.certificateConfig || d.certificateconfig || undefined
-        }));
+        supabaseList = data.map((d: any) => {
+          const tid = d.tenant_id || d.komisariat_id || null;
+          return {
+            ...d,
+            tenant_id: tid,
+            komisariat_id: tid,
+            commissariat: d.commissariat || (tid ? getTenantNameById(tid) : "Pengurus Cabang Grobogan"),
+            formFields: d.formFields || d.formfields || [],
+            materi: d.materi || [],
+            certificateTemplate: d.certificateTemplate || d.certificatetemplate || undefined,
+            certificateConfig: d.certificateConfig || d.certificateconfig || undefined
+          };
+        });
       } else if (error) {
         console.error("Supabase read error on kaderisasi:", error.message);
       }
@@ -65,16 +72,26 @@ export async function saveKaderisasi(kaderisasiList: Kaderisasi[]): Promise<bool
   if (isSupabaseConfigured && supabase) {
     try {
       const newIds = kaderisasiList.map(k => k.id);
-      const normalized = kaderisasiList.map(k => ({
-        id: k.id,
-        nama: k.nama,
-        tipe: k.tipe,
-        formFields: k.formFields || [],
-        materi: k.materi || [],
-        certificateTemplate: k.certificateTemplate || null,
-        certificateConfig: k.certificateConfig || null,
-        createdAt: k.createdAt || (k as any).created_at || new Date().toISOString()
-      }));
+      const normalized = kaderisasiList.map(k => {
+        const commStr = typeof k.commissariat === "string" ? k.commissariat : "";
+        const resolvedTenantId =
+          k.tenant_id ||
+          k.komisariat_id ||
+          (commStr ? getTenantIdByName(commStr) : null) ||
+          CABANG_TENANT_ID;
+
+        return {
+          id: k.id,
+          nama: k.nama,
+          tipe: k.tipe,
+          tenant_id: resolvedTenantId,
+          formFields: k.formFields || [],
+          materi: k.materi || [],
+          certificateTemplate: k.certificateTemplate || null,
+          certificateConfig: k.certificateConfig || null,
+          createdAt: k.createdAt || (k as any).created_at || new Date().toISOString()
+        };
+      });
 
       // Auto-cleanup storage files if deleting kaderisasi agenda
       try {

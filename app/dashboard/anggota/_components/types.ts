@@ -1,4 +1,5 @@
 import type { CadreFollowUp } from "@/lib/db";
+import { getTenantIdByName, getTenantNameById } from "@/lib/tenancy";
 
 export interface CadreHistory {
   level: string;
@@ -12,6 +13,8 @@ export interface Member {
   name: string;
   level: "MAPABA" | "PKD" | "PKL" | "PKN";
   komisariat: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   angkatan: string;
   status: "Aktif" | "Alumni" | "Pasif";
   email: string;
@@ -55,13 +58,19 @@ export interface Member {
 }
 
 export function mapCadreToMember(c: CadreFollowUp): Member {
-  const komisariat = c.commissariat || "PK PMII Ki Ageng Getas Pendawa";
+  const tid = c.tenant_id || c.komisariat_id || getTenantIdByName(c.commissariat);
+  const komisariat =
+    c.commissariat ||
+    (tid ? getTenantNameById(tid) : null) ||
+    "Pengurus Cabang PMII Grobogan";
 
   return {
     id: c.id,
     name: c.name,
     level: (c.level as any) || "MAPABA",
     komisariat,
+    komisariat_id: tid,
+    tenant_id: tid,
     angkatan: c.angkatan || "2024",
     status: (c.memberStatus as any) || (c.status === "SELESAI" ? "Alumni" : "Aktif"),
     email: c.email || "",
@@ -70,7 +79,7 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     nipa: c.nipa || c.nta || "",
     gender: (c.gender as any) || "Laki-laki",
     history: c.history || [
-      { level: c.level, date: c.startDate || "", location: c.commissariat || "", status: "Selesai" }
+      { level: c.level, date: c.startDate || "", location: komisariat, status: "Selesai" }
     ],
     provinsi: c.provinsi || "",
     kabupaten: c.kabupaten || "",
@@ -106,13 +115,19 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
 }
 
 export function mapMemberToCadre(m: Member): CadreFollowUp {
-  const commissariat = m.komisariat || "PK PMII Ki Ageng Getas Pendawa";
+  const tid = m.tenant_id || m.komisariat_id || getTenantIdByName(m.komisariat);
+  const commissariat =
+    m.komisariat ||
+    (tid ? getTenantNameById(tid) : null) ||
+    "Pengurus Cabang PMII Grobogan";
 
   return {
     id: m.id,
     name: m.name,
     level: m.level as any,
     commissariat,
+    komisariat_id: tid,
+    tenant_id: tid,
     startDate: m.history && m.history[0] ? m.history[0].date : "",
     status: m.status === "Alumni" ? "SELESAI" : "AKTIF",
     submissions: [],

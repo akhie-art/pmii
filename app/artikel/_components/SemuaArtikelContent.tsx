@@ -45,12 +45,11 @@ export function SemuaArtikelContent() {
 
     db.getArticles()
       .then((data) => {
-        if (data && data.length > 0) {
-          setArticles(data.filter((a) => a.status === "DITAMPILKAN"));
-        }
+        setArticles(data ? data.filter((a) => a.status === "DITAMPILKAN") : []);
       })
       .catch((err) => {
         console.error("Gagal mengambil data artikel:", err);
+        setArticles([]);
       })
       .finally(() => {
         setLoading(false);
@@ -234,7 +233,7 @@ export function SemuaArtikelContent() {
                     {/* Article Image Container */}
                     <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                       <Image
-                        src={art.image}
+                        src={art.image || "/image/landing_page.png"}
                         alt={art.title}
                         width={800}
                         height={500}

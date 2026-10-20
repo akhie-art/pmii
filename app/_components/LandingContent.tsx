@@ -116,11 +116,10 @@ export function LandingContent() {
     });
 
     db.getArticles().then((arts) => {
-      if (arts && arts.length > 0) {
-        setArticles(arts.filter((a) => a.status === "DITAMPILKAN"));
-      }
+      setArticles(arts ? arts.filter((a) => a.status === "DITAMPILKAN") : []);
     }).catch((err) => {
       console.error("Failed to fetch articles:", err);
+      setArticles([]);
     });
   }, []);
 
@@ -613,7 +612,7 @@ export function LandingContent() {
                   {/* Article Image Container */}
                   <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                     <Image
-                      src={art.image}
+                      src={art.image || "/image/landing_page.png"}
                       alt={art.title}
                       width={800}
                       height={500}

@@ -13,6 +13,22 @@ import { DocumentItem, FolderItem, DriveTab } from "@/types/drive";
 import { db } from "@/lib/db";
 import { deleteStorageFile } from "@/lib/supabase";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  isRecordInTenant,
+  enforceTenantWrite,
+  getActiveTenant,
+  setActiveTenant as setGlobalActiveTenant,
+  isCabangOrAdmin,
+  DEFAULT_KOMISARIAT_LIST,
+  TENANT_CHANGED_EVENT
+} from "@/lib/tenancy";
 
 // Import komponen hasil pecahan
 import DriveSidebar from "./components/DriveSidebar";
@@ -468,6 +484,8 @@ const renderFilePreview = (fileMeta: { type: string; url: string }, doc: Documen
 };
 
 export default function DrivePage() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -515,8 +533,9 @@ export default function DrivePage() {
   };
 
   const updateDocuments = async (newDocs: DocumentItem[]) => {
-    setDocuments(newDocs);
-    await db.saveArsip(newDocs);
+    const taggedDocs = newDocs.map(d => enforceTenantWrite(currentUser, d, activeTenant));
+    setDocuments(taggedDocs);
+    await db.saveArsip(taggedDocs);
   };
 
   const updateFolders = (newFolders: FolderItem[]) => {
@@ -571,6 +590,22 @@ export default function DrivePage() {
 
   useEffect(() => {
     setIsMounted(true);
+    const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
+    let uObj: any = null;
+    if (storedUser) {
+      try {
+        uObj = JSON.parse(storedUser);
+        setCurrentUser(uObj);
+      } catch {}
+    }
+    const currentTenant = getActiveTenant(uObj) || "ALL";
+    setActiveTenant(currentTenant);
+
+    const handleTenant = (e: any) => {
+      setActiveTenant(e.detail?.activeTenant || "ALL");
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
     const loadData = async () => {
       try {
         const docs = await db.getArsip();
@@ -624,11 +659,22 @@ export default function DrivePage() {
       }
     };
     loadData();
+
+    return () => {
+      window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    };
   }, []);
 
   const currentFolders = folders.filter((f) => f.parent === (selectedFolder || null));
 
   const filteredDocs = documents.filter((doc) => {
+    const matchesTenant = isRecordInTenant(
+      currentUser,
+      doc,
+      activeTenant
+    );
+    if (!matchesTenant) return false;
+
     const matchesSearch =
       doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.code.toLowerCase().includes(searchTerm.toLowerCase());
@@ -697,8 +743,33 @@ export default function DrivePage() {
   return (
     <div className="space-y-6 pb-12 overflow-hidden h-full flex flex-col font-sans">
       
-      {/* Search Bar */}
-      <div className="flex justify-end">
+      {/* Search Bar & Tenant Switcher */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+        {isCabangOrAdmin(currentUser) && (
+          <Select
+            value={activeTenant}
+            onValueChange={(val) => {
+              if (val) {
+                setActiveTenant(val);
+                setGlobalActiveTenant(val);
+              }
+            }}
+          >
+            <SelectTrigger className="h-9 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[170px]">
+              <SelectValue placeholder="Semua Komisariat" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+              <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+              <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+              {DEFAULT_KOMISARIAT_LIST.map((c) => (
+                <SelectItem key={c} value={c} className="text-xs">
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <Input 

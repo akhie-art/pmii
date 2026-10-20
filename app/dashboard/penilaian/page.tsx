@@ -8,6 +8,7 @@ import {
   db,
   generateUUID,
   deduplicateEvaluations,
+  syncEvaluationsWithRegistrations,
   type ParticipantEvaluation,
   type SessionScore,
   type EventActivity,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { isRecordInTenant, isCabangRecord, getActiveTenant, TENANT_CHANGED_EVENT } from "@/lib/tenancy";
 
 import { AssessmentFilters } from "./_components/AssessmentFilters";
 import { MateriTabs } from "./_components/MateriTabs";
@@ -28,6 +30,7 @@ export default function PenilaianPesertaPage() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [events, setEvents] = useState<EventActivity[]>([]);
   const [registrations, setRegistrations] = useState<ParticipantRegistration[]>([]);
   const [evaluations, setEvaluations] = useState<ParticipantEvaluation[]>([]);
@@ -98,7 +101,7 @@ export default function PenilaianPesertaPage() {
 
         setRegistrations(cleanRegs);
 
-        // Auto-populate
+        // Set selected activity to initial event if not yet set
         const targetEventId = cleanEvents[0]?.id || "";
         setSelectedActivityId((prev) => {
           if (!prev || !cleanEvents.some((e) => e.id === prev)) {
@@ -106,82 +109,20 @@ export default function PenilaianPesertaPage() {
           }
           return prev;
         });
-        const currentEvent = cleanEvents.find((e) => e.id === targetEventId) || cleanEvents[0] || null;
-        const eventRegs = targetEventId ? cleanRegs.filter((r) => r.eventId === targetEventId) : [];
 
-        let hasNewSync = false;
-        const syncedList = [...cleanEvals];
+        // Comprehensive sync of all registered participants across all events
+        const { synced, hasChanges } = syncEvaluationsWithRegistrations(
+          cleanEvals,
+          cleanRegs,
+          cleanEvents,
+          cadresData || []
+        );
 
-        // Enrich existing evaluations with photo avatar if available
-        syncedList.forEach((e) => {
-          if (!e.avatar) {
-            const matchedCadre = cadresData?.find(
-              (c) =>
-                (c.name && e.participantName && c.name.trim().toLowerCase() === e.participantName.trim().toLowerCase()) ||
-                (e.cadreId && c.id === e.cadreId)
-            );
-            if (matchedCadre?.avatar) {
-              e.avatar = matchedCadre.avatar;
-              hasNewSync = true;
-            }
-          }
-        });
-
-        eventRegs.forEach((reg) => {
-          const matchedCadre = cadresData?.find(
-            (c) =>
-              (c.name && reg.cadreName && c.name.trim().toLowerCase() === reg.cadreName.trim().toLowerCase()) ||
-              (c.email && reg.cadreEmail && c.email.toLowerCase() === reg.cadreEmail.toLowerCase())
-          );
-          const regCadreId = matchedCadre?.id || reg.id;
-          const regCleanName = (reg.cadreName || "").trim().toLowerCase();
-
-          const alreadyInEval = syncedList.some((e) => {
-            if (e.activityId !== targetEventId) return false;
-            const evalCleanName = (e.participantName || "").trim().toLowerCase();
-            const evalCadreId = (e.cadreId || "").trim().toLowerCase();
-            return (
-              (regCadreId && evalCadreId && (evalCadreId === regCadreId.toLowerCase() || (matchedCadre?.id && evalCadreId === matchedCadre.id.toLowerCase()))) ||
-              (regCleanName && evalCleanName && evalCleanName === regCleanName)
-            );
-          });
-
-          if (!alreadyInEval) {
-            hasNewSync = true;
-            syncedList.push({
-              id: generateUUID(),
-              activityId: targetEventId,
-              activityName: currentEvent?.name || "",
-              cadreId: regCadreId,
-              participantName: reg.cadreName,
-              avatar: matchedCadre?.avatar || "",
-              gender: (matchedCadre?.gender as any) || "",
-              commissariat: matchedCadre?.commissariat || "",
-              university: matchedCadre?.perguruanTinggi || "",
-              level: currentEvent?.level || "MAPABA",
-              sessionScores: {},
-              kognitif: 0,
-              afektif: 0,
-              psikomotorik: 0,
-              finalScore: 0,
-              grade: "E",
-              status: "BELUM_DINILAI",
-              evaluatorId: currentUser?.id || "",
-              evaluatorName: currentUser?.name || "",
-              notes: "",
-              updatedAt: new Date().toISOString()
-            });
-          }
-        });
-
-        // Deduplicate final list before saving and setting state
-        const dedupedList = deduplicateEvaluations(syncedList);
-
-        if (hasNewSync || cleanEvals.length !== evalsData.length || dedupedList.length !== cleanEvals.length) {
-          await db.saveEvaluations(dedupedList);
+        if (hasChanges || cleanEvals.length !== evalsData.length || synced.length !== cleanEvals.length) {
+          await db.saveEvaluations(synced);
         }
 
-        setEvaluations(dedupedList);
+        setEvaluations(synced);
       } catch (err) {
         console.error("Error loading evaluation data:", err);
       } finally {
@@ -191,22 +132,42 @@ export default function PenilaianPesertaPage() {
 
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+      let uObj: any = null;
       if (stored) {
         try {
-          setCurrentUser(JSON.parse(stored));
+          uObj = JSON.parse(stored);
+          setCurrentUser(uObj);
         } catch (e) {
           console.error("User parse error:", e);
         }
       }
-    }
+      const curTenant = getActiveTenant(uObj) || "ALL";
+      setActiveTenant(curTenant);
 
-    loadData();
+      const handleTenant = (e: any) => {
+        setActiveTenant(e.detail?.activeTenant || "ALL");
+      };
+      window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
+      loadData();
+
+      return () => {
+        window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      };
+    } else {
+      loadData();
+    }
   }, []);
+
+  // Filtered Events by Tenant
+  const tenantEvents = useMemo(() => {
+    return events.filter((e) => isRecordInTenant(currentUser, e, activeTenant));
+  }, [events, currentUser, activeTenant]);
 
   // Selected Activity Object
   const currentActivity = useMemo(() => {
-    return events.find((e) => e.id === selectedActivityId) || events[0] || null;
-  }, [events, selectedActivityId]);
+    return tenantEvents.find((e) => e.id === selectedActivityId) || tenantEvents[0] || null;
+  }, [tenantEvents, selectedActivityId]);
 
   // List of Materi Sessions for Current Activity
   const activitySessions: string[] = useMemo(() => {
@@ -238,62 +199,16 @@ export default function PenilaianPesertaPage() {
     setSelectedMateri("ALL");
 
     const targetEvent = events.find((e) => e.id === actId) || events[0] || null;
-    const eventRegs = registrations.filter((r) => r.eventId === actId);
+    const { synced, hasChanges } = syncEvaluationsWithRegistrations(
+      evaluations,
+      registrations,
+      events,
+      cadres
+    );
 
-    let hasNewSync = false;
-    const syncedList = [...evaluations];
-
-    eventRegs.forEach((reg) => {
-      const matchedCadre = cadres.find(
-        (c) =>
-          (c.name && reg.cadreName && c.name.trim().toLowerCase() === reg.cadreName.trim().toLowerCase()) ||
-          (c.email && reg.cadreEmail && c.email.toLowerCase() === reg.cadreEmail.toLowerCase())
-      );
-      const regCadreId = matchedCadre?.id || reg.id;
-      const regCleanName = (reg.cadreName || "").trim().toLowerCase();
-
-      const alreadyInEval = syncedList.some((e) => {
-        if (e.activityId !== actId) return false;
-        const evalCleanName = (e.participantName || "").trim().toLowerCase();
-        const evalCadreId = (e.cadreId || "").trim().toLowerCase();
-        return (
-          (regCadreId && evalCadreId && (evalCadreId === regCadreId.toLowerCase() || (matchedCadre?.id && evalCadreId === matchedCadre.id.toLowerCase()))) ||
-          (regCleanName && evalCleanName && evalCleanName === regCleanName)
-        );
-      });
-
-      if (!alreadyInEval) {
-        hasNewSync = true;
-        syncedList.push({
-          id: generateUUID(),
-          activityId: actId,
-          activityName: targetEvent?.name || "",
-          cadreId: regCadreId,
-          participantName: reg.cadreName,
-          avatar: matchedCadre?.avatar || "",
-          gender: (matchedCadre?.gender as any) || "",
-          commissariat: matchedCadre?.commissariat || "",
-          university: matchedCadre?.perguruanTinggi || "",
-          level: targetEvent?.level || "MAPABA",
-          sessionScores: {},
-          kognitif: 0,
-          afektif: 0,
-          psikomotorik: 0,
-          finalScore: 0,
-          grade: "E",
-          status: "BELUM_DINILAI",
-          evaluatorId: currentUser?.id || "",
-          evaluatorName: currentUser?.name || "",
-          notes: "",
-          updatedAt: new Date().toISOString()
-        });
-      }
-    });
-
-    if (hasNewSync) {
-      const dedupedList = deduplicateEvaluations(syncedList);
-      setEvaluations(dedupedList);
-      await db.saveEvaluations(dedupedList);
+    if (hasChanges) {
+      setEvaluations(synced);
+      await db.saveEvaluations(synced);
       toast.info(`Daftar peserta otomatis disinkronkan dari pendaftaran ${targetEvent?.name || ""}`);
     }
   };
@@ -318,9 +233,14 @@ export default function PenilaianPesertaPage() {
         }
       }
 
-      return matchActivity && matchSearch && matchStatus;
+      const isCabangEvent = currentActivity && isCabangRecord(currentActivity);
+      const matchTenant = isCabangEvent
+        ? true
+        : isRecordInTenant(currentUser, item, activeTenant);
+
+      return matchTenant && matchActivity && matchSearch && matchStatus;
     });
-  }, [evaluations, selectedActivityId, searchQuery, statusFilter, selectedMateri]);
+  }, [evaluations, selectedActivityId, searchQuery, statusFilter, selectedMateri, currentUser, activeTenant]);
 
   // Open Score Modal for specific materi
   const handleOpenScoreModal = (evalItem: ParticipantEvaluation, materi: string) => {
@@ -441,7 +361,7 @@ export default function PenilaianPesertaPage() {
 
       {/* 2. MINIMALIST CONTROLS BAR */}
       <AssessmentFilters
-        events={events}
+        events={tenantEvents}
         selectedActivityId={selectedActivityId}
         onActivityChange={handleActivityChange}
         currentActivity={currentActivity}

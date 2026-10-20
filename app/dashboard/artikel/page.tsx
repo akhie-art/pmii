@@ -1,13 +1,23 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Newspaper, Plus } from "lucide-react";
+import Link from "next/link";
+import { Newspaper, Plus, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { db, DEFAULT_ARTICLES } from "@/lib/db";
+import { Badge } from "@/components/ui/badge";
+import { db, DEFAULT_ARTICLES, generateUUID, type Article, type UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
-import type { Article, UserAccount } from "@/lib/db";
+import {
+  isRecordInTenant,
+  enforceTenantWrite,
+  getActiveTenant,
+  setActiveTenant as setGlobalActiveTenant,
+  isCabangOrAdmin,
+  DEFAULT_KOMISARIAT_LIST,
+  TENANT_CHANGED_EVENT
+} from "@/lib/tenancy";
 
 import {
   PRESET_CATEGORIES,
@@ -28,6 +38,18 @@ export default function AdminArtikelPage() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
+
+  useEffect(() => {
+    setActiveTenant(getActiveTenant() || "ALL");
+    const handleTenant = (e: any) => {
+      setActiveTenant(e.detail?.activeTenant || "ALL");
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+  }, []);
 
   // Filter & Search States
   const [searchQuery, setSearchQuery] = useState("");
@@ -54,7 +76,7 @@ export default function AdminArtikelPage() {
     content: "",
     authorName: "",
     authorRole: "",
-    image: "/image/kaderisasi.jpg",
+    image: "",
     tagsInput: "PMII, Kaderisasi, Pergerakan",
     status: "DITAMPILKAN"
   });
@@ -80,14 +102,28 @@ export default function AdminArtikelPage() {
       }
     }
 
+    if (typeof window !== "undefined") {
+      const storedArticles = localStorage.getItem("PMII_ARTICLES_DATA");
+      if (
+        storedArticles &&
+        (storedArticles.includes("art-") ||
+          storedArticles.includes("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a2") ||
+          storedArticles.toLowerCase().includes("meneguhkan aswaja") ||
+          storedArticles.toLowerCase().includes("refleksi mapaba") ||
+          storedArticles.toLowerCase().includes("modernisasi persuratan"))
+      ) {
+        localStorage.removeItem("PMII_ARTICLES_DATA");
+      }
+    }
+
     const fetchArticles = async () => {
       try {
         setLoading(true);
         const data = await db.getArticles();
-        setArticles(data);
+        setArticles(data || []);
       } catch (err) {
         console.error("Failed to load articles:", err);
-        setArticles(DEFAULT_ARTICLES);
+        setArticles([]);
       } finally {
         setLoading(false);
       }
@@ -112,7 +148,9 @@ export default function AdminArtikelPage() {
     const matchStatus =
       selectedStatus === "Semua" || art.status === selectedStatus;
 
-    return matchSearch && matchCategory && matchStatus;
+    const matchTenant = isRecordInTenant(currentUser, art, activeTenant);
+
+    return matchTenant && matchSearch && matchCategory && matchStatus;
   });
 
   // Open Create Form
@@ -127,7 +165,7 @@ export default function AdminArtikelPage() {
       content: "",
       authorName: author.name,
       authorRole: author.role,
-      image: "/image/kaderisasi.jpg",
+      image: "",
       tagsInput: "PMII, Kaderisasi, Pergerakan",
       status: "DITAMPILKAN"
     });
@@ -152,7 +190,7 @@ export default function AdminArtikelPage() {
       content: initialContentHtml,
       authorName: article.authorName || author.name,
       authorRole: article.authorRole || author.role,
-      image: article.image || "/image/kaderisasi.jpg",
+      image: article.image || "",
       tagsInput: article.tags?.join(", ") || "",
       status: article.status
     });
@@ -167,118 +205,140 @@ export default function AdminArtikelPage() {
       return;
     }
 
-    const resolvedCategory =
-      formData.category === "Lainnya"
-        ? formData.customCategory.trim() || "Kaderisasi"
-        : formData.category;
-
-    const resolvedSlug = formData.slug.trim()
-      ? slugify(formData.slug)
-      : slugify(formData.title);
-
-    const tagsArray = formData.tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
     const rawText = stripHtml(formData.content);
-    const autoExcerpt =
-      rawText.length > 150 ? rawText.substring(0, 150) + "..." : rawText || formData.title;
+    if (!rawText.trim()) {
+      showToast("Isi lengkap artikel wajib ditulis!");
+      return;
+    }
 
-    let resolvedImage = formData.image;
-    if (resolvedImage.startsWith("data:image/")) {
-      try {
-        const fileExt = resolvedImage.substring(
-          resolvedImage.indexOf("/") + 1,
-          resolvedImage.indexOf(";base64")
-        );
-        const fileName = `article-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const base64Data = resolvedImage.split(",")[1];
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: `image/${fileExt}` });
-        const file = new File([blob], fileName, { type: `image/${fileExt}` });
+    setIsSubmitting(true);
+    try {
+      const resolvedCategory =
+        formData.category === "Lainnya"
+          ? formData.customCategory.trim() || "Kaderisasi"
+          : formData.category;
 
-        if (isSupabaseConfigured && supabase) {
-          const { error: uploadError } = await supabase.storage.from("articles").upload(fileName, file);
-          if (!uploadError) {
-            const { data: publicUrlData } = supabase.storage.from("articles").getPublicUrl(fileName);
-            if (publicUrlData?.publicUrl) {
-              resolvedImage = publicUrlData.publicUrl;
+      let resolvedSlug = formData.slug.trim()
+        ? slugify(formData.slug)
+        : slugify(formData.title);
+
+      // Check slug uniqueness
+      const isSlugTaken = articles.some(
+        (a) => a.slug === resolvedSlug && (!editingArticle || a.id !== editingArticle.id)
+      );
+      if (isSlugTaken) {
+        resolvedSlug = `${resolvedSlug}-${Math.random().toString(36).substring(2, 6)}`;
+      }
+
+      const tagsArray = formData.tagsInput
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const autoExcerpt =
+        rawText.length > 150 ? rawText.substring(0, 150) + "..." : rawText || formData.title;
+
+      let resolvedImage = formData.image;
+      if (resolvedImage.startsWith("data:image/")) {
+        try {
+          const fileExt = resolvedImage.substring(
+            resolvedImage.indexOf("/") + 1,
+            resolvedImage.indexOf(";base64")
+          );
+          const fileName = `article-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+          const base64Data = resolvedImage.split(",")[1];
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: `image/${fileExt}` });
+          const file = new File([blob], fileName, { type: `image/${fileExt}` });
+
+          if (isSupabaseConfigured && supabase) {
+            const filePath = `articles/${fileName}`;
+            const { error: uploadError } = await supabase.storage.from("materials").upload(filePath, file);
+            if (!uploadError) {
+              const { data: publicUrlData } = supabase.storage.from("materials").getPublicUrl(filePath);
+              if (publicUrlData?.publicUrl) {
+                resolvedImage = publicUrlData.publicUrl;
+              }
             }
           }
+        } catch (uploadErr) {
+          console.error("Gagal mengunggah foto sampul ke storage:", uploadErr);
         }
-      } catch (uploadErr) {
-        console.error("Gagal mengunggah foto sampul ke storage:", uploadErr);
       }
+
+      const initials = formData.authorName
+        .split(" ")
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase();
+
+      const now = new Date();
+      const finalContent = [formData.content.trim()];
+
+      let updatedList: Article[];
+
+      if (editingArticle) {
+        updatedList = articles.map((art) => {
+          if (art.id === editingArticle.id) {
+            return {
+              ...art,
+              title: formData.title.trim(),
+              slug: resolvedSlug,
+              category: resolvedCategory,
+              excerpt: autoExcerpt,
+              content: finalContent,
+              authorName: formData.authorName,
+              authorRole: formData.authorRole,
+              authorInitials: initials,
+              image: resolvedImage || "",
+              tags: tagsArray.length > 0 ? tagsArray : ["PMII"],
+              status: formData.status,
+              updatedAt: now.toISOString(),
+              updated_at: now.toISOString()
+            };
+          }
+          return art;
+        });
+        showToast("Artikel berhasil diperbarui!");
+      } else {
+        const newArticle: Article = enforceTenantWrite<Article>(currentUser, {
+          id: generateUUID(),
+          slug: resolvedSlug,
+          title: formData.title.trim(),
+          category: resolvedCategory,
+          excerpt: autoExcerpt,
+          content: finalContent,
+          authorName: formData.authorName,
+          authorRole: formData.authorRole,
+          authorInitials: initials,
+          image: resolvedImage || "",
+          tags: tagsArray.length > 0 ? tagsArray : ["PMII"],
+          status: formData.status,
+          views: 0,
+          createdAt: now.toISOString(),
+          created_at: now.toISOString(),
+          updatedAt: now.toISOString(),
+          updated_at: now.toISOString()
+        });
+        updatedList = [newArticle, ...articles];
+        showToast("Artikel baru berhasil dipublikasikan!");
+      }
+
+      setArticles(updatedList);
+      await db.saveArticles(updatedList);
+      setShowFormModal(false);
+    } catch (err) {
+      console.error("Terjadi kesalahan saat menyimpan artikel:", err);
+      showToast("Gagal menyimpan artikel. Silakan coba lagi.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const initials = formData.authorName
-      .split(" ")
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase();
-
-    const now = new Date();
-    const finalContent = formData.content.trim() ? [formData.content] : [formData.title];
-
-    let updatedList: Article[];
-
-    if (editingArticle) {
-      updatedList = articles.map((art) => {
-        if (art.id === editingArticle.id) {
-          return {
-            ...art,
-            title: formData.title,
-            slug: resolvedSlug,
-            category: resolvedCategory,
-            excerpt: autoExcerpt,
-            content: finalContent,
-            authorName: formData.authorName,
-            authorRole: formData.authorRole,
-            authorInitials: initials,
-            image: resolvedImage || "/image/kaderisasi.jpg",
-            tags: tagsArray.length > 0 ? tagsArray : ["PMII"],
-            status: formData.status,
-            updatedAt: now.toISOString()
-          };
-        }
-        return art;
-      });
-      showToast("Artikel berhasil diperbarui!");
-    } else {
-      const newArticle: Article = {
-        id: `art-${Date.now()}`,
-        slug: resolvedSlug,
-        title: formData.title,
-        category: resolvedCategory,
-        excerpt: autoExcerpt,
-        content: finalContent,
-        authorName: formData.authorName,
-        authorRole: formData.authorRole,
-        authorInitials: initials,
-        image: resolvedImage || "/image/kaderisasi.jpg",
-        tags: tagsArray.length > 0 ? tagsArray : ["PMII"],
-        status: formData.status,
-        views: 0,
-        commissariat: currentUser?.commissariat || "Ki Ageng Getas Pendawa",
-        createdAt: now.toISOString(),
-        created_at: now.toISOString(),
-        updatedAt: now.toISOString(),
-        updated_at: now.toISOString()
-      };
-      updatedList = [newArticle, ...articles];
-      showToast("Artikel baru berhasil dipublikasikan!");
-    }
-
-    setArticles(updatedList);
-    await db.saveArticles(updatedList);
-    setShowFormModal(false);
   };
 
   // Toggle Article Status Directly
@@ -299,9 +359,10 @@ export default function AdminArtikelPage() {
   // Delete Article
   const handleDeleteArticle = async () => {
     if (!deletingArticle) return;
-    const updated = articles.filter((a) => a.id !== deletingArticle.id);
+    const articleIdToDelete = deletingArticle.id;
+    const updated = articles.filter((a) => a.id !== articleIdToDelete);
     setArticles(updated);
-    await db.saveArticles(updated);
+    await db.deleteArticle(articleIdToDelete);
     setShowDeleteModal(false);
     setDeletingArticle(null);
     showToast("Artikel berhasil dihapus.");
@@ -317,24 +378,34 @@ export default function AdminArtikelPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Newspaper className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            Manajemen Artikel & Warta
-          </h1>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Kelola tulisan ilmiah, opini pergerakan, dan warta kegiatan yang tampil di landing page.
-          </p>
-        </div>
+      {/* BREADCRUMB & ACTION TOOLBAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <Link
+            href="/dashboard"
+            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
+            Dashboard
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+            Artikel & Warta
+          </span>
+          <Badge
+            variant="outline"
+            className="ml-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-normal"
+          >
+            {articles.length} Artikel
+          </Badge>
+        </nav>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             onClick={handleOpenCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 sm:h-10 px-4 rounded-lg flex items-center gap-1.5 shadow-xs cursor-pointer"
+            size="sm"
+            className="h-8.5 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             <span>Tulis Artikel Baru</span>
           </Button>
         </div>
@@ -348,6 +419,13 @@ export default function AdminArtikelPage() {
         setSelectedCategory={setSelectedCategory}
         selectedStatus={selectedStatus}
         setSelectedStatus={setSelectedStatus}
+        tenantFilter={activeTenant}
+        setTenantFilter={(val) => {
+          setActiveTenant(val);
+          setGlobalActiveTenant(val);
+        }}
+        availableKomisariats={DEFAULT_KOMISARIAT_LIST}
+        isCabang={isCabangOrAdmin(currentUser)}
         viewMode={viewMode}
         setViewMode={setViewMode}
       />
@@ -410,6 +488,7 @@ export default function AdminArtikelPage() {
         setFormData={setFormData}
         onSubmit={handleSaveArticle}
         showToast={showToast}
+        isSubmitting={isSubmitting}
       />
 
       {/* ARTICLE PREVIEW MODAL */}

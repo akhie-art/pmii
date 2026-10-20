@@ -1,6 +1,13 @@
 import React from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 interface PengurusFiltersProps {
   searchQuery: string;
@@ -9,6 +16,10 @@ interface PengurusFiltersProps {
   setSelectedDept: (dept: string) => void;
   selectedStatus: string;
   setSelectedStatus: (status: string) => void;
+  tenantFilter?: string;
+  setTenantFilter?: (tenant: string) => void;
+  availableKomisariats?: string[];
+  isCabang?: boolean;
   allDepartments: string[];
 }
 
@@ -19,6 +30,10 @@ export const PengurusFilters: React.FC<PengurusFiltersProps> = ({
   setSelectedDept,
   selectedStatus,
   setSelectedStatus,
+  tenantFilter = "ALL",
+  setTenantFilter,
+  availableKomisariats = [],
+  isCabang = false,
   allDepartments
 }) => {
   return (
@@ -48,6 +63,24 @@ export const PengurusFilters: React.FC<PengurusFiltersProps> = ({
             </option>
           ))}
         </select>
+
+        {/* Tenant/Komisariat Filter */}
+        {isCabang && setTenantFilter && (
+          <Select value={tenantFilter} onValueChange={(val) => { if (val) setTenantFilter(val); }}>
+            <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[140px]">
+              <SelectValue placeholder="Semua Komisariat" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+              <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+              <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+              {availableKomisariats.map((c) => (
+                <SelectItem key={c} value={c} className="text-xs">
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Status Filter */}
         <select

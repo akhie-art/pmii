@@ -24,23 +24,40 @@ export interface CadreHistory {
 
 export type UserRole = 
   | "admin" 
+  | "superadmin"
+  | "super_admin"
   | "pengurus" 
   | "instruktur"
   | "anggota" 
   | "peserta" 
   | "ADMIN" 
+  | "SUPERADMIN"
+  | "SUPER_ADMIN"
   | "PENGURUS" 
   | "INSTRUKTUR"
   | "ANGGOTA" 
   | "PESERTA" 
   | "KOMISARIAT";
 
+export interface Role {
+  id: string;
+  code: string;
+  allowed_menus?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface CadreFollowUp {
   id: string;
   user_id?: string;
   name: string;
   level: "MAPABA" | "PKD" | "PKL" | string;
-  commissariat: string;
+  role_id?: string | null;
+  role_detail?: Role;
+  commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
+  needsOnboarding?: boolean;
   rayon?: string;
   startDate?: string;
   status: "AKTIF" | "SELESAI" | "REVISI" | string;
@@ -159,7 +176,9 @@ export interface EventActivity {
   status: "OPEN" | "CLOSED";
   sessions?: string[];
   formFields?: FormField[];
-  commissariat: string;
+  commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   waGroupLink?: string;
   timeline?: EventStageTimeline;
   targetCadres?: string[];
@@ -184,6 +203,8 @@ export interface ParticipantRegistration {
   email?: string;
   phone?: string;
   commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   major?: string;
   registeredAt?: string;
   screeningStatus?: "PENDING" | "PASSED" | "FAILED" | string;
@@ -194,6 +215,10 @@ export interface ParticipantRegistration {
   certificateNumber?: string;
   certificateIssuedAt?: string;
   userId?: string;
+  cadreId?: string;
+  avatar?: string;
+  gender?: string;
+  university?: string;
 }
 
 export interface Requirement {
@@ -215,6 +240,8 @@ export interface Requirement {
   fileSize?: string;
   minSubmissions?: number;
   kaderisasiId?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
 }
 
 export interface BoardMember {
@@ -234,6 +261,8 @@ export interface BoardMember {
   avatar?: string;
   order?: number;
   user_id?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
 }
 
 export interface KomisariatRayon {
@@ -244,28 +273,37 @@ export interface KomisariatRayon {
 
 export interface KomisariatStructure {
   chairman?: string;
+  chairman_id?: string | null;
   secretary?: string;
+  secretary_id?: string | null;
   treasurer?: string;
+  treasurer_id?: string | null;
   period?: string;
   binaDesaCount?: number;
   rayonCount?: number;
   cadresTarget?: number;
 }
 
-export interface CommissariatList {
+export interface Tenant {
   id: string;
   name: string;
   university?: string;
   campusName?: string;
-  establishedDate?: string;
+  level?: "CABANG" | "KOMISARIAT" | string;
+  type?: "CABANG" | "KOMISARIAT" | string;
+  establishedDate?: string | null;
   establishedYear?: number;
-  status: "AKTIF" | "PERSUPERVISION" | "INAKTIF" | "TIDAK AKTIF" | string;
+  status?: string;
   logoInitial?: string;
-  contactEmail: string;
-  accreditation: "A" | "B" | "C" | "Belum Akreditasi";
+  logo?: string;
+  logoUrl?: string;
+  contactEmail?: string;
   structure: KomisariatStructure;
   rayons?: KomisariatRayon[];
+  created_at?: string;
 }
+
+export type CommissariatList = Tenant;
 
 export interface UserAccount {
   id: string;
@@ -274,7 +312,13 @@ export interface UserAccount {
   email: string;
   password?: string;
   role: UserRole;
+  role_id?: string | null;
+  role_name?: string;
+  role_detail?: Role;
   commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
+  needsOnboarding?: boolean;
   rayon?: string;
   status: "AKTIF" | "NONAKTIF";
   createdAt: string;
@@ -303,6 +347,8 @@ export interface ParticipantEvaluation {
   cadreId: string;
   participantName: string;
   commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   avatar?: string;
   kognitif: number;
   afektif: number;
@@ -387,6 +433,9 @@ export interface Kaderisasi {
   id: string;
   nama: string;
   tipe: "FORMAL" | "INFORMAL" | "NON_FORMAL";
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
+  commissariat?: string;
   createdAt: string;
   formFields?: FormField[];
   materi?: KaderisasiMateri[];
@@ -478,6 +527,8 @@ export interface Article {
   views?: number;
   likes?: number;
   commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;
@@ -501,6 +552,8 @@ export interface SuratTemplate {
   senderTitle?: string;
   senderLocation?: string;
   commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   createdAt?: string;
   created_at?: string;
 }
@@ -519,9 +572,32 @@ export interface MailItem {
   senderLocation: string;
   dateIndo: string;
   commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
   fileUrl?: string;
   fileName?: string;
   fileSize?: string;
+  created_at?: string;
+}
+
+export interface ArsipItem {
+  id: string;
+  code: string;
+  title: string;
+  category: string;
+  year: string;
+  size: string;
+  access: string;
+  uploadedDate: string;
+  uploader: string;
+  downloads?: number;
+  description?: string;
+  isStarred?: boolean;
+  url?: string;
+  commissariat?: string;
+  komisariat_id?: string | null;
+  tenant_id?: string | null;
+  uploaderAvatar?: string;
   created_at?: string;
 }
 

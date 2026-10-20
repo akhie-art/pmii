@@ -108,3 +108,36 @@ export async function saveEvents(eventsList: EventActivity[]): Promise<boolean> 
   });
   return saveTableData<EventActivity>("kegiatan", KEYS.EVENTS, normalized as any);
 }
+
+export async function deleteEvent(id: string): Promise<boolean> {
+  const { deleteTableRow } = await import("./core");
+  const { supabase, isSupabaseConfigured } = await import("../supabase");
+
+  // 1. Hapus pendaftaran yang terkait dengan kegiatan ini dari Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error: regErr } = await supabase.from("pendaftaran").delete().eq("eventId", id);
+      if (regErr) {
+        console.warn("Notice deleting event registrations from Supabase:", regErr.message);
+      }
+    } catch (e) {
+      console.warn("Notice deleting registrations for event:", e);
+    }
+  }
+
+  // 2. Bersihkan pendaftaran terkait di LocalStorage
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(KEYS.REGISTRATIONS);
+      if (stored) {
+        const regs = JSON.parse(stored) as any[];
+        const filtered = regs.filter((r) => String(r.eventId) !== String(id));
+        localStorage.setItem(KEYS.REGISTRATIONS, JSON.stringify(filtered));
+      }
+    } catch {}
+  }
+
+  // 3. Hapus kegiatan dari tabel kegiatan dan LocalStorage
+  return deleteTableRow("kegiatan", id, KEYS.EVENTS);
+}
+

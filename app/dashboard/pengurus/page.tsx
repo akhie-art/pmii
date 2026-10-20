@@ -11,6 +11,19 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
+import { generateUUID } from "@/lib/utils";
+import {
+  isRecordInTenant,
+  isCabangRecord,
+  enforceTenantWrite,
+  getActiveTenant,
+  setActiveTenant as setGlobalActiveTenant,
+  isCabangOrAdmin,
+  DEFAULT_KOMISARIAT_LIST,
+  TENANT_CHANGED_EVENT,
+  CABANG_TENANT_ID,
+  getTenantIdByName
+} from "@/lib/tenancy";
 
 import {
   type BoardMember,
@@ -26,6 +39,8 @@ import { DepartmentModal } from "./_components/DepartmentModal";
 
 export default function KomisariatPengurusPage() {
   const [mounted, setMounted] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [activeCampus, setActiveCampus] = useState("UIN Walisongo");
   const [boardMembers, setBoardMembers] = useState<BoardMember[]>([]);
   const [activeTab, setActiveTab] = useState<"daftar" | "struktur">("daftar");
@@ -66,8 +81,28 @@ export default function KomisariatPengurusPage() {
   const { showToast, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
-    const campus = typeof window !== "undefined" ? (localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || "UIN Walisongo") : "UIN Walisongo";
-    setActiveCampus(campus);
+    const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
+    let uObj: any = null;
+    if (storedUser) {
+      try {
+        uObj = JSON.parse(storedUser);
+        setCurrentUser(uObj);
+      } catch {}
+    }
+    const currentTenant = getActiveTenant(uObj) || "ALL";
+    setActiveTenant(currentTenant);
+    if (currentTenant !== "ALL") {
+      setActiveCampus(currentTenant);
+    }
+
+    const handleTenant = (e: any) => {
+      const nextTenant = e.detail?.activeTenant || "ALL";
+      setActiveTenant(nextTenant);
+      if (nextTenant !== "ALL") {
+        setActiveCampus(nextTenant);
+      }
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
     const savedDivs = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_DIVISIONS") : null;
     if (savedDivs) {
@@ -89,6 +124,10 @@ export default function KomisariatPengurusPage() {
       setCadres(cadresData as any);
       setMounted(true);
     });
+
+    return () => {
+      window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    };
   }, []);
 
   const saveDivisions = (newDivs: string[]) => {
@@ -226,6 +265,19 @@ export default function KomisariatPengurusPage() {
         : "Sahabat";
     const memberAvatar = matchedCadre?.avatar || (editingMember ? editingMember.avatar : "") || "";
 
+    const resolvedComm =
+      matchedCadre?.commissariat ||
+      (editingMember?.commissariat) ||
+      (activeTenant !== "ALL" ? activeTenant : (currentUser?.commissariat || "Pengurus Cabang Grobogan"));
+
+    const resolvedTenantId =
+      getTenantIdByName(resolvedComm) ||
+      (matchedCadre as any)?.tenant_id ||
+      (matchedCadre as any)?.komisariat_id ||
+      (editingMember?.tenant_id) ||
+      (activeTenant !== "ALL" ? getTenantIdByName(activeTenant) : CABANG_TENANT_ID) ||
+      CABANG_TENANT_ID;
+
     if (editingMember) {
       // Edit existing member
       const updated = boardMembers.map((m) =>
@@ -240,7 +292,9 @@ export default function KomisariatPengurusPage() {
               phone: matchedCadre?.phone || editingMember.phone || "-",
               status: editingMember.status || "AKTIF",
               period: formPeriod.trim() || "2026 - 2027",
-              commissariat: m.commissariat || activeCampus,
+              commissariat: resolvedComm || m.commissariat || "Pengurus Cabang Grobogan",
+              tenant_id: resolvedTenantId || m.tenant_id || CABANG_TENANT_ID,
+              komisariat_id: resolvedTenantId || m.komisariat_id || CABANG_TENANT_ID,
               avatar: memberAvatar
             }
           : m
@@ -249,19 +303,25 @@ export default function KomisariatPengurusPage() {
       showToast(`Data "${formName.trim()}" berhasil diperbarui!`);
     } else {
       // Add new member
-      const newMember: BoardMember = {
-        id: `board-${Date.now()}`,
-        name: formName.trim(),
-        gender: inferredGender,
-        position: formPosition.trim() || (formDept === "BPH" ? "Pengurus BPH" : `Anggota Bidang ${formDept}`),
-        department: formDept,
-        email: matchedCadre?.email || "-",
-        phone: matchedCadre?.phone || "-",
-        status: "AKTIF",
-        period: formPeriod.trim() || "2026 - 2027",
-        commissariat: matchedCadre?.commissariat || activeCampus,
-        avatar: memberAvatar
-      };
+      const newMember: BoardMember = enforceTenantWrite<BoardMember>(
+        currentUser,
+        {
+          id: generateUUID(),
+          name: formName.trim(),
+          gender: inferredGender,
+          position: formPosition.trim() || (formDept === "BPH" ? "Pengurus BPH" : `Anggota Bidang ${formDept}`),
+          department: formDept,
+          email: matchedCadre?.email || "-",
+          phone: matchedCadre?.phone || "-",
+          status: "AKTIF",
+          period: formPeriod.trim() || "2026 - 2027",
+          commissariat: resolvedComm,
+          tenant_id: resolvedTenantId,
+          komisariat_id: resolvedTenantId,
+          avatar: memberAvatar
+        },
+        activeTenant
+      );
       const updated = [newMember, ...boardMembers];
       saveBoardMembers(updated);
       showToast(`Berhasil menambahkan ${formName.trim()} sebagai pengurus!`);
@@ -281,6 +341,13 @@ export default function KomisariatPengurusPage() {
 
   // Filtering logic
   const filteredMembers = boardMembers.filter((m) => {
+    const matchesTenant = isRecordInTenant(
+      currentUser,
+      m,
+      activeTenant
+    );
+    if (!matchesTenant) return false;
+
     const matchesSearch =
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.position.toLowerCase().includes(searchQuery.toLowerCase());
@@ -370,6 +437,13 @@ export default function KomisariatPengurusPage() {
               setSelectedDept={setSelectedDept}
               selectedStatus={selectedStatus}
               setSelectedStatus={setSelectedStatus}
+              tenantFilter={activeTenant}
+              setTenantFilter={(val) => {
+                setActiveTenant(val);
+                setGlobalActiveTenant(val);
+              }}
+              availableKomisariats={DEFAULT_KOMISARIAT_LIST}
+              isCabang={isCabangOrAdmin(currentUser)}
               allDepartments={allDepartments}
             />
 

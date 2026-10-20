@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { db, Kaderisasi } from "@/lib/db";
+import { db, Kaderisasi, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserRole, UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { exportCardAsImage } from "@/lib/cardExporter";
@@ -64,7 +64,8 @@ interface EventActivity {
   name: string;
   level: string;
   date: string;
-  commissariat: string;
+  commissariat?: string;
+  komisariat_id?: string | null;
   description: string;
   status: "OPEN" | "CLOSED";
   formFields?: FormField[];
@@ -343,7 +344,7 @@ export default function RegisterPage() {
           const foundEvent = events.find((e: any) => e.id === eventId);
           if (foundEvent) {
             setEventDetails(foundEvent);
-            setCommissariat(foundEvent.commissariat);
+            setCommissariat(foundEvent.commissariat || "PMII Grobogan");
             setLevel(foundEvent.level as "MAPABA" | "PKD" | "PKL");
 
             const initialAnswers: Record<string, string> = {};
@@ -510,6 +511,7 @@ export default function RegisterPage() {
       // 4. ATURAN ORGANISASI: Data pendaftar MAPABA BARU berstatus PESERTA dan BELUM masuk ke tabel anggota.
       //    Data HANYA masuk ke tabel anggota jika pendaftar sudah dinyatakan LULUS MAPABA.
       //    (Hanya level lanjutan seperti PKD/PKL atau kader senior yang langsung masuk tabel anggota).
+      let createdCadre: CadreFollowUp | null = null;
       if (level !== "MAPABA") {
         const newCadre: CadreFollowUp = {
           id: `cadre-${Date.now()}`,
@@ -527,6 +529,7 @@ export default function RegisterPage() {
           registrationNumber: regNo,
           role: "anggota"
         };
+        createdCadre = newCadre;
         const updatedList = [...cadresList, newCadre];
         await db.saveCadres(updatedList);
       }
@@ -563,6 +566,12 @@ export default function RegisterPage() {
       };
 
       await db.saveRegistrations([...registrationsList, newRegistration]);
+
+      try {
+        await ensureEvaluationForRegistration(newRegistration, null, createdCadre);
+      } catch (evalErr) {
+        console.warn("Failed to auto-sync evaluation on public register:", evalErr);
+      }
 
       setLoading(false);
       setIsSuccessOpen(true);

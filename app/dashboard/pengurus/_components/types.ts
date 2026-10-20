@@ -10,6 +10,8 @@ export interface BoardMember {
   period: string;
   commissariat?: string;
   avatar?: string;
+  tenant_id?: string | null;
+  komisariat_id?: string | null;
 }
 
 export const DEFAULT_DIVISIONS = [

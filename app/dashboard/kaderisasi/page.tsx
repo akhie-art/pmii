@@ -33,6 +33,25 @@ import {
 import { generateUUID } from "@/lib/utils";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 import { CERT_FIELDS, DEFAULT_FORM_FIELDS, FONT_OPTIONS } from "./_components/types";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  isRecordInTenant,
+  isCabangRecord,
+  enforceTenantWrite,
+  getActiveTenant,
+  setActiveTenant as setGlobalActiveTenant,
+  isCabangOrAdmin,
+  DEFAULT_KOMISARIAT_LIST,
+  TENANT_CHANGED_EVENT,
+  CABANG_TENANT_ID,
+  getTenantIdByName
+} from "@/lib/tenancy";
 import { AgendaFormModal } from "./_components/AgendaFormModal";
 import { DeleteAgendaModal } from "./_components/DeleteAgendaModal";
 import { deleteStorageFile } from "@/lib/supabase";
@@ -111,6 +130,8 @@ function TipeBadge({ tipe }: { tipe: string }) {
 
 export default function SistemKaderisasiPage() {
   const [mounted, setMounted] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [kaderisasiList, setKaderisasiList] = useState<Kaderisasi[]>([]);
 
   // Search & Filter
@@ -130,6 +151,22 @@ export default function SistemKaderisasiPage() {
   const { showToast, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
+    const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
+    let uObj: any = null;
+    if (storedUser) {
+      try {
+        uObj = JSON.parse(storedUser);
+        setCurrentUser(uObj);
+      } catch {}
+    }
+    const currentTenant = getActiveTenant(uObj) || "ALL";
+    setActiveTenant(currentTenant);
+
+    const handleTenant = (e: any) => {
+      setActiveTenant(e.detail?.activeTenant || "ALL");
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
     const loadData = async () => {
       try {
         const list = await db.getKaderisasi();
@@ -149,11 +186,18 @@ export default function SistemKaderisasiPage() {
     };
 
     loadData();
+
+    return () => {
+      window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    };
   }, []);
 
   // Filtered agenda list
   const filteredAgendas = useMemo(() => {
     return kaderisasiList.filter((item) => {
+      const matchesTenant = isRecordInTenant(currentUser, item, activeTenant);
+      if (!matchesTenant) return false;
+
       const matchesSearch = item.nama
         .toLowerCase()
         .includes(agendaSearch.toLowerCase());
@@ -161,7 +205,7 @@ export default function SistemKaderisasiPage() {
         selectedTipe === "SEMUA" || item.tipe === selectedTipe;
       return matchesSearch && matchesTipe;
     });
-  }, [kaderisasiList, agendaSearch, selectedTipe]);
+  }, [kaderisasiList, agendaSearch, selectedTipe, currentUser, activeTenant]);
 
   const hasActiveFilter =
     agendaSearch.trim() !== "" || selectedTipe !== "SEMUA";
@@ -202,16 +246,26 @@ export default function SistemKaderisasiPage() {
     certificateTemplate?: string;
     certificateConfig?: CertificateLayoutConfig;
   }) => {
-    const newAgenda: Kaderisasi = {
-      id: generateUUID(),
-      nama: data.nama,
-      tipe: data.tipe,
-      materi: data.materi,
-      formFields: data.formFields,
-      certificateTemplate: data.certificateTemplate,
-      certificateConfig: data.certificateConfig,
-      createdAt: new Date().toISOString()
-    };
+    const targetComm = activeTenant !== "ALL" ? activeTenant : (currentUser?.commissariat || "Pengurus Cabang Grobogan");
+    const targetTenantId = getTenantIdByName(targetComm) || CABANG_TENANT_ID;
+
+    const newAgenda: Kaderisasi = enforceTenantWrite<Kaderisasi>(
+      currentUser,
+      {
+        id: generateUUID(),
+        nama: data.nama,
+        tipe: data.tipe,
+        materi: data.materi,
+        formFields: data.formFields,
+        certificateTemplate: data.certificateTemplate,
+        certificateConfig: data.certificateConfig,
+        tenant_id: targetTenantId,
+        komisariat_id: targetTenantId,
+        commissariat: targetComm,
+        createdAt: new Date().toISOString()
+      },
+      activeTenant
+    );
 
     const updated = [newAgenda, ...kaderisasiList];
     setKaderisasiList(updated);
@@ -231,6 +285,8 @@ export default function SistemKaderisasiPage() {
   }) => {
     const updated = kaderisasiList.map((item) => {
       if (item.id === editAgendaId) {
+        const itemComm = item.commissariat || (activeTenant !== "ALL" ? activeTenant : "Pengurus Cabang Grobogan");
+        const itemTenantId = item.tenant_id || getTenantIdByName(itemComm) || CABANG_TENANT_ID;
         return {
           ...item,
           nama: data.nama,
@@ -238,7 +294,10 @@ export default function SistemKaderisasiPage() {
           materi: data.materi,
           formFields: data.formFields,
           certificateTemplate: data.certificateTemplate,
-          certificateConfig: data.certificateConfig
+          certificateConfig: data.certificateConfig,
+          tenant_id: itemTenantId,
+          komisariat_id: itemTenantId,
+          commissariat: itemComm
         };
       }
       return item;
@@ -335,6 +394,31 @@ export default function SistemKaderisasiPage() {
 
         {/* Filter Pills & Add Button */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {isCabangOrAdmin(currentUser) && (
+            <Select
+              value={activeTenant}
+              onValueChange={(val) => {
+                if (val) {
+                  setActiveTenant(val);
+                  setGlobalActiveTenant(val);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-xl min-w-[150px]">
+                <SelectValue placeholder="Semua Komisariat" />
+              </SelectTrigger>
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl max-h-60">
+                <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+                <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+                {DEFAULT_KOMISARIAT_LIST.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs">
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {TIPE_OPTIONS.map(({ value, label }) => {
             const isActive = selectedTipe === value;
             return (

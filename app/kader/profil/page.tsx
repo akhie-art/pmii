@@ -966,7 +966,7 @@ export default function ProfilPage() {
         type: "kta",
         name: currentCadre.name,
         idNumber: memberNTA,
-        commissariat: currentCadre.commissariat,
+        commissariat: currentCadre.commissariat || "PMII Grobogan",
         level: currentCadre.level,
         startDate: memberStartDate !== "-" ? memberStartDate : undefined
       });

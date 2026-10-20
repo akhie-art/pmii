@@ -11,7 +11,7 @@ import type {
   UserAccount
 } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { isRecordInTenant } from "@/lib/tenancy";
+import { isRecordInTenant, getActiveTenant, TENANT_CHANGED_EVENT } from "@/lib/tenancy";
 import { FeedbackModal } from "@/components/ui/feedback-modal";
 
 import {
@@ -32,6 +32,7 @@ import { SahkanKelulusanModal } from "./_components/SahkanKelulusanModal";
 
 export default function UnifiedRtlVerifikasiPage() {
   const [mounted, setMounted] = useState(false);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
 
   // Core Data
   const [events, setEvents] = useState<EventActivity[]>([]);
@@ -155,15 +156,25 @@ export default function UnifiedRtlVerifikasiPage() {
       }
     };
 
+    setActiveTenant(getActiveTenant() || "ALL");
+    const handleTenant = (e: any) => {
+      setActiveTenant(e.detail?.activeTenant || "ALL");
+    };
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+
     loadAll();
+
+    return () => {
+      window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    };
   }, []);
 
   // Filtered Events by Tenant
   const tenantEvents = useMemo(() => {
     return events.filter((e) =>
-      isRecordInTenant(currentUser, { commissariat: e.commissariat })
+      isRecordInTenant(currentUser, { commissariat: e.commissariat, komisariat_id: e.komisariat_id }, activeTenant)
     );
-  }, [events, currentUser]);
+  }, [events, currentUser, activeTenant]);
 
   const selectedEvent = useMemo(() => {
     if (selectedEventId === "ALL") return null;
@@ -187,10 +198,22 @@ export default function UnifiedRtlVerifikasiPage() {
 
   // Automatically derive participant progress list for the selected event (or all)
   const eventParticipantsProgress: EventParticipantProgress[] = useMemo(() => {
-    const targetRegs =
-      selectedEventId === "ALL"
-        ? registrations
-        : registrations.filter((r) => r.eventId === selectedEventId);
+    const allowedEventIds = new Set(tenantEvents.map((e) => e.id));
+    const targetRegs = registrations.filter((r) => {
+      if (selectedEventId !== "ALL") return r.eventId === selectedEventId;
+      return (
+        allowedEventIds.has(r.eventId) ||
+        isRecordInTenant(
+          currentUser,
+          {
+            commissariat: r.commissariat,
+            komisariat_id: (r as any).komisariat_id,
+            tenant_id: (r as any).tenant_id || (r as any).komisariat_id
+          },
+          activeTenant
+        )
+      );
+    });
 
     return targetRegs.map((reg) => {
       // Find event for this registration

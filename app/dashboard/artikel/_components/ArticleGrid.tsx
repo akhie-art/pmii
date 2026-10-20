@@ -1,10 +1,11 @@
 import React from "react";
 import Image from "next/image";
-import { Eye, Edit, Trash2, Calendar } from "lucide-react";
+import { Eye, Edit, Trash2, Calendar, Newspaper } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
+import { isCabangRecord } from "@/lib/tenancy";
 
 interface ArticleGridProps {
   articles: Article[];
@@ -28,17 +29,34 @@ export const ArticleGrid: React.FC<ArticleGridProps> = ({
         >
           <div>
             {/* Image Cover */}
-            <div className="relative aspect-[16/10] bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-              <Image
-                src={art.image}
-                alt={art.title}
-                fill
-                className="object-cover"
-              />
-              <div className="absolute top-3 left-3 flex items-center gap-1.5">
+            <div className="relative aspect-[16/10] bg-zinc-100 dark:bg-zinc-800 overflow-hidden flex items-center justify-center">
+              {art.image ? (
+                <Image
+                  src={art.image}
+                  alt={art.title}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-zinc-400 gap-1 select-none">
+                  <Newspaper className="w-7 h-7 text-zinc-400" />
+                  <span className="text-[10px] font-medium text-zinc-400">Tanpa Sampul</span>
+                </div>
+              )}
+              <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 max-w-[70%]">
                 <Badge className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md text-[10px] font-semibold text-blue-600 dark:text-blue-400 border border-zinc-200/60 dark:border-zinc-800">
                   {art.category}
                 </Badge>
+                {isCabangRecord(art) ? (
+                  <Badge className="bg-emerald-600/90 text-white backdrop-blur-md text-[9px] font-semibold border-none">
+                    🏛️ Cabang
+                  </Badge>
+                ) : art.commissariat ? (
+                  <Badge className="bg-blue-600/90 text-white backdrop-blur-md text-[9px] font-medium truncate max-w-[120px] border-none">
+                    🎓 {art.commissariat}
+                  </Badge>
+                ) : null}
               </div>
               <div className="absolute top-3 right-3">
                 <Badge

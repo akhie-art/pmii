@@ -276,15 +276,23 @@ export default function LengkapiDataPage() {
 
       // 1. Simpan ke Supabase tabel anggota secara langsung (dengan fallback kader)
       if (isSupabaseConfigured && supabase) {
+        const payload: any = { ...updatedCadre };
+        delete payload.commissariat;
+        delete payload.komisariat_id;
+        delete payload.password;
+        delete payload.role_detail;
+        delete payload.allowedMenus;
+        delete payload.needsOnboarding;
+
         const { error: dbError } = await supabase
           .from("anggota")
-          .update(updatedCadre)
+          .update(payload)
           .eq("id", memberId);
 
         if (dbError) {
           const altRes = await supabase
             .from("kader")
-            .update(updatedCadre)
+            .update(payload)
             .eq("id", memberId);
           if (altRes.error) {
             console.warn("Notice Supabase direct update, falling back to db helper:", altRes.error.message);

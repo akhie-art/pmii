@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -12,7 +12,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
-  Share2
+  Share2,
+  RotateCcw,
+  Users,
+  RefreshCw
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +41,18 @@ import { generateUUID } from "@/lib/utils";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 import { db, type UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { isRecordInTenant } from "@/lib/tenancy";
+import {
+  isRecordInTenant,
+  getActiveTenant,
+  setActiveTenant as setGlobalActiveTenant,
+  DEFAULT_KOMISARIAT_LIST,
+  TENANT_CHANGED_EVENT,
+  isCabangOrAdmin,
+  normalizeTenantName,
+  getTenantIdByName,
+  getTenantNameById,
+  type TenantScoped
+} from "@/lib/tenancy";
 import * as XLSX from "xlsx";
 
 import type { Member, CadreHistory } from "./_components/types";
@@ -55,7 +69,16 @@ import { MemberBulkDeleteDialog } from "./_components/MemberBulkDeleteDialog";
 export default function AnggotaPage() {
   const [mounted, setMounted] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return null;
+  });
+  const [commissariats, setCommissariats] = useState<any[]>([]);
 
   // Bulk Selection States
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -63,6 +86,7 @@ export default function AnggotaPage() {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   // Filters & Search
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("ALL");
   const [komisariatFilter, setKomisariatFilter] = useState<string>("ALL");
@@ -101,50 +125,174 @@ export default function AnggotaPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const fetchCadres = async () => {
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      let dbCadres: any[] = [];
       try {
-        const dbCadres = await db.getCadres([]);
-        const mapped = dbCadres.map((c) => mapCadreToMember(c));
-        setMembers(mapped);
-      } catch (err) {
-        console.error("Error fetching cadres:", err);
-      } finally {
-        setMounted(true);
+        dbCadres = await db.getCadres([]);
+      } catch (e) {
+        console.warn("[AnggotaPage] db.getCadres error:", e);
       }
+
+      // Direct fallback ke Supabase jika db.getCadres() mengembalikan kosong
+      if ((!dbCadres || dbCadres.length === 0) && isSupabaseConfigured && supabase) {
+        try {
+          const { data: directData, error: dirErr } = await supabase.from("anggota").select("*");
+          if (directData && directData.length > 0) {
+            dbCadres = directData;
+          } else if (dirErr) {
+            console.warn("[AnggotaPage] Direct supabase read error:", dirErr);
+          }
+        } catch (e) {
+          console.warn("[AnggotaPage] Direct supabase read exception:", e);
+        }
+      }
+
+      // Direct REST fallback dengan public anon key jika data masih kosong (kebal sesi expired di browser)
+      if ((!dbCadres || dbCadres.length === 0) && isSupabaseConfigured) {
+        try {
+          const rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+          const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+          if (rawUrl && anonKey) {
+            const res = await fetch(`${rawUrl}/rest/v1/anggota?select=*`, {
+              headers: {
+                apikey: anonKey,
+                Authorization: `Bearer ${anonKey}`,
+              },
+            });
+            if (res.ok) {
+              const restData = await res.json();
+              if (Array.isArray(restData) && restData.length > 0) {
+                dbCadres = restData;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[AnggotaPage] Direct REST fallback error:", e);
+        }
+      }
+
+      const commList = await db.getCommissariats([]).catch(() => []);
+      const mapped = (dbCadres || []).map((c) => {
+        const tid = c.tenant_id || c.komisariat_id || getTenantIdByName(c.commissariat);
+        const resolvedComm =
+          c.commissariat ||
+          (tid ? getTenantNameById(tid) : null) ||
+          "Pengurus Cabang PMII Grobogan";
+        return mapCadreToMember({
+          ...c,
+          tenant_id: tid,
+          komisariat_id: tid,
+          commissariat: resolvedComm
+        });
+      });
+      setMembers(mapped);
+      if (commList && Array.isArray(commList)) {
+        setCommissariats(commList);
+      }
+    } catch (err) {
+      console.error("Error fetching cadres / commissariats:", err);
+    } finally {
+      setIsLoading(false);
+      setMounted(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    setActiveTenant(getActiveTenant() || "ALL");
+    const handleTenant = (e: any) => {
+      setActiveTenant(e.detail?.activeTenant || "ALL");
+      setCurrentPage(1);
     };
-    fetchCadres();
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
   }, []);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, levelFilter, komisariatFilter]);
+  }, [searchTerm, levelFilter, komisariatFilter, activeTenant]);
+
+  // Daftar unik komisariat untuk filter dropdown
+  const availableKomisariats = useMemo(() => {
+    const set = new Set<string>();
+    DEFAULT_KOMISARIAT_LIST.forEach((k) => set.add(k));
+    commissariats.forEach((c) => {
+      const isCabang =
+        (c.level && c.level.toUpperCase() === "CABANG") ||
+        (c.type && c.type.toUpperCase() === "CABANG") ||
+        (c.name && c.name.toLowerCase().includes("cabang"));
+      if (!isCabang && c.name && c.name.trim()) set.add(c.name.trim());
+    });
+    members.forEach((m) => {
+      const c = (m.komisariat || "").trim();
+      if (c && !c.toLowerCase().includes("cabang")) set.add(c);
+    });
+    return Array.from(set);
+  }, [commissariats, members]);
 
   // Filtered members list
   const filteredMembers = members.filter((member) => {
-    const query = searchTerm.toLowerCase();
+    if (!member) return false;
+    const query = (searchTerm || "").trim().toLowerCase();
+    const name = (member.name || "").toLowerCase();
+    const nipa = (member.nipa || "").toLowerCase();
+    const email = (member.email || "").toLowerCase();
+    const phone = (member.phone || "").toLowerCase();
+    const kampus = (member.perguruanTinggi || "").toLowerCase();
+
     const matchesSearch =
-      !searchTerm ||
-      member.name.toLowerCase().includes(query) ||
-      (member.nipa && member.nipa.toLowerCase().includes(query)) ||
-      (member.email && member.email.toLowerCase().includes(query)) ||
-      (member.phone && member.phone.toLowerCase().includes(query)) ||
-      (member.perguruanTinggi && member.perguruanTinggi.toLowerCase().includes(query));
+      !query ||
+      name.includes(query) ||
+      nipa.includes(query) ||
+      email.includes(query) ||
+      phone.includes(query) ||
+      kampus.includes(query);
 
-    const matchesLevel = levelFilter === "ALL" || member.level === levelFilter;
+    const matchesLevel = !levelFilter || levelFilter === "ALL" || member.level === levelFilter;
 
-    const matchesTenant = isRecordInTenant(currentUser, {
-      commissariat: member.komisariat
-    });
+    // Tenant Scoping
+    const memberScoped: TenantScoped = {
+      tenant_id: member.tenant_id || member.komisariat_id,
+      komisariat_id: member.tenant_id || member.komisariat_id,
+      commissariat: member.komisariat,
+      komisariat: member.komisariat,
+      campus: member.perguruanTinggi,
+      perguruanTinggi: member.perguruanTinggi
+    };
 
-    const matchesKomisariat =
-      komisariatFilter === "ALL" || member.komisariat === komisariatFilter;
+    let matchesTenant = false;
+    if (!isCabangOrAdmin(currentUser)) {
+      // Akun Pengurus / Kader / Anggota Komisariat: HANYA melihat data anggota komisariatnya sendiri!
+      matchesTenant = isRecordInTenant(currentUser, memberScoped);
+    } else {
+      // Akun Pengurus Cabang / Super Admin:
+      // 1. Filter dari Tenant Switcher di Header (activeTenant)
+      const matchesActiveTenant = isRecordInTenant(currentUser, memberScoped, activeTenant);
+
+      // 2. Filter tambahan dari dropdown komisariat di halaman
+      let matchesDropdown = true;
+      if (komisariatFilter && komisariatFilter !== "ALL") {
+        const memComm = member.komisariat || "";
+        matchesDropdown =
+          normalizeTenantName(memComm) === normalizeTenantName(komisariatFilter) ||
+          memComm.toLowerCase().includes(komisariatFilter.toLowerCase()) ||
+          komisariatFilter.toLowerCase().includes(memComm.toLowerCase());
+      }
+
+      matchesTenant = matchesActiveTenant && matchesDropdown;
+    }
 
     return (
       matchesSearch &&
       matchesLevel &&
-      matchesTenant &&
-      (currentUser?.role === "ADMIN" ? matchesKomisariat : true)
+      matchesTenant
     );
   });
 
@@ -311,8 +459,21 @@ export default function AnggotaPage() {
     }
   };
   const handleAddMember = async (data: Partial<Member>) => {
-    const targetAngkatan = data.angkatan || "2026";
-    const targetKomisariat = data.komisariat || "PK PMII Ki Ageng Getas Pendawa";
+    const isCabang = isCabangOrAdmin(currentUser);
+    const targetAngkatan = data.angkatan || String(new Date().getFullYear());
+    const targetKomisariat =
+      data.komisariat ||
+      (!isCabang
+        ? (currentUser?.commissariat || getTenantNameById(currentUser?.tenant_id))
+        : (activeTenant !== "ALL" ? activeTenant : "Pengurus Cabang PMII Grobogan")) ||
+      "Pengurus Cabang PMII Grobogan";
+
+    const targetTenantId =
+      data.tenant_id ||
+      data.komisariat_id ||
+      (!isCabang ? (currentUser?.tenant_id || currentUser?.komisariat_id) : null) ||
+      getTenantIdByName(targetKomisariat);
+
     const targetLevel = data.level || "MAPABA";
 
     const newNipa = `PMII.${targetAngkatan}.11.${
@@ -329,10 +490,12 @@ export default function AnggotaPage() {
     ];
 
     const newMember: Member = {
-      id: `cadre-${Date.now()}`,
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `cadre-${Date.now()}`,
       name: data.name || "",
       level: targetLevel,
       komisariat: targetKomisariat,
+      komisariat_id: targetTenantId,
+      tenant_id: targetTenantId,
       angkatan: targetAngkatan,
       status: "Aktif",
       email: data.email || "",
@@ -387,9 +550,20 @@ export default function AnggotaPage() {
 
     const updatedList = members.map((m) => {
       if (m.id === editingMember.id) {
+        const nextKomisariat = data.komisariat || m.komisariat;
+        const nextTenantId =
+          data.tenant_id ||
+          data.komisariat_id ||
+          getTenantIdByName(nextKomisariat) ||
+          m.tenant_id ||
+          m.komisariat_id;
+
         return {
           ...m,
-          ...data
+          ...data,
+          komisariat: nextKomisariat,
+          komisariat_id: nextTenantId,
+          tenant_id: nextTenantId
         };
       }
       return m;
@@ -435,9 +609,21 @@ export default function AnggotaPage() {
 
     newMembersData.forEach((data, idx) => {
       currentCount++;
+      const isCabang = isCabangOrAdmin(currentUser);
       const targetAngkatan = data.angkatan || String(new Date().getFullYear());
       const targetKomisariat =
-        data.komisariat || currentUser?.commissariat || "PK PMII Ki Ageng Getas Pendawa";
+        data.komisariat ||
+        (!isCabang
+          ? (currentUser?.commissariat || getTenantNameById(currentUser?.tenant_id))
+          : (activeTenant !== "ALL" ? activeTenant : "Pengurus Cabang PMII Grobogan")) ||
+        "Pengurus Cabang PMII Grobogan";
+
+      const targetTenantId =
+        data.tenant_id ||
+        data.komisariat_id ||
+        (!isCabang ? (currentUser?.tenant_id || currentUser?.komisariat_id) : null) ||
+        getTenantIdByName(targetKomisariat);
+
       const targetLevel = data.level || "MAPABA";
 
       const newNipa =
@@ -461,7 +647,7 @@ export default function AnggotaPage() {
       ];
 
       const cleanNik = data.nik ? data.nik.replace(/\D/g, "") : "";
-      const memberId = `cadre-${now}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+      const memberId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `cadre-${now}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
 
       // Tentukan email login unik
       let memberEmail = data.email ? data.email.trim().toLowerCase() : "";
@@ -486,6 +672,8 @@ export default function AnggotaPage() {
         name: data.name || "",
         level: targetLevel,
         komisariat: targetKomisariat,
+        komisariat_id: targetTenantId,
+        tenant_id: targetTenantId,
         angkatan: targetAngkatan,
         status: data.status || "Aktif",
         email: memberEmail,
@@ -964,6 +1152,11 @@ export default function AnggotaPage() {
           <span className="font-semibold text-zinc-900 dark:text-zinc-100">
             Anggota
           </span>
+          {!isCabangOrAdmin(currentUser) && (currentUser?.commissariat || (currentUser?.tenant_id && getTenantNameById(currentUser.tenant_id))) && (
+            <Badge variant="outline" className="ml-1 text-[11px] font-normal border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60">
+              {currentUser?.commissariat || getTenantNameById(currentUser?.tenant_id)}
+            </Badge>
+          )}
         </nav>
 
         {/* Action Buttons: Stacked & Full-Width on Mobile, Inline on Desktop */}
@@ -1027,19 +1220,27 @@ export default function AnggotaPage() {
               </SelectContent>
             </Select>
 
-            {currentUser?.role === "ADMIN" && (
+            {isCabangOrAdmin(currentUser) && (
               <Select
-                value={komisariatFilter}
-                onValueChange={(val) => setKomisariatFilter(val ?? "ALL")}
+                value={activeTenant !== "ALL" ? activeTenant : komisariatFilter}
+                onValueChange={(val) => {
+                  const target = val ?? "ALL";
+                  setKomisariatFilter(target);
+                  setActiveTenant(target);
+                  setGlobalActiveTenant(target);
+                }}
               >
-                <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[160px]">
-                  <SelectValue placeholder="Komisariat" />
+                <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[170px]">
+                  <SelectValue placeholder="Semua Komisariat" />
                 </SelectTrigger>
                 <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-                  <SelectItem value="ALL">Semua Komisariat</SelectItem>
-                  <SelectItem value="PK PMII Ki Ageng Getas Pendawa">Ki Ageng Getas Pendawa</SelectItem>
-                  <SelectItem value="Komisariat Walisongo">Komisariat Walisongo</SelectItem>
-                  <SelectItem value="Komisariat Diponegoro">Komisariat Diponegoro</SelectItem>
+                  <SelectItem value="ALL">Semua Komisariat / Cabang</SelectItem>
+                  <SelectItem value="Pengurus Cabang Grobogan">Pengurus Cabang Grobogan</SelectItem>
+                  {availableKomisariats.map((comm) => (
+                    <SelectItem key={comm} value={comm}>
+                      {comm}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             )}
@@ -1086,8 +1287,34 @@ export default function AnggotaPage() {
           </div>
 
           {currentMembers.length === 0 ? (
-            <div className="p-8 text-center text-xs text-zinc-400">
-              Tidak ada data anggota yang sesuai filter.
+            <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+              <Users className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mb-1" />
+              <p className="font-semibold text-xs text-zinc-700 dark:text-zinc-300">
+                {isLoading ? "Memuat data anggota..." : "Tidak ada data anggota yang sesuai filter."}
+              </p>
+              <p className="text-[11px] text-zinc-400 max-w-xs">
+                {isLoading
+                  ? "Menghubungkan ke basis data..."
+                  : members.length === 0
+                  ? "Belum ada data anggota yang tersinkronisasi."
+                  : `Tersedia ${members.length} data anggota, namun tidak cocok dengan filter aktif.`}
+              </p>
+              {!isLoading && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLevelFilter("ALL");
+                    setKomisariatFilter("ALL");
+                    setSearchTerm("");
+                    fetchData();
+                  }}
+                  className="mt-2 text-xs h-7 px-3 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Filter & Muat Ulang</span>
+                </Button>
+              )}
             </div>
           ) : (
             currentMembers.map((member) => {
@@ -1287,8 +1514,36 @@ export default function AnggotaPage() {
             <TableBody>
               {currentMembers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-36 text-center text-xs text-zinc-400">
-                    Tidak ada data anggota yang sesuai filter.
+                  <TableCell colSpan={8} className="h-44 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 py-4">
+                      <Users className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mb-1" />
+                      <p className="font-semibold text-xs text-zinc-700 dark:text-zinc-300">
+                        {isLoading ? "Memuat data anggota..." : "Tidak ada data anggota yang sesuai filter."}
+                      </p>
+                      <p className="text-[11px] text-zinc-400 max-w-sm">
+                        {isLoading
+                          ? "Menghubungkan ke basis data..."
+                          : members.length === 0
+                          ? "Belum ada data anggota yang tersinkronisasi."
+                          : `Tersedia ${members.length} data anggota, namun tidak cocok dengan filter aktif.`}
+                      </p>
+                      {!isLoading && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setLevelFilter("ALL");
+                            setKomisariatFilter("ALL");
+                            setSearchTerm("");
+                            fetchData();
+                          }}
+                          className="mt-2 text-xs h-7 px-3 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Reset Filter & Muat Ulang</span>
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1492,8 +1747,12 @@ export default function AnggotaPage() {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddMember}
-        defaultKomisariat={currentUser?.commissariat || "PK PMII Ki Ageng Getas Pendawa"}
-        isAdmin={currentUser?.role === "ADMIN"}
+        defaultKomisariat={
+          (!isCabangOrAdmin(currentUser)
+            ? (currentUser?.commissariat || getTenantNameById(currentUser?.tenant_id))
+            : (activeTenant !== "ALL" ? activeTenant : currentUser?.commissariat)) || "Pengurus Cabang PMII Grobogan"
+        }
+        isAdmin={isCabangOrAdmin(currentUser)}
       />
 
       <MemberFormModal
@@ -1504,8 +1763,12 @@ export default function AnggotaPage() {
         }}
         member={editingMember}
         onSubmit={handleEditMember}
-        defaultKomisariat={currentUser?.commissariat || "PK PMII Ki Ageng Getas Pendawa"}
-        isAdmin={currentUser?.role === "ADMIN"}
+        defaultKomisariat={
+          (!isCabangOrAdmin(currentUser)
+            ? (currentUser?.commissariat || getTenantNameById(currentUser?.tenant_id))
+            : (activeTenant !== "ALL" ? activeTenant : currentUser?.commissariat)) || "Pengurus Cabang PMII Grobogan"
+        }
+        isAdmin={isCabangOrAdmin(currentUser)}
       />
 
       <MemberDetailModal
@@ -1532,7 +1795,11 @@ export default function AnggotaPage() {
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImport={handleImportMembers}
-        defaultKomisariat={currentUser?.commissariat || "PK PMII Ki Ageng Getas Pendawa"}
+        defaultKomisariat={
+          (!isCabangOrAdmin(currentUser)
+            ? (currentUser?.commissariat || getTenantNameById(currentUser?.tenant_id))
+            : (activeTenant !== "ALL" ? activeTenant : currentUser?.commissariat)) || "Pengurus Cabang PMII Grobogan"
+        }
         currentMemberCount={members.length}
       />
 

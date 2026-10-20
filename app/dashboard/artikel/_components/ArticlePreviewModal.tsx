@@ -23,21 +23,35 @@ export const ArticlePreviewModal: React.FC<ArticlePreviewModalProps> = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/65 backdrop-blur-xs">
       <div className="relative w-full max-w-2xl max-h-[88vh] overflow-y-auto bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl z-10 flex flex-col">
         {/* Cover Image */}
-        <div className="relative aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-800 shrink-0">
-          <Image
-            src={article.image}
-            alt={article.title}
-            fill
-            className="object-cover"
-          />
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors cursor-pointer"
-            aria-label="Tutup pratinjau"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        {article.image ? (
+          <div className="relative aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-800 shrink-0">
+            <Image
+              src={article.image}
+              alt={article.title}
+              fill
+              sizes="(max-width: 768px) 100vw, 672px"
+              className="object-cover"
+            />
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors cursor-pointer"
+              aria-label="Tutup pratinjau"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40">
+            <span className="text-xs font-semibold text-zinc-400">Pratinjau Artikel</span>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 flex items-center justify-center transition-colors cursor-pointer"
+              aria-label="Tutup pratinjau"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="p-6 sm:p-8 space-y-6">

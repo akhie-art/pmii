@@ -14,8 +14,14 @@ interface EditEventModalProps {
     date: string;
     description?: string;
     sessions?: string[];
+    waGroupLink?: string;
+    commissariat?: string;
+    komisariat_id?: string | null;
+    tenant_id?: string | null;
   }) => void;
   kaderisasiList: any[];
+  currentUser?: any;
+  commissariats?: any[];
 }
 
 export default function EditEventModal({

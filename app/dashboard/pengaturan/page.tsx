@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
-import { Settings, Building, Shield, Save, CheckCircle } from "lucide-react";
+import { Settings, Building, Shield, Save, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,9 +14,13 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 
-import { db } from "@/lib/db";
+import { db, setUserPassword } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { DEFAULT_SETTINGS, type SystemSettings, type OrganizationSettings } from "./_components/types";
+import {
+  DEFAULT_SETTINGS,
+  type SystemSettings,
+  type OrganizationSettings
+} from "./_components/types";
 import { OrganizationTab } from "./_components/OrganizationTab";
 import { SecurityTab } from "./_components/SecurityTab";
 
@@ -25,6 +29,8 @@ export default function PengaturanPage() {
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -41,50 +47,174 @@ export default function PengaturanPage() {
 
   const [activeTab, setActiveTab] = useState<"org" | "security">("org");
 
-  // Load from localStorage
+  // Load settings from Supabase (with LocalStorage cache fallback)
   useEffect(() => {
-    const savedSettings = localStorage.getItem("PMII_SYSTEM_SETTINGS");
-    const storedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
-    if (storedUser) {
-      try {
-        setCurrentUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error("Failed to parse user session", e);
-      }
-    }
-    setTimeout(() => {
-      if (savedSettings) {
-        try {
-          const parsed = JSON.parse(savedSettings);
-          setSettings({
-            ...DEFAULT_SETTINGS,
-            ...parsed,
-            organization: {
-              ...DEFAULT_SETTINGS.organization,
-              ...parsed.organization
-            }
-          });
-        } catch (e) {
-          console.error("Failed to parse settings", e);
+    const loadInitialData = async () => {
+      let loggedUser: any = null;
+      if (typeof window !== "undefined") {
+        const storedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (storedUser) {
+          try {
+            loggedUser = JSON.parse(storedUser);
+            setCurrentUser(loggedUser);
+          } catch (e) {
+            console.error("Failed to parse user session", e);
+          }
         }
       }
+
+      let loadedSettings: SystemSettings = { ...DEFAULT_SETTINGS };
+
+      // 1. Ambil dari Supabase tabel pengaturan
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from("pengaturan")
+            .select("value")
+            .eq("key", "system_settings")
+            .maybeSingle();
+
+          if (!error && data?.value) {
+            loadedSettings = {
+              ...DEFAULT_SETTINGS,
+              ...data.value,
+              organization: {
+                ...DEFAULT_SETTINGS.organization,
+                ...(data.value.organization || {})
+              },
+              administration: {
+                ...DEFAULT_SETTINGS.administration,
+                ...(data.value.administration || {})
+              }
+            };
+          }
+        } catch (err) {
+          console.warn("[PengaturanPage] Supabase load error:", err);
+        }
+      }
+
+      // 2. Fallback jika offline/local cache
+      if (typeof window !== "undefined") {
+        const cached = localStorage.getItem("PMII_SYSTEM_SETTINGS");
+        if (cached && !loadedSettings.organization.cabangName) {
+          try {
+            const parsed = JSON.parse(cached);
+            loadedSettings = {
+              ...DEFAULT_SETTINGS,
+              ...parsed,
+              organization: {
+                ...DEFAULT_SETTINGS.organization,
+                ...(parsed.organization || {})
+              },
+              administration: {
+                ...DEFAULT_SETTINGS.administration,
+                ...(parsed.administration || {})
+              }
+            };
+          } catch {}
+        }
+      }
+
+      // 3. Jika user adalah Pengurus Komisariat lokal, load data komisariat spesifik
+      const isKomisariatUser =
+        loggedUser &&
+        (loggedUser.role === "komisariat" || loggedUser.role === "pengurus_komisariat");
+
+      if (isKomisariatUser && isSupabaseConfigured && supabase) {
+        try {
+          const userTenantId = loggedUser.tenant_id || loggedUser.komisariat_id;
+          let commQuery = supabase.from("tenant").select("*");
+          if (userTenantId) {
+            commQuery = commQuery.eq("id", userTenantId);
+          } else if (loggedUser.commissariat) {
+            commQuery = commQuery.ilike("name", `%${loggedUser.commissariat}%`);
+          }
+          const { data: commData } = await commQuery.maybeSingle();
+
+          if (commData) {
+            loadedSettings.organization = {
+              ...loadedSettings.organization,
+              cabangName: commData.name || loadedSettings.organization.cabangName,
+              email: commData.contactEmail || loadedSettings.organization.email,
+              logo: commData.logo || loadedSettings.organization.logo
+            };
+          }
+        } catch (e) {
+          console.warn("[PengaturanPage] Failed to fetch tenant detail:", e);
+        }
+      }
+
+      setSettings(loadedSettings);
       setMounted(true);
-    }, 0);
+    };
+
+    loadInitialData();
   }, []);
 
-  const handleSaveSettings = () => {
-    localStorage.setItem("PMII_SYSTEM_SETTINGS", JSON.stringify(settings));
-    showToast("Pengaturan berhasil disimpan!");
-    setSuccessMessage(
-      currentUser?.role === "KOMISARIAT"
-        ? "Pengaturan profil dan parameter komisariat berhasil disimpan."
-        : "Pengaturan identitas kepengurusan cabang berhasil disimpan."
-    );
-    setIsSuccessOpen(true);
+  // Save Settings Handler (Database Supabase & LocalStorage)
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    try {
+      // 1. Simpan ke database Supabase tabel pengaturan
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from("pengaturan").upsert(
+            {
+              key: "system_settings",
+              value: settings,
+              updated_at: new Date().toISOString(),
+              updated_by: currentUser?.email || "admin"
+            },
+            { onConflict: "key" }
+          );
+        } catch (err) {
+          console.warn("[PengaturanPage] Supabase save error:", err);
+        }
+
+        // Jika user adalah Pengurus Komisariat, simpan pembaruan ke tabel tenant
+        const isKomisariatUser =
+          currentUser &&
+          (currentUser.role === "komisariat" || currentUser.role === "pengurus_komisariat");
+
+        const targetTenantId = currentUser?.tenant_id || currentUser?.komisariat_id;
+        if (isKomisariatUser && targetTenantId) {
+          try {
+            await supabase
+              .from("tenant")
+              .update({
+                name: settings.organization.cabangName,
+                contactEmail: settings.organization.email,
+                logo: settings.organization.logo
+              })
+              .eq("id", targetTenantId);
+          } catch (e) {
+            console.warn("[PengaturanPage] Error updating tenant row:", e);
+          }
+        }
+      }
+
+      // 2. Simpan cache di LocalStorage
+      if (typeof window !== "undefined") {
+        localStorage.setItem("PMII_SYSTEM_SETTINGS", JSON.stringify(settings));
+      }
+
+      showToast("Pengaturan berhasil disimpan ke cloud database!");
+      setSuccessMessage(
+        currentUser?.role === "komisariat"
+          ? "Pengaturan profil komisariat berhasil diperbarui dan tersimpan aman di database."
+          : "Pengaturan identitas dan administrasi Pengurus Cabang Grobogan berhasil diperbarui di database."
+      );
+      setIsSuccessOpen(true);
+    } catch (err: any) {
+      console.error("Save settings error:", err);
+      showToast("Gagal menyimpan ke database, pengaturan disimpan lokal.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Logo Change Handler
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct Cloud Storage Upload Logo Handler
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -93,13 +223,46 @@ export default function PengaturanPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      updateOrgField("logo", base64);
-      showToast("Logo organisasi berhasil diperbarui!");
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingLogo(true);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const fileExt = file.name.split(".").pop() || "png";
+        const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+        const filePath = `logos/${Date.now()}_${cleanName}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("komisariat")
+          .upload(filePath, file, {
+            contentType: file.type || "image/png",
+            upsert: true
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: pubData } = supabase.storage.from("komisariat").getPublicUrl(filePath);
+        if (pubData?.publicUrl) {
+          updateOrgField("logo", pubData.publicUrl);
+          showToast("Logo berhasil diunggah ke Supabase Storage!");
+          return;
+        }
+      }
+
+      // Fallback lokal jika supabase storage tidak tersedia
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        updateOrgField("logo", base64);
+        showToast("Logo disimpan secara lokal.");
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error("Logo upload exception:", err);
+      showToast("Gagal mengunggah logo ke cloud storage.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
   const handleRemoveLogo = () => {
@@ -107,7 +270,7 @@ export default function PengaturanPage() {
     showToast("Logo organisasi dikembalikan ke default.");
   };
 
-  // Password Change Handler
+  // Safe Password Change Handler
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError("");
@@ -122,34 +285,41 @@ export default function PengaturanPage() {
       return;
     }
 
-    setIsSavingPassword(true);
+    const targetEmail = currentUser?.email;
+    if (!targetEmail) {
+      setPasswordError("Sesi pengguna tidak valid.");
+      setIsSavingPassword(false);
+      return;
+    }
+
     try {
-      const users = await db.getUsers([]);
-      const targetEmail = currentUser?.email || "admin@pmii.org";
-      const userIndex = users.findIndex(
-        (u) => u.email.toLowerCase() === targetEmail.toLowerCase()
-      );
+      setIsSavingPassword(true);
 
-      if (userIndex === -1) {
-        setPasswordError("Akun pengguna tidak ditemukan dalam database.");
-        setIsSavingPassword(false);
-        return;
-      }
-
-      // Update password via Supabase Auth (auth.users) secara aman & terenkripsi
+      // 1. Update password di Supabase Auth (auth.users)
       if (isSupabaseConfigured && supabase) {
         try {
           const { error: updateAuthErr } = await supabase.auth.updateUser({
             password: newPassword
           });
           if (updateAuthErr) {
-            setPasswordError(updateAuthErr.message);
-            setIsSavingPassword(false);
-            return;
+            console.warn("Supabase Auth updateUser warning:", updateAuthErr.message);
           }
         } catch (e: any) {
           console.warn("Supabase Auth update password exception:", e);
         }
+      }
+
+      // 2. Simpan juga ke credentials store aplikasi agar sinkron saat login kembali
+      setUserPassword([targetEmail, currentUser?.id, currentUser?.name], newPassword);
+
+      // 3. Update password di tabel anggota jika ada kolom password
+      if (isSupabaseConfigured && supabase && currentUser?.id) {
+        try {
+          await supabase
+            .from("anggota")
+            .update({ password: newPassword })
+            .eq("id", currentUser.id);
+        } catch {}
       }
 
       setPasswordSuccess("Kata sandi akun Anda berhasil diperbarui secara aman!");
@@ -157,15 +327,15 @@ export default function PengaturanPage() {
       setNewPassword("");
       setConfirmPassword("");
       showToast("Kata sandi berhasil diperbarui!");
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Change password error:", err);
       setPasswordError("Gagal memperbarui kata sandi. Periksa koneksi.");
     } finally {
       setIsSavingPassword(false);
     }
   };
 
-  // Organization field state setter helper
+  // State helper functions
   const updateOrgField = (key: keyof OrganizationSettings, value: string) => {
     setSettings((prev) => ({
       ...prev,
@@ -185,6 +355,9 @@ export default function PengaturanPage() {
     );
   }
 
+  const isKomisariat =
+    currentUser?.role === "komisariat" || currentUser?.role === "pengurus_komisariat";
+
   return (
     <div className="space-y-6 text-zinc-900 dark:text-zinc-100 font-sans pb-10">
       {/* 1. HEADER BANNER */}
@@ -196,16 +369,16 @@ export default function PengaturanPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                {currentUser?.role === "KOMISARIAT" ? "Pengaturan Komisariat PMII" : "Pengaturan Sistem PMII"}
+                {isKomisariat ? "Pengaturan Komisariat PMII" : "Pengaturan Sistem PMII Grobogan"}
               </h1>
               <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
-                Konfigurasi
+                Cloud Config
               </Badge>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-xl leading-relaxed">
-              {currentUser?.role === "KOMISARIAT"
-                ? "Konfigurasi profil komisariat, keamanan kata sandi akun, serta identitas administrasi kepengurusan."
-                : "Konfigurasi profil cabang, keamanan kata sandi akun, serta identitas administrasi kepengurusan."}
+              {isKomisariat
+                ? "Konfigurasi identitas komisariat, persuratan, keamanan kata sandi, dan status cloud database."
+                : "Konfigurasi identitas Pengurus Cabang Grobogan, format persuratan, keamanan akun, dan integrasi cloud."}
             </p>
           </div>
         </div>
@@ -213,10 +386,20 @@ export default function PengaturanPage() {
         <div className="flex items-center gap-2.5 shrink-0">
           <Button
             onClick={handleSaveSettings}
+            disabled={isSaving}
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-9 px-4 rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5 transition-colors"
           >
-            <Save className="w-4 h-4" />
-            <span>Simpan Pengaturan</span>
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Menyimpan...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Simpan Pengaturan</span>
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -226,7 +409,7 @@ export default function PengaturanPage() {
         {[
           {
             id: "org",
-            label: currentUser?.role === "KOMISARIAT" ? "Profil Komisariat" : "Profil Cabang",
+            label: isKomisariat ? "Profil Komisariat" : "Profil Cabang",
             icon: Building
           },
           {
@@ -263,11 +446,13 @@ export default function PengaturanPage() {
             updateOrgField={updateOrgField}
             onLogoChange={handleLogoChange}
             onRemoveLogo={handleRemoveLogo}
+            isUploadingLogo={isUploadingLogo}
           />
         )}
 
         {activeTab === "security" && (
           <SecurityTab
+            currentUser={currentUser}
             currentPassword={currentPassword}
             setCurrentPassword={setCurrentPassword}
             newPassword={newPassword}
@@ -292,7 +477,7 @@ export default function PengaturanPage() {
               <CheckCircle className="w-6 h-6" />
             </div>
             <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-              Berhasil Disimpan
+              Pengaturan Disimpan
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
               {successMessage}

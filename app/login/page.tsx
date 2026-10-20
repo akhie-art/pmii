@@ -22,7 +22,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, clearSupabaseStorage } from "@/lib/supabase";
+import {
+  isUserSuperAdmin,
+  isUserAdmin,
+  isUserPengurus,
+  isUserInstruktur,
+  getTargetStaffPrefix
+} from "@/lib/auth-helpers";
+import { getKomisariatIdByName, getTenantNameById } from "@/lib/tenancy";
 
 function GoogleIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -78,6 +86,11 @@ export default function LoginPage() {
       const redirect = params.get("redirect");
       if (redirect) {
         setRedirectUrl(redirect);
+      }
+
+      // Bersihkan token autentikasi usang jika belum login
+      if (!localStorage.getItem("PMII_LOGGED_IN_USER")) {
+        clearSupabaseStorage();
       }
     }
   }, []);
@@ -145,33 +158,60 @@ export default function LoginPage() {
 
       const inputId = email.trim().toLowerCase();
       const normalizedInput = inputId.replace(/\s+/g, " ");
+      const inputNoSpace = inputId.replace(/\s+/g, "");
       const inputDigits = inputId.replace(/\D/g, "");
+      const isInputEmail = inputId.includes("@");
 
-      // 1. Cari anggota berdasarkan Nama Lengkap (case-insensitive & spasi rapi), Email, NIPA, NTA, NIK, atau No HP
-      const matchedKader = cadres.find(c => {
-        const cadreNameNorm = (c.name || "").trim().toLowerCase().replace(/\s+/g, " ");
-        return (
-          (cadreNameNorm && cadreNameNorm === normalizedInput) ||
-          (c.email && c.email.trim().toLowerCase() === inputId) ||
-          (c.nipa && c.nipa.trim().toLowerCase() === inputId) ||
-          (c.nta && c.nta.trim().toLowerCase() === inputId) ||
-          (c.nik && c.nik.trim().toLowerCase() === inputId) ||
-          (inputDigits.length >= 9 && c.phone && c.phone.replace(/\D/g, "").endsWith(inputDigits.slice(-9)))
-        );
-      });
+      // 1. Cari exact match di users sistem (auth.users)
+      let matchedUser = users.find(u => u.email && u.email.trim().toLowerCase() === inputId);
 
-      // 2. Cari akun user sistem berdasarkan Nama Lengkap atau Email
-      let matchedUser = users.find(u => {
-        const userNameNorm = (u.name || "").trim().toLowerCase().replace(/\s+/g, " ");
-        return (
-          (userNameNorm && userNameNorm === normalizedInput) ||
-          (u.email && u.email.trim().toLowerCase() === inputId) ||
-          (matchedKader && u.email && matchedKader.email && u.email.trim().toLowerCase() === matchedKader.email.trim().toLowerCase()) ||
-          (matchedKader && (u.id === matchedKader.id || u.id === `usr-${matchedKader.id}` || (u.user_id && u.user_id === matchedKader.user_id)))
-        );
-      });
+      // 2. Cari exact match di anggota/kader
+      let matchedKader = cadres.find(c => c.email && c.email.trim().toLowerCase() === inputId);
 
-      // 3. Jika belum di tabel anggota dan belum di users, cari di pendaftaran (Peserta Baru MAPABA)
+      // 3. Jika input bukan format email (misal nama, nik, nta, phone, dsb.), cari secara fleksibel
+      if (!isInputEmail) {
+        if (!matchedKader) {
+          matchedKader = cadres.find(c => {
+            const cadreNameNorm = (c.name || "").trim().toLowerCase().replace(/\s+/g, " ");
+            const cadreNameNoSpace = (c.name || "").trim().toLowerCase().replace(/\s+/g, "");
+            const emailPrefix = (c.email || "").split("@")[0].toLowerCase();
+            return (
+              (cadreNameNorm && cadreNameNorm === normalizedInput) ||
+              (cadreNameNoSpace && cadreNameNoSpace === inputNoSpace) ||
+              (emailPrefix && emailPrefix === inputId) ||
+              (c.nipa && c.nipa.trim().toLowerCase() === inputId) ||
+              (c.nta && c.nta.trim().toLowerCase() === inputId) ||
+              (c.nik && c.nik.trim().toLowerCase() === inputId) ||
+              (inputDigits.length >= 9 && c.phone && c.phone.replace(/\D/g, "").endsWith(inputDigits.slice(-9)))
+            );
+          });
+        }
+
+        if (!matchedUser) {
+          matchedUser = users.find(u => {
+            const userNameNorm = (u.name || "").trim().toLowerCase().replace(/\s+/g, " ");
+            const userNameNoSpace = (u.name || "").trim().toLowerCase().replace(/\s+/g, "");
+            const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
+            return (
+              (userNameNorm && userNameNorm === normalizedInput) ||
+              (userNameNoSpace && userNameNoSpace === inputNoSpace) ||
+              (emailPrefix && emailPrefix === inputId) ||
+              (matchedKader && u.email && matchedKader.email && u.email.trim().toLowerCase() === matchedKader.email.trim().toLowerCase()) ||
+              (matchedKader && (u.id === matchedKader.id || u.id === `usr-${matchedKader.id}` || (u.user_id && u.user_id === matchedKader.user_id)))
+            );
+          });
+        }
+      } else {
+        // Jika input adalah email, hubungkan data kader / user yang emailnya sama persis
+        if (matchedUser && matchedUser.email && !matchedKader) {
+          matchedKader = cadres.find(c => c.email && c.email.trim().toLowerCase() === matchedUser!.email!.trim().toLowerCase());
+        }
+        if (matchedKader && matchedKader.email && !matchedUser) {
+          matchedUser = users.find(u => u.email && u.email.trim().toLowerCase() === matchedKader!.email!.trim().toLowerCase());
+        }
+      }
+
+      // 4. Jika belum di tabel anggota dan belum di users, cari di pendaftaran (Peserta Baru MAPABA)
       if (!matchedKader && !matchedUser) {
         const matchedReg = registrations.find(r => {
           const regNameNorm = (r.cadreName || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -195,8 +235,10 @@ export default function LoginPage() {
         }
       }
 
-      // Tentukan alamat email untuk otentikasi Supabase Auth jika ada
-      const authEmail = (matchedKader?.email || matchedUser?.email || email).trim().toLowerCase();
+      // Tentukan alamat email untuk otentikasi Supabase Auth (selalu gunakan input email asli jika berformat email)
+      const authEmail = isInputEmail
+        ? inputId
+        : (matchedKader?.email || matchedUser?.email || email).trim().toLowerCase();
 
       // 0. Autentikasi aman melalui Supabase Auth (auth.users)
       let supabaseAuthVerified = false;
@@ -207,7 +249,20 @@ export default function LoginPage() {
             email: authEmail,
             password: password
           });
-          if (!authError && authData?.user) {
+          if (authError) {
+            const errLower = authError.message?.toLowerCase() || "";
+            if (errLower.includes("refresh token") || errLower.includes("invalid_grant")) {
+              clearSupabaseStorage();
+              const { data: retryData, error: retryErr } = await supabase.auth.signInWithPassword({
+                email: authEmail,
+                password: password
+              });
+              if (!retryErr && retryData?.user) {
+                supabaseAuthVerified = true;
+                authenticatedUser = retryData.user;
+              }
+            }
+          } else if (authData?.user) {
             supabaseAuthVerified = true;
             authenticatedUser = authData.user;
           }
@@ -218,10 +273,10 @@ export default function LoginPage() {
 
       // Verifikasi kata sandi
       const customPassword =
-        db.getUserPassword(matchedKader) ||
-        db.getUserPassword(matchedUser) ||
         db.getUserPassword(inputId) ||
         db.getUserPassword(authEmail) ||
+        db.getUserPassword(matchedUser) ||
+        db.getUserPassword(matchedKader) ||
         matchedUser?.password ||
         (matchedKader as any)?.password;
 
@@ -283,74 +338,103 @@ export default function LoginPage() {
         setSuccess(true);
         setLoading(false);
         
-        const kaderRoleNorm = (matchedKader.role || "anggota").toLowerCase();
-        const isStaff = kaderRoleNorm === "admin" || kaderRoleNorm === "pengurus" || kaderRoleNorm === "komisariat" || kaderRoleNorm === "instruktur";
+        const effectiveRole = (matchedUser?.role || matchedKader.role || "pengurus") as UserRole;
+        const kaderRoleNorm = (effectiveRole || "").toLowerCase();
+        const isStaff = isUserAdmin(kaderRoleNorm) || isUserPengurus(kaderRoleNorm) || isUserInstruktur(kaderRoleNorm);
+        const targetTid =
+          (matchedKader as any).tenant_id ||
+          (matchedKader as any).komisariat_id ||
+          getKomisariatIdByName(matchedUser?.commissariat || matchedKader.commissariat);
+        const targetComm =
+          matchedUser?.commissariat ||
+          matchedKader.commissariat ||
+          (targetTid ? getTenantNameById(targetTid) : "") ||
+          "";
+        const hasComm = Boolean(targetTid || (targetComm && targetComm.trim()));
 
         const cadreSession: UserAccount = {
           id: authenticatedUser?.id || matchedUser?.id || matchedKader.user_id || matchedKader.id,
           user_id: authenticatedUser?.id || matchedUser?.user_id || matchedKader.user_id,
           name: matchedKader.name,
           email: matchedKader.email || authEmail,
-          role: (matchedUser?.role || matchedKader.role || "anggota") as UserRole,
-          commissariat: matchedUser?.commissariat || matchedKader.commissariat || "Ki Ageng Getas Pendawa",
+          role: effectiveRole,
+          commissariat: targetComm,
+          komisariat_id: targetTid,
+          tenant_id: targetTid,
+          needsOnboarding: !hasComm && !isStaff,
           status: matchedKader.status === "AKTIF" ? "AKTIF" : "NONAKTIF",
           createdAt: matchedKader.created_at || new Date().toISOString(),
           avatar: matchedKader.avatar,
-          allowedMenus: matchedUser?.allowedMenus || authenticatedUser?.user_metadata?.allowedMenus || [
-            "/kader",
-            "/kader/kegiatan",
-            "/kader/materi",
-            "/kader/profil",
-            "/kader/laporan"
-          ]
+          allowedMenus: Array.isArray(matchedUser?.allowedMenus)
+            ? matchedUser.allowedMenus
+            : (Array.isArray(authenticatedUser?.user_metadata?.allowedMenus)
+                ? authenticatedUser.user_metadata.allowedMenus
+                : (isStaff
+                    ? [
+                        "/dashboard",
+                        "/dashboard/anggota",
+                        "/dashboard/pengurus",
+                        "/dashboard/kaderisasi",
+                        "/dashboard/penilaian",
+                        "/dashboard/rekap-nilai",
+                        "/dashboard/materi",
+                        "/dashboard/kegiatan",
+                        "/dashboard/verifikasi",
+                        "/dashboard/surat",
+                        "/dashboard/arsip",
+                        "/dashboard/artikel"
+                      ]
+                    : [
+                        "/kader",
+                        "/kader/kegiatan",
+                        "/kader/materi",
+                        "/kader/profil",
+                        "/kader/laporan"
+                      ]))
         };
 
         localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(cadreSession));
-        localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", cadreSession.commissariat || "Ki Ageng Getas Pendawa");
+        if (cadreSession.commissariat) {
+          localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", cadreSession.commissariat);
+        }
         localStorage.setItem("PMII_ACTIVE_CADRE_ID", matchedKader.id);
 
-        const targetPath = isStaff 
-          ? (kaderRoleNorm === "admin" ? "/admin" : kaderRoleNorm === "instruktur" ? "/instruktur" : "/pengurus") 
-          : `/${kaderRoleNorm}`;
+        const isSuperAdminCadre = isUserSuperAdmin(kaderRoleNorm);
+        if (!isSuperAdminCadre && (!hasComm || matchedKader.needsOnboarding)) {
+          setTimeout(() => {
+            router.push("/onboarding");
+          }, 800);
+          return;
+        }
+
+        const targetPath = isStaff ? getTargetStaffPrefix(kaderRoleNorm) : `/${kaderRoleNorm}`;
         setTimeout(() => {
           router.push(redirectUrl || targetPath);
         }, 800);
         return;
       }
 
-      // Fallback otentikasi akun default sistem jika input nama/email default
-      if (!matchedUser) {
-        if (inputId === "admin@pmii.org" || inputId === "admin") {
-          matchedUser = {
-            id: authenticatedUser?.id || "user-admin",
-            name: "Admin PK PMII Ki Ageng Getas Pendawa",
-            email: "admin@pmii.org",
-            role: "admin",
-            commissariat: "Ki Ageng Getas Pendawa",
-            status: "AKTIF",
-            createdAt: new Date().toISOString()
-          };
-        } else if (inputId === "pengurus@pmii.org" || inputId === "pengurus") {
-          matchedUser = {
-            id: authenticatedUser?.id || "user-pengurus",
-            name: "Pengurus PK PMII Ki Ageng Getas Pendawa",
-            email: "pengurus@pmii.org",
-            role: "pengurus",
-            commissariat: "Ki Ageng Getas Pendawa",
-            status: "AKTIF",
-            createdAt: new Date().toISOString()
-          };
-        } else if (inputId === "instruktur@pmii.org" || inputId === "instruktur") {
-          matchedUser = {
-            id: authenticatedUser?.id || "user-instruktur",
-            name: "Sahabat M. Farhan (Instruktur)",
-            email: "instruktur@pmii.org",
-            role: "instruktur",
-            commissariat: "Ki Ageng Getas Pendawa",
-            status: "AKTIF",
-            createdAt: new Date().toISOString()
-          };
-        }
+      // Dynamic Resolution untuk akun resmi berbasis database roles
+      if (!matchedUser && authenticatedUser) {
+        const userMetaRole = authenticatedUser.user_metadata?.role || "anggota";
+        const userMetaRoleId = authenticatedUser.user_metadata?.role_id;
+        const allRoles = await db.getRoles();
+        const foundRole = allRoles.find((r) => r.id === userMetaRoleId || r.code.toLowerCase() === userMetaRole.toLowerCase());
+
+        matchedUser = {
+          id: authenticatedUser.id,
+          user_id: authenticatedUser.id,
+          name: authenticatedUser.user_metadata?.name || authenticatedUser.email?.split("@")[0] || "User",
+          email: authenticatedUser.email || inputId,
+          role: (foundRole?.code || userMetaRole) as UserRole,
+          role_id: foundRole?.id || userMetaRoleId,
+          role_name: authenticatedUser.user_metadata?.role_name || foundRole?.code,
+          commissariat: authenticatedUser.user_metadata?.commissariat || "",
+          tenant_id: authenticatedUser.user_metadata?.tenant_id || null,
+          status: "AKTIF",
+          createdAt: authenticatedUser.created_at || new Date().toISOString(),
+          allowedMenus: authenticatedUser.user_metadata?.allowedMenus || foundRole?.allowed_menus || []
+        };
       }
 
       if (matchedUser && isAuthValid) {
@@ -380,20 +464,38 @@ export default function LoginPage() {
         setSuccess(true);
         setLoading(false);
 
+        const userRoleNorm = (matchedUser.role || "pengurus").toLowerCase();
+        const isSuperAdminUser = isUserSuperAdmin(userRoleNorm);
+        const needsOnboard = !isSuperAdminUser && (!matchedKader || !matchedUser.commissariat || matchedUser.needsOnboarding);
+
+        if (needsOnboard) {
+          const onboardSession = {
+            ...matchedUser,
+            needsOnboarding: true,
+            commissariat: ""
+          };
+          localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(onboardSession));
+          localStorage.removeItem("PMII_ACTIVE_COMMISSARIAT");
+          if (matchedUser.id) {
+            localStorage.setItem("PMII_ACTIVE_CADRE_ID", matchedUser.id);
+          }
+          setTimeout(() => {
+            router.push("/onboarding");
+          }, 800);
+          return;
+        }
+
         localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(matchedUser));
-        localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", matchedUser?.commissariat || "Ki Ageng Getas Pendawa");
+        if (matchedUser.commissariat) {
+          localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", matchedUser.commissariat);
+        }
         if (matchedUser.id) {
           localStorage.setItem("PMII_ACTIVE_CADRE_ID", matchedUser.id);
         }
 
-        const userRoleNorm = (matchedUser.role || "pengurus").toLowerCase();
-        const isStaffUser = userRoleNorm === "admin" || userRoleNorm === "pengurus" || userRoleNorm === "komisariat" || userRoleNorm === "instruktur";
-        const targetPath = userRoleNorm === "admin" 
-          ? "/admin" 
-          : userRoleNorm === "instruktur" 
-          ? "/instruktur" 
-          : userRoleNorm === "pengurus" 
-          ? "/pengurus" 
+        const isStaffUser = isUserAdmin(userRoleNorm) || isUserPengurus(userRoleNorm) || isUserInstruktur(userRoleNorm);
+        const targetPath = isStaffUser 
+          ? getTargetStaffPrefix(userRoleNorm) 
           : (userRoleNorm === "peserta" || userRoleNorm === "anggota")
           ? "/kader"
           : `/${userRoleNorm}`;

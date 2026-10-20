@@ -1,15 +1,30 @@
-import { supabase, isSupabaseConfigured, deleteStorageFile } from "../supabase";
+import { supabase, isSupabaseConfigured, deleteStorageFile, clearSupabaseStorage } from "../supabase";
 import { isValidUUID, generateUUID } from "../utils";
+import { getTenantIdByName, getTenantNameById, CABANG_TENANT_ID, getKomisariatIdByName, getKomisariatNameById } from "../tenancy";
 
 export function normalizeKomisariat(comm: string | undefined): string {
-  if (!comm) return "Ki Ageng Getas Pendawa";
+  if (!comm || !comm.trim()) {
+    if (typeof window !== "undefined") {
+      const active = localStorage.getItem("PMII_ACTIVE_TENANT_COMMISSARIAT");
+      if (active && active !== "ALL" && active !== "Semua Komisariat") return active;
+      const userStr = localStorage.getItem("PMII_LOGGED_IN_USER");
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.commissariat) return u.commissariat;
+        } catch {}
+      }
+    }
+    return "Komisariat Ki Ageng Getas Pendawa";
+  }
   const c = comm.trim().toLowerCase();
-  if (c.includes("getas") || c.includes("pendawa")) return "Ki Ageng Getas Pendawa";
-  if (c.includes("walisongo")) return "Ki Ageng Getas Pendawa";
-  if (c.includes("diponegoro") || c.includes("undip")) return "Universitas Diponegoro";
-  if (c.includes("sunan kalijaga") || c.includes("kalijaga")) return "UIN Sunan Kalijaga";
-  if (c.includes("negeri semarang") || c.includes("unnes")) return "Universitas Negeri Semarang";
-  return comm;
+  if (c.includes("cabang") || c.includes("pc pmii")) return "Pengurus Cabang Grobogan";
+  if (c.includes("tarub")) return "Komisariat Ki Ageng Tarub";
+  if (c.includes("ajisaka")) return "Komisariat Ajisaka";
+  if (c.includes("joko") || c.includes("suro")) return "Komisariat Joko Suro";
+  if (c.includes("getas") || c.includes("pendawa")) return "Komisariat Ki Ageng Getas Pendawa";
+  if (c.includes("walisongo") && !c.includes("semarang")) return "Komisariat Ki Ageng Getas Pendawa";
+  return comm.trim();
 }
 
 export function normalizeDateString(dateStr: string | undefined): string | null {
@@ -52,18 +67,9 @@ export function normalizeDateString(dateStr: string | undefined): string | null 
 let _resolvedAnggotaTable: string | null = null;
 
 export async function getEffectiveTableName(tableName: string): Promise<string> {
-  if (tableName !== "anggota" && tableName !== "kader") return tableName;
-  if (_resolvedAnggotaTable) return _resolvedAnggotaTable;
-  if (!isSupabaseConfigured || !supabase) return "anggota";
-  try {
-    const { error } = await supabase.from("anggota").select("id").limit(1);
-    if (!error) {
-      _resolvedAnggotaTable = "anggota";
-      return "anggota";
-    }
-  } catch {}
-  _resolvedAnggotaTable = "kader";
-  return "kader";
+  if (tableName === "anggota" || tableName === "kader") return "anggota";
+  if (tableName === "komisariat" || tableName === "commissariats" || tableName === "tenant" || tableName === "tenants") return "tenant";
+  return tableName;
 }
 
 export function extractMissingColumn(errorMessage: string): string | null {
@@ -78,6 +84,21 @@ export function extractMissingColumn(errorMessage: string): string | null {
 
   return null;
 }
+
+export const TABLES_WITHOUT_COMMISSARIAT = [
+  "kegiatan",
+  "pengurus",
+  "surat",
+  "arsip",
+  "articles",
+  "evaluations",
+  "surat_templates",
+  "anggota",
+  "kader",
+  "pendaftaran",
+  "persyaratan",
+  "kaderisasi"
+];
 
 /**
  * Generic Read with Resilient Multi-Layer Sync (Supabase <-> LocalStorage)
@@ -103,12 +124,63 @@ export async function getTableData<T>(
       }
 
       if (error) {
-        console.warn(`[Supabase Read Warning] ${effectiveTable}: ${error.message}. Menggunakan cache lokal.`);
-      } else if (data) {
+        console.warn(`[Supabase Read Warning] ${effectiveTable}: ${error.message}. Mencoba REST anon key...`);
+        const errMsg = (error.message || "").toLowerCase();
+        if (errMsg.includes("jwt") || errMsg.includes("expired") || errMsg.includes("token")) {
+          clearSupabaseStorage();
+        }
+
+        // Coba direct REST fetch anon sebagai fallback
+        try {
+          const rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+          const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+          if (rawUrl && anonKey) {
+            const restRes = await fetch(`${rawUrl}/rest/v1/${effectiveTable}?select=*`, {
+              headers: {
+                apikey: anonKey,
+                Authorization: `Bearer ${anonKey}`,
+              },
+            });
+            if (restRes.ok) {
+              const restData = await restRes.json();
+              if (Array.isArray(restData)) {
+                data = restData;
+                error = null;
+              }
+            }
+          }
+        } catch (restErr) {
+          console.warn(`[Supabase REST fallback error] ${effectiveTable}:`, restErr);
+        }
+      }
+
+      if (data) {
         let mergedData = data;
         if (localStorageKey && typeof window !== "undefined") {
-          if (effectiveTable === "surat" || effectiveTable === "surat_templates") {
-            // For surat & surat_templates, remote database is authoritative; do not resurrect stale local caches
+          const authoritativeTables = [
+            "anggota",
+            "kader",
+            "pengguna",
+            "users",
+            "pendaftaran",
+            "kegiatan",
+            "surat",
+            "surat_templates",
+            "komisariat",
+            "tenant",
+            "tenants",
+            "articles",
+            "arsip",
+            "evaluations",
+            "kaderisasi",
+            "kurikulum",
+            "persyaratan",
+            "board_members",
+            "pengurus"
+          ];
+          if (authoritativeTables.includes(effectiveTable) || authoritativeTables.includes(tableName)) {
+            // Database Supabase adalah sumber data tunggal yang otoritatif.
+            // Jangan hidupkan kembali sisa cache lokal (phantom/ghost local items).
             mergedData = data;
             localStorage.setItem(localStorageKey, JSON.stringify(data));
           } else {
@@ -148,6 +220,20 @@ export async function getTableData<T>(
             };
           });
         }
+
+        // Resolusi dinamis nama tenant/komisariat dari Foreign Key tenant_id/komisariat_id untuk UI & Tenancy
+        if (Array.isArray(mergedData) && (TABLES_WITHOUT_COMMISSARIAT.includes(effectiveTable) || TABLES_WITHOUT_COMMISSARIAT.includes(tableName))) {
+          mergedData = mergedData.map((item: any) => {
+            const tid = item.tenant_id || item.komisariat_id;
+            return {
+              ...item,
+              tenant_id: tid,
+              komisariat_id: tid,
+              commissariat: item.commissariat || (tid ? getTenantNameById(tid) : "Pengurus Cabang Grobogan")
+            };
+          });
+        }
+
         return mergedData as T[];
       }
     } catch (err: any) {
@@ -162,6 +248,24 @@ export async function getTableData<T>(
       try {
         let parsed = JSON.parse(stored) as any[];
         if (tableName === "articles" && Array.isArray(parsed)) {
+          const ghostTitles = [
+            "meneguhkan aswaja",
+            "refleksi mapaba",
+            "modernisasi persuratan"
+          ];
+          const cleaned = parsed.filter((item: any) => {
+            const t = (item.title || "").toLowerCase();
+            const id = String(item.id || "");
+            const isGhost =
+              ghostTitles.some((g) => t.includes(g)) ||
+              id.startsWith("art-") ||
+              id.startsWith("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a2");
+            return !isGhost;
+          });
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(localStorageKey, JSON.stringify(cleaned));
+            parsed = cleaned;
+          }
           parsed = parsed.map((item: any) => {
             const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
             return {
@@ -171,6 +275,19 @@ export async function getTableData<T>(
             };
           });
         }
+
+        if (Array.isArray(parsed) && (TABLES_WITHOUT_COMMISSARIAT.includes(effectiveTable) || TABLES_WITHOUT_COMMISSARIAT.includes(tableName))) {
+          parsed = parsed.map((item: any) => {
+            const tid = item.tenant_id || item.komisariat_id;
+            return {
+              ...item,
+              tenant_id: tid,
+              komisariat_id: tid,
+              commissariat: item.commissariat || (tid ? getTenantNameById(tid) : "Pengurus Cabang Grobogan")
+            };
+          });
+        }
+
         return parsed as T[];
       } catch (e) {
         console.error(`[LocalStorage Parse Error] ${localStorageKey}:`, e);
@@ -250,6 +367,24 @@ export async function deleteTableRow(
               if (parsed.fileUrl) await deleteStorageFile(parsed.fileUrl);
             } catch {}
           }
+        }
+      } else if (effectiveTable === "surat") {
+        const { data: s } = await supabase
+          .from("surat")
+          .select('id, "fileUrl"')
+          .eq("id", id)
+          .single();
+        if (s && s.fileUrl) {
+          await deleteStorageFile(s.fileUrl);
+        }
+      } else if (effectiveTable === "surat_templates") {
+        const { data: t } = await supabase
+          .from("surat_templates")
+          .select('id, "fileUrl"')
+          .eq("id", id)
+          .single();
+        if (t && t.fileUrl) {
+          await deleteStorageFile(t.fileUrl);
         }
       }
 
@@ -385,7 +520,14 @@ export async function saveTableData<T extends { id: string | number }>(
             .not("id", "in", formattedIds);
 
           if (options?.scopeCommissariat) {
-            deleteQuery = deleteQuery.eq("commissariat", options.scopeCommissariat);
+            if (TABLES_WITHOUT_COMMISSARIAT.includes(effectiveTable) || TABLES_WITHOUT_COMMISSARIAT.includes(tableName)) {
+              const tid = getTenantIdByName(options.scopeCommissariat);
+              if (tid) {
+                deleteQuery = deleteQuery.eq("tenant_id", tid);
+              }
+            } else {
+              deleteQuery = deleteQuery.eq("commissariat", options.scopeCommissariat);
+            }
           }
 
           const { error: deleteError } = await deleteQuery;
@@ -399,7 +541,14 @@ export async function saveTableData<T extends { id: string | number }>(
             .neq("id", "00000000-0000-0000-0000-000000000000");
 
           if (options?.scopeCommissariat) {
-            deleteQuery = deleteQuery.eq("commissariat", options.scopeCommissariat);
+            if (TABLES_WITHOUT_COMMISSARIAT.includes(effectiveTable) || TABLES_WITHOUT_COMMISSARIAT.includes(tableName)) {
+              const tid = getTenantIdByName(options.scopeCommissariat);
+              if (tid) {
+                deleteQuery = deleteQuery.eq("tenant_id", tid);
+              }
+            } else {
+              deleteQuery = deleteQuery.eq("commissariat", options.scopeCommissariat);
+            }
           }
 
           const { error: deleteError } = await deleteQuery;
@@ -412,36 +561,97 @@ export async function saveTableData<T extends { id: string | number }>(
       // Upsert remaining list with automatic column self-healing
       if (sanitizedList.length > 0) {
         let currentList = sanitizedList.map((item: any) => {
+          const copy = { ...item };
+
+          // 1. Table-specific adjustments
           if (effectiveTable === "articles") {
-            const copy = { ...item };
             copy.created_at = copy.created_at || copy.createdAt || new Date().toISOString();
             copy.updated_at = copy.updated_at || copy.updatedAt || new Date().toISOString();
             delete copy.createdAt;
             delete copy.updatedAt;
             delete copy.date;
             delete copy.readTime;
-            return copy;
-          }
-          if (effectiveTable === "arsip") {
-            const copy = { ...item };
+          } else if (effectiveTable === "arsip") {
             copy.created_at = copy.created_at || new Date().toISOString();
-            return copy;
-          }
-          if (effectiveTable === "kader" || effectiveTable === "anggota" || tableName === "kader" || tableName === "anggota") {
-            const copy = { ...item };
+          } else if (effectiveTable === "kader" || effectiveTable === "anggota" || tableName === "kader" || tableName === "anggota") {
             delete copy.allowedMenus;
-            return copy;
-          }
-          if (effectiveTable === "evaluations") {
-            const copy = { ...item };
+            delete copy.role_detail;
+            delete copy.needsOnboarding;
+            delete copy.password;
+          } else if (effectiveTable === "evaluations") {
             if (copy.sessionScores && typeof copy.sessionScores === "object") {
               const cleanedScores = { ...copy.sessionScores };
               delete cleanedScores.__quizMeta;
               copy.sessionScores = cleanedScores;
             }
-            return copy;
+            delete copy.created_at;
+            delete copy.createdAt;
+            if (copy.catatanFasilitator) {
+              copy.notes = copy.notes || copy.catatanFasilitator;
+              delete copy.catatanFasilitator;
+            }
+          } else if (effectiveTable === "komisariat") {
+            if (copy.establishedDate === "" || (typeof copy.establishedDate === "string" && !copy.establishedDate.trim())) {
+              copy.establishedDate = null;
+            }
           }
-          return { ...item };
+
+          // 2. General date sanitization: convert empty date strings to null
+          for (const key of Object.keys(copy)) {
+            if (
+              (key.toLowerCase().includes("date") || key.toLowerCase().includes("tanggal")) &&
+              typeof copy[key] === "string" &&
+              copy[key].trim() === ""
+            ) {
+              copy[key] = null;
+            }
+          }
+
+          // 3. Sinkronisasi otomatis relasi Foreign Key tenant_id untuk multi-tenant
+          if (effectiveTable !== "tenant" && effectiveTable !== "komisariat") {
+            const commStr = typeof copy.commissariat === "string" ? copy.commissariat.toLowerCase() : "";
+            const isCabang =
+              copy.tenant_id === CABANG_TENANT_ID ||
+              copy.komisariat_id === CABANG_TENANT_ID ||
+              copy.tenant_id === "c0000000-0000-0000-0000-000000000001" ||
+              copy.komisariat_id === "c0000000-0000-0000-0000-000000000001" ||
+              commStr.includes("cabang") ||
+              commStr.includes("pc pmii") ||
+              commStr.includes("pc grobogan");
+
+            if (isCabang) {
+              copy.tenant_id = CABANG_TENANT_ID;
+            } else {
+              const commName = copy.commissariat || copy.komisariat || copy.perguruanTinggi || copy.campus;
+              let resolvedId = (commName ? getTenantIdByName(commName) : null) || copy.tenant_id || copy.komisariat_id;
+              if (resolvedId === "33333333-3333-3333-3333-333333333333") resolvedId = "2342112a-7413-4151-9998-3a13e833902f";
+              if (resolvedId === "44444444-4444-4444-4444-444444444444") resolvedId = "2eae53a7-28ff-40b5-95f1-69f85d179d8e";
+              if (resolvedId === "c0000000-0000-0000-0000-000000000001") resolvedId = CABANG_TENANT_ID;
+              if (resolvedId && isValidUUID(resolvedId)) {
+                copy.tenant_id = resolvedId;
+              } else {
+                copy.tenant_id = CABANG_TENANT_ID;
+              }
+            }
+          }
+
+          // 4. Hapus kolom 'commissariat' & 'komisariat_id' untuk tabel operasional yang sudah menggunakan Foreign Key murni (tenant_id)
+          if (TABLES_WITHOUT_COMMISSARIAT.includes(effectiveTable) || TABLES_WITHOUT_COMMISSARIAT.includes(tableName)) {
+            delete copy.commissariat;
+            delete copy.komisariat_id;
+          }
+
+          // 5. Pastikan kolom id & user_id bertipe UUID valid untuk tabel PostgreSQL bertipe UUID
+          if (["anggota", "kader", "users", "tenant", "kegiatan", "surat", "arsip", "kaderisasi", "evaluations", "pengurus"].includes(effectiveTable)) {
+            if (copy.id && !isValidUUID(copy.id)) {
+              copy.id = generateUUID();
+            }
+            if (copy.user_id && !isValidUUID(copy.user_id)) {
+              copy.user_id = copy.id;
+            }
+          }
+
+          return copy;
         });
 
         let attempts = 0;
@@ -473,6 +683,22 @@ export async function saveTableData<T extends { id: string | number }>(
               attempts++;
               continue;
             }
+          }
+
+          // Self-healing for invalid date input syntax: convert all empty strings to null
+          if (upsertError.message.includes("invalid input syntax for type date")) {
+            console.warn(`[Date Type Healing] ${effectiveTable}: Mendeteksi sintaks input tanggal kosong, mengonversi string kosong menjadi null...`);
+            currentList = currentList.map((item: any) => {
+              const copy = { ...item };
+              for (const k of Object.keys(copy)) {
+                if (copy[k] === "") {
+                  copy[k] = null;
+                }
+              }
+              return copy;
+            });
+            attempts++;
+            continue;
           }
 
           // Self-healing for unique constraint violations on evaluations
@@ -514,6 +740,24 @@ export async function saveTableData<T extends { id: string | number }>(
             } catch (resolveErr) {
               console.warn("Gagal auto-resolve unique constraint IDs:", resolveErr);
             }
+          }
+
+          // Self-healing for foreign key constraint violations (e.g. invalid tenant_id / komisariat_id)
+          if (
+            upsertError.code === "23503" ||
+            upsertError.message.includes("violates foreign key constraint")
+          ) {
+            console.warn(
+              `[Foreign Key Healing] ${effectiveTable}: Pelanggaran foreign key terdeteksi (${upsertError.message}), mereset tenant_id menjadi null untuk mencoba ulang...`
+            );
+            currentList = currentList.map((item: any) => {
+              const copy = { ...item };
+              copy.tenant_id = null;
+              delete copy.komisariat_id;
+              return copy;
+            });
+            attempts++;
+            continue;
           }
 
           console.error(`[Supabase Write Error] ${effectiveTable}:`, upsertError.message);

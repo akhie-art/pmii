@@ -25,7 +25,8 @@ import {
   User,
   GraduationCap,
   Newspaper,
-  Award
+  Award,
+  ChevronDown,
 } from "lucide-react";
 
 // Import shadcn/ui components
@@ -33,10 +34,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { safeSignOut, supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import {
+  isUserAdmin,
+  isUserSuperAdmin,
+  isUserPengurus,
+  isUserInstruktur,
+  getTargetStaffPrefix,
+  isMenuAllowed
+} from "@/lib/auth-helpers";
+import { getTenantNameById } from "@/lib/tenancy";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -44,7 +57,6 @@ import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -113,6 +125,50 @@ export default function DashboardLayout({
         }
 
         const roleNormalized = (user.role || "pengurus").toLowerCase();
+        const isSuperAdminUser = isUserSuperAdmin(roleNormalized);
+
+        // Jika akun butuh onboarding atau belum terdaftar di basis data keanggotaan (anggota/kader)
+        if (!isSuperAdminUser) {
+          if (user.needsOnboarding) {
+            router.replace("/onboarding");
+            return;
+          }
+
+          // Cek apakah akun terdaftar di data anggota
+          (async () => {
+            try {
+              const cadres = await db.getCadres();
+              const foundCadre: any = cadres.find(
+                (c: any) =>
+                  (c.email && user.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
+                  c.id === user.id ||
+                  (user.user_id && c.user_id === user.user_id)
+              );
+              if (!foundCadre) {
+                const updatedSession = { ...user, needsOnboarding: true };
+                localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
+                router.replace("/onboarding");
+                return;
+              }
+
+              // Sinkronkan informasi tenant jika belum lengkap di session
+              const resolvedTid = foundCadre.tenant_id || foundCadre.komisariat_id || user.tenant_id || user.komisariat_id;
+              const resolvedComm = user.commissariat || foundCadre.commissariat || (resolvedTid ? getTenantNameById(resolvedTid) : null);
+              if ((!user.tenant_id && resolvedTid) || (!user.commissariat && resolvedComm)) {
+                const updatedSession = {
+                  ...user,
+                  tenant_id: resolvedTid,
+                  komisariat_id: resolvedTid,
+                  commissariat: resolvedComm || user.commissariat
+                };
+                localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
+              }
+            } catch (err) {
+              console.warn("Notice verifying membership in layout:", err);
+            }
+          })();
+        }
+
         // Jika akun anggota, peserta, atau kader, alihkan ke URL dinamis sesuai data role akunnya
         if (roleNormalized === "anggota" || roleNormalized === "peserta" || roleNormalized === "kader") {
           localStorage.setItem("PMII_ACTIVE_CADRE_ID", user.id);
@@ -120,10 +176,10 @@ export default function DashboardLayout({
           return;
         }
 
-        const isAdmin = roleNormalized === "admin";
-        const isPengurus = roleNormalized === "pengurus" || roleNormalized === "komisariat";
-        const isInstruktur = roleNormalized === "instruktur";
-        const targetStaffPrefix = isAdmin ? "/admin" : (isInstruktur ? "/instruktur" : "/pengurus");
+        const isAdmin = isUserAdmin(roleNormalized);
+        const isPengurus = isUserPengurus(roleNormalized);
+        const isInstruktur = isUserInstruktur(roleNormalized);
+        const targetStaffPrefix = getTargetStaffPrefix(roleNormalized);
 
         // URL dynamic role routing: if user is at legacy /dashboard or /dashboard/*, redirect to /admin, /pengurus, or /instruktur
         if (typeof window !== "undefined") {
@@ -157,6 +213,45 @@ export default function DashboardLayout({
         setCurrentUser(user);
         setLoading(false);
 
+        // Background synchronization with Supabase Users Auth for live role/allowedMenus updates
+        if (isSupabaseConfigured && supabase && user.email) {
+          (async () => {
+            try {
+              const { data: usersData, error } = await supabase.rpc("get_auth_users");
+              if (!error && Array.isArray(usersData)) {
+                const fresh = usersData.find((u: any) =>
+                  (u.email && u.email.toLowerCase().trim() === user.email.toLowerCase().trim()) ||
+                  (u.id && (u.id === user.id || u.id === user.user_id))
+                );
+                if (fresh) {
+                  const freshRole = fresh.role || user.role || "pengurus";
+                  const freshAllowed = Array.isArray(fresh.allowedMenus) ? fresh.allowedMenus : (user.allowedMenus || []);
+                  const freshStatus = fresh.status || user.status || "AKTIF";
+                  const freshComm = fresh.commissariat || user.commissariat;
+
+                  const roleChanged = freshRole !== user.role;
+                  const menusChanged = JSON.stringify(freshAllowed) !== JSON.stringify(user.allowedMenus);
+                  const statusChanged = freshStatus !== user.status;
+
+                  if (roleChanged || menusChanged || statusChanged) {
+                    const updatedSession = {
+                      ...user,
+                      role: freshRole,
+                      allowedMenus: freshAllowed,
+                      status: freshStatus,
+                      commissariat: freshComm
+                    };
+                    localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
+                    setCurrentUser(updatedSession);
+                  }
+                }
+              }
+            } catch (syncErr) {
+              console.warn("Notice syncing user session in layout:", syncErr);
+            }
+          })();
+        }
+
         // Route Guard for Instruktur
         const normalizedPath = pathname.replace(/\/$/, "");
         if (isInstruktur) {
@@ -176,36 +271,26 @@ export default function DashboardLayout({
           }
         }
 
-        // Route Guard for Pengurus (cannot access admin-only menus)
-        if (isPengurus) {
-          if (
-            normalizedPath === `${targetStaffPrefix}/pengguna` ||
-            normalizedPath.startsWith(`${targetStaffPrefix}/pengguna/`) ||
-            normalizedPath === `${targetStaffPrefix}/pengaturan` ||
-            normalizedPath.startsWith(`${targetStaffPrefix}/pengaturan/`) ||
-            normalizedPath === "/admin/pengguna" ||
-            normalizedPath.startsWith("/admin/pengguna/") ||
-            normalizedPath === "/admin/pengaturan" ||
-            normalizedPath.startsWith("/admin/pengaturan/")
-          ) {
+        // Route Guard for Custom allowedMenus / Restricted Roles
+        const isRootHome =
+          normalizedPath === "/dashboard" ||
+          normalizedPath === "/admin" ||
+          normalizedPath === "/pengurus" ||
+          normalizedPath === "/instruktur" ||
+          normalizedPath === targetStaffPrefix;
+        const isProfil = normalizedPath.endsWith("/profil");
+
+        if (!isSuperAdminUser && !isRootHome && !isProfil) {
+          // If pengurus tries to access legacy /admin routes, redirect to targetStaffPrefix
+          if (isPengurus && (normalizedPath === "/admin" || normalizedPath.startsWith("/admin/"))) {
             router.push(targetStaffPrefix);
             return;
           }
 
-          // Check custom allowedMenus if assigned
-          if (Array.isArray(user.allowedMenus) && user.allowedMenus.length > 0) {
-            if (
-              normalizedPath !== targetStaffPrefix &&
-              normalizedPath !== `${targetStaffPrefix}/profil`
-            ) {
-              const isAllowed = user.allowedMenus.some((href: string) => {
-                const normalizedHref = href.replace(/\/$/, "");
-                return normalizedPath === normalizedHref || normalizedPath.startsWith(normalizedHref + "/");
-              });
-              if (!isAllowed) {
-                router.push(targetStaffPrefix);
-              }
-            }
+          const isAllowed = isMenuAllowed(normalizedPath, user, targetStaffPrefix);
+          if (!isAllowed) {
+            router.push(targetStaffPrefix);
+            return;
           }
         }
       } catch (e) {
@@ -229,14 +314,15 @@ export default function DashboardLayout({
   }
 
   const userRole = (currentUser?.role || "").toLowerCase();
-  const isAdmin = userRole === "admin";
-  const isPengurus = userRole === "pengurus" || userRole === "komisariat";
-  const isInstruktur = userRole === "instruktur";
+  const isAdmin = isUserAdmin(userRole);
+  const isSuperAdmin = isUserSuperAdmin(userRole, currentUser?.email);
+  const isPengurus = isUserPengurus(userRole);
+  const isInstruktur = isUserInstruktur(userRole);
 
   const matchRole = pathname ? pathname.match(/^\/(admin|pengurus|instruktur|dashboard)/) : null;
   const staffPrefix = matchRole && matchRole[1] !== "dashboard"
     ? `/${matchRole[1]}`
-    : (isAdmin ? "/admin" : isInstruktur ? "/instruktur" : "/pengurus");
+    : getTargetStaffPrefix(userRole);
 
   const menuGroups: MenuGroup[] = isInstruktur
     ? [
@@ -259,6 +345,11 @@ export default function DashboardLayout({
         {
           groupLabel: "Keanggotaan & Struktur",
           items: [
+            {
+              name: isSuperAdmin ? "Tenant" : "Data Komisariat",
+              href: `${staffPrefix}/${isSuperAdmin ? "tenant" : "komisariat"}`,
+              icon: Building2
+            },
             { name: "Database Anggota", href: `${staffPrefix}/anggota`, icon: Users },
             { name: "Data Pengurus", href: `${staffPrefix}/pengurus`, icon: UserCheck },
           ]
@@ -287,31 +378,18 @@ export default function DashboardLayout({
             { name: "Artikel & Berita", href: `${staffPrefix}/artikel`, icon: Newspaper },
           ]
         },
-        ...(isAdmin
-          ? [
-              {
-                groupLabel: "Konfigurasi & Pengaturan",
-                items: [
-                  { name: "Manajemen Pengguna", href: `${staffPrefix}/pengguna`, icon: ShieldCheck },
-                  { name: "Pengaturan Sistem", href: `${staffPrefix}/pengaturan`, icon: Settings },
-                ]
-              }
-            ]
-          : [])
+        {
+          groupLabel: "Konfigurasi & Pengaturan",
+          items: [
+            { name: "Manajemen Pengguna", href: `${staffPrefix}/pengguna`, icon: ShieldCheck },
+            { name: "Pengaturan Sistem", href: `${staffPrefix}/pengaturan`, icon: Settings },
+          ]
+        }
       ];
 
   const filteredGroups = menuGroups.map(group => ({
     ...group,
-    items: group.items.filter(item => {
-      if (isAdmin) return true;
-      if (currentUser && Array.isArray(currentUser.allowedMenus) && currentUser.allowedMenus.length > 0) {
-        return currentUser.allowedMenus.some((m: string) => {
-          const subPath = m.replace(/^\/dashboard/, staffPrefix);
-          return item.href === subPath || item.href === m;
-        });
-      }
-      return true;
-    })
+    items: group.items.filter(item => isMenuAllowed(item.href, currentUser, staffPrefix))
   })).filter(group => group.items.length > 0);
 
   const notifications = [
@@ -352,7 +430,9 @@ export default function DashboardLayout({
                   {isAdmin ? "Panel Administrator" : isInstruktur ? "Panel Tim Instruktur" : "Panel Pengurus"}
                 </h3>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                  PK PMII Ki Ageng Getas Pendawa
+                  {isAdmin
+                    ? "PC PMII Grobogan"
+                    : (currentUser?.commissariat || "Pengurus PMII")}
                 </p>
               </div>
             </div>
@@ -368,7 +448,14 @@ export default function DashboardLayout({
                 <SidebarGroupContent>
                   <SidebarMenu className="space-y-0.5">
                     {group.items.map((item) => {
-                      const isActive = pathname === item.href || (item.href !== staffPrefix && pathname.startsWith(item.href + "/"));
+                      const isTenantOrKomisariatMatch =
+                        (item.href.endsWith("/tenant") || item.href.endsWith("/komisariat")) &&
+                        (pathname.endsWith("/tenant") || pathname.endsWith("/komisariat") || pathname.includes("/tenant/") || pathname.includes("/komisariat/"));
+
+                      const isActive =
+                        pathname === item.href ||
+                        (item.href !== staffPrefix && pathname.startsWith(item.href + "/")) ||
+                        isTenantOrKomisariatMatch;
                       const Icon = item.icon;
 
                       return (
@@ -406,56 +493,6 @@ export default function DashboardLayout({
               </SidebarGroup>
             ))}
           </SidebarContent>
-
-          {/* Sidebar Footer */}
-          <SidebarFooter className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shrink-0">
-            <div className="flex flex-col gap-2">
-              {/* User Profile Card - Hanya tampil di sidebar jika BUKAN Pengurus (karena Pengurus dipindah ke Navbar) */}
-              {!isPengurus && (
-                <Link
-                  href={`${staffPrefix}/profil`}
-                  className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors group"
-                  title="Lihat & Kelola Profil"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 dark:bg-blue-700 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                    {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : "AD"}
-                  </div>
-                  <div className="flex flex-col min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                    <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      {currentUser?.name || "Admin PK PMII"}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1 truncate">
-                      <ShieldCheck className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
-                      <span className="truncate">
-                        {userRole === "admin" ? "Administrator" : currentUser?.role || "Administrator"}
-                      </span>
-                    </span>
-                  </div>
-                </Link>
-              )}
-              
-              {/* Logout Button */}
-              <Link 
-                href="/login" 
-                className="w-full"
-                onClick={() => {
-                  localStorage.removeItem("PMII_LOGGED_IN_USER");
-                  localStorage.removeItem("PMII_ACTIVE_COMMISSARIAT");
-                  localStorage.removeItem("PMII_ACTIVE_CADRE_ID");
-                }}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full flex items-center justify-center gap-2 h-8 rounded-lg text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors duration-150 group-data-[collapsible=icon]:p-0"
-                  title="Keluar Sistem"
-                >
-                  <LogOut className="w-3.5 h-3.5 shrink-0" />
-                  <span className="group-data-[collapsible=icon]:hidden">Keluar Sistem</span>
-                </Button>
-              </Link>
-            </div>
-          </SidebarFooter>
         </Sidebar>
 
         {/* OFFICIAL SHADCN SIDEBAR INSET COMPONENT */}
@@ -487,7 +524,8 @@ export default function DashboardLayout({
             </div>
 
             {/* RIGHT: Notifications, Theme Toggle, Profile */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+
               {/* Theme Toggle Button */}
               <Button
                 variant="outline"
@@ -545,44 +583,94 @@ export default function DashboardLayout({
                 </DropdownMenuContent>
               </DropdownMenu>
               
-              {/* User Profile in Navbar for Pengurus & Anggota */}
-              {!isAdmin ? (
-                <div className="flex items-center pl-2 border-l border-zinc-200 dark:border-zinc-800">
-                  <Link
-                    href={`${staffPrefix}/profil`}
-                    className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/80 transition-all duration-150 cursor-pointer group shadow-2xs"
-                    title="Klik untuk membuka Halaman Profil"
+              {/* User Profile in Navbar (untuk semua role) */}
+              <div className="flex items-center pl-2 border-l border-zinc-200 dark:border-zinc-800">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/80 transition-all duration-150 cursor-pointer group shadow-2xs outline-none"
+                        title="Menu Akun Pengguna"
+                      >
+                        {currentUser?.avatar ? (
+                          <Avatar className="w-7 h-7 rounded-lg border border-blue-200 dark:border-blue-900 shrink-0 overflow-hidden">
+                            <AvatarImage src={currentUser.avatar} alt={currentUser.name} className="object-cover" />
+                            <AvatarFallback className="bg-blue-600 text-white font-bold text-xs">
+                              {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : "AD"}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <div className="w-7 h-7 rounded-lg bg-blue-600 dark:bg-blue-700 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                            {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : "AD"}
+                          </div>
+                        )}
+                        <div className="hidden sm:flex flex-col text-left min-w-0 max-w-[130px] md:max-w-[190px]">
+                          <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {currentUser?.name || (isAdmin ? "Admin Pengurus Cabang" : isInstruktur ? "Instruktur PMII" : "Pengurus PMII")}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1 truncate">
+                            <ShieldCheck className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                            <span className="truncate">
+                              {userRole === "admin" ? "Administrator" : isInstruktur ? "Tim Instruktur" : isPengurus ? "Pengurus" : currentUser?.role || "Administrator"}
+                            </span>
+                          </span>
+                        </div>
+                        <ChevronDown className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors ml-0.5 shrink-0 hidden sm:block" />
+                      </button>
+                    }
+                  />
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg p-1.5 z-50"
                   >
-                    <Avatar className="w-7 h-7 rounded-full border border-blue-200 dark:border-blue-900 shrink-0 overflow-hidden">
-                      {currentUser?.avatar ? (
-                        <AvatarImage src={currentUser.avatar} alt={currentUser.name} className="object-cover" />
-                      ) : null}
-                      <AvatarFallback className="bg-blue-600 text-white font-bold text-xs">
-                        {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : "PM"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="hidden sm:flex flex-col text-left min-w-0 max-w-[130px] md:max-w-[170px]">
-                      <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {currentUser?.name || (isAdmin ? "Admin PMII" : isInstruktur ? "Instruktur PMII" : "Pengurus PMII")}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span className="truncate">
-                          {isAdmin ? "Administrator" : isInstruktur ? "Tim Instruktur" : isPengurus ? "Pengurus" : userRole === "peserta" ? "Peserta MAPABA" : "Kader Aktif"}
-                        </span>
-                      </span>
+                    <div className="px-2.5 py-2 border-b border-zinc-100 dark:border-zinc-800 mb-1">
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        {currentUser?.name || "Akun PMII"}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                        {currentUser?.email || (isAdmin ? "admin@pmii.id" : "pengurus@pmii.id")}
+                      </p>
                     </div>
-                    <User className="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ml-0.5 shrink-0 hidden sm:block" />
-                  </Link>
-                </div>
-              ) : (
-                /* Quick Action for Admin */
-                <div className="hidden md:flex items-center gap-2 pl-2 border-l border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 font-mono tracking-wider select-none text-zinc-600 dark:text-zinc-400">
-                    SHIFT + K
-                  </span>
-                </div>
-              )}
+                    <DropdownMenuItem
+                      onClick={() => router.push(`${staffPrefix}/profil`)}
+                      className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
+                    >
+                      <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Profil Saya</span>
+                    </DropdownMenuItem>
+                    {isMenuAllowed(`${staffPrefix}/pengguna`, currentUser, staffPrefix) && (
+                      <DropdownMenuItem
+                        onClick={() => router.push(`${staffPrefix}/pengguna`)}
+                        className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Manajemen Pengguna</span>
+                      </DropdownMenuItem>
+                    )}
+                    {isMenuAllowed(`${staffPrefix}/pengaturan`, currentUser, staffPrefix) && (
+                      <DropdownMenuItem
+                        onClick={() => router.push(`${staffPrefix}/pengaturan`)}
+                        className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>Pengaturan Sistem</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator className="my-1 bg-zinc-100 dark:bg-zinc-800" />
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        await safeSignOut();
+                        router.push("/login");
+                      }}
+                      className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                      <span>Keluar Sistem</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </header>
 

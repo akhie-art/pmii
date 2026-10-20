@@ -5,7 +5,8 @@ import {
   Mail,
   Globe,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  Loader2
 } from "lucide-react";
 
 function Instagram({ className }: { className?: string }) {
@@ -37,6 +38,7 @@ interface OrganizationTabProps {
   updateOrgField: (key: keyof OrganizationSettings, value: string) => void;
   onLogoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveLogo: () => void;
+  isUploadingLogo?: boolean;
 }
 
 export const OrganizationTab: React.FC<OrganizationTabProps> = ({
@@ -44,10 +46,11 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
   currentUser,
   updateOrgField,
   onLogoChange,
-  onRemoveLogo
+  onRemoveLogo,
+  isUploadingLogo = false
 }) => {
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const isKomisariat = currentUser?.role === "KOMISARIAT";
+  const isKomisariat = currentUser?.role === "komisariat" || currentUser?.role === "pengurus_komisariat";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -56,12 +59,12 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
         <CardHeader className="pb-4 border-b border-zinc-100 dark:border-zinc-800">
           <CardTitle className="text-sm font-bold tracking-wide flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
             <Building className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span>{isKomisariat ? "Identitas Organisasi Komisariat" : "Identitas Organisasi Cabang"}</span>
+            <span>{isKomisariat ? "Identitas Organisasi Komisariat" : "Identitas Pengurus Cabang"}</span>
           </CardTitle>
           <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400">
             {isKomisariat
-              ? "Informasi resmi kepengurusan PMII tingkat komisariat yang tertera pada dokumen dan arsip administrasi."
-              : "Informasi resmi kepengurusan PMII tingkat cabang yang tertera pada dokumen dan arsip administrasi."}
+              ? "Informasi resmi kepengurusan PMII tingkat komisariat yang tertera pada dokumen dan kop administrasi."
+              : "Informasi resmi kepengurusan PMII tingkat cabang yang tertera pada dokumen dan kop administrasi."}
           </CardDescription>
         </CardHeader>
 
@@ -69,7 +72,7 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Nama Komisariat
+                {isKomisariat ? "Nama Komisariat" : "Nama Pengurus Cabang"}
               </label>
               <Input
                 value={settings.organization.cabangName}
@@ -165,7 +168,7 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* Sidebar Card: Logo Only */}
+      {/* Sidebar Card: Logo Organisasi */}
       <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none lg:col-span-1 p-5 sm:p-6 flex flex-col justify-center">
         <div className="border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 rounded-xl p-5 flex flex-col items-center justify-center text-center space-y-3.5">
           <input
@@ -177,7 +180,12 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
           />
 
           <div className="w-24 h-24 rounded-full bg-blue-600 dark:bg-blue-700 border-2 border-amber-400/40 flex items-center justify-center text-white font-bold text-lg shadow-sm relative overflow-hidden group">
-            {settings.organization.logo ? (
+            {isUploadingLogo ? (
+              <div className="flex flex-col items-center justify-center gap-1 text-white">
+                <Loader2 className="w-6 h-6 animate-spin text-white" />
+                <span className="text-[9px]">Mengunggah...</span>
+              </div>
+            ) : settings.organization.logo ? (
               <img
                 src={settings.organization.logo}
                 alt="Logo Organisasi"
@@ -187,7 +195,7 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
               <span>PMII</span>
             )}
             <div
-              onClick={() => logoInputRef.current?.click()}
+              onClick={() => !isUploadingLogo && logoInputRef.current?.click()}
               className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-semibold text-white transition-opacity duration-200 cursor-pointer"
             >
               Ganti Logo
@@ -198,7 +206,7 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
             <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
               {isKomisariat ? "Lambang PK PMII" : "Lambang PC PMII"}
             </h4>
-            <p className="text-[10px] text-zinc-400">PNG, JPG, SVG, atau WebP (Maks. 2MB)</p>
+            <p className="text-[10px] text-zinc-400">Tersimpan di Cloud Storage Supabase (Maks. 2MB)</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -206,6 +214,7 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
               type="button"
               variant="outline"
               size="sm"
+              disabled={isUploadingLogo}
               onClick={() => logoInputRef.current?.click()}
               className="text-xs font-medium h-8 border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer flex items-center gap-1.5"
             >
@@ -213,7 +222,7 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
               <span>{settings.organization.logo ? "Ganti Logo" : "Unggah Logo"}</span>
             </Button>
 
-            {settings.organization.logo && (
+            {settings.organization.logo && !isUploadingLogo && (
               <Button
                 type="button"
                 variant="ghost"

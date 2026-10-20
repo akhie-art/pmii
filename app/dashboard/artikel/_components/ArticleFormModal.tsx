@@ -7,7 +7,8 @@ import {
   Globe,
   RotateCw,
   Upload,
-  Check
+  Check,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,6 +26,7 @@ interface ArticleFormModalProps {
   setFormData: React.Dispatch<React.SetStateAction<ArticleFormData>>;
   onSubmit: (e: React.FormEvent) => void;
   showToast: (msg: string) => void;
+  isSubmitting?: boolean;
 }
 
 export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
@@ -34,7 +36,8 @@ export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
   formData,
   setFormData,
   onSubmit,
-  showToast
+  showToast,
+  isSubmitting = false
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,8 +132,9 @@ export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
 
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={onClose}
-              className="w-8 h-8 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 flex items-center justify-center cursor-pointer transition-colors"
+              className="w-8 h-8 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 text-zinc-500 flex items-center justify-center cursor-pointer transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -246,6 +250,7 @@ export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
                         src={formData.image}
                         alt="Sampul Artikel"
                         fill
+                        sizes="(max-width: 1024px) 100vw, 360px"
                         className="object-cover"
                       />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
@@ -415,17 +420,28 @@ export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
               <Button
                 type="button"
                 variant="outline"
+                disabled={isSubmitting}
                 onClick={onClose}
-                className="h-9 text-xs px-4 rounded-xl cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="h-9 text-xs px-4 rounded-xl cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
               >
                 Batal
               </Button>
               <Button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs px-5 rounded-xl shadow-md cursor-pointer font-semibold flex items-center gap-1.5"
+                disabled={isSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white h-9 text-xs px-5 rounded-xl shadow-md cursor-pointer font-semibold flex items-center gap-1.5"
               >
-                <Check className="w-4 h-4" />
-                <span>{editingArticle ? "Perbarui Artikel" : "Simpan & Terbitkan"}</span>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{editingArticle ? "Memperbarui..." : "Menerbitkan..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{editingArticle ? "Perbarui Artikel" : "Simpan & Terbitkan"}</span>
+                  </>
+                )}
               </Button>
             </div>
           </div>

@@ -97,6 +97,7 @@ export default function KaderDashboardPage() {
 
   const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
   const rolePrefix = match ? `/${match[1]}` : (cadre?.role ? `/${cadre.role.toLowerCase()}` : "/peserta");
+  const isPeserta = (match ? match[1] : (cadre?.role ? cadre.role.toLowerCase() : "peserta")) === "peserta" || rolePrefix === "/peserta";
 
   return (
     <motion.div
@@ -115,40 +116,44 @@ export default function KaderDashboardPage() {
             Selamat Datang, {cadre.name}!
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-2xl">
-            Portal Kaderisasi mandiri untuk mengakses bahan ajar silabus, menyerahkan laporan progres RKTL, dan melihat identitas keanggotaan Anda.
+            {isPeserta
+              ? "Portal kegiatan mandiri untuk memantau agenda pelatihan, mengerjakan alur kegiatan, dan melihat profil Anda."
+              : "Portal Kaderisasi mandiri untuk mengakses bahan ajar silabus, menyerahkan laporan progres RKTL, dan melihat identitas keanggotaan Anda."}
           </p>
         </div>
       </motion.div>
 
       {/* 2. MENU ACTION NAVIGATION CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isPeserta ? "lg:grid-cols-3" : "lg:grid-cols-4"} gap-4`}>
         
-        {/* CARD 1: MATERI */}
-        <motion.div variants={itemVariants}>
-          <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none p-4.5 h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="space-y-2.5">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <BookOpen className="w-4.5 h-4.5" />
+        {/* CARD 1: MATERI (Hanya tampil untuk anggota/kader yang sudah lulus) */}
+        {!isPeserta && (
+          <motion.div variants={itemVariants}>
+            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none p-4.5 h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+              <div className="space-y-2.5">
+                <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <BookOpen className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                    Materi & Silabus
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed line-clamp-2">
+                    Pelajari modul resmi MAPABA, kajian Aswaja, dan latihan kuis mandiri.
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                  Materi & Silabus
-                </CardTitle>
-                <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed line-clamp-2">
-                  Pelajari modul resmi MAPABA, kajian Aswaja, dan latihan kuis mandiri.
-                </CardDescription>
-              </div>
-            </div>
 
-            <div className="pt-4">
-              <Link href={`${rolePrefix}/materi`}>
-                <Button className="w-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs h-8 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 transition-colors">
-                  Buka Silabus <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        </motion.div>
+              <div className="pt-4">
+                <Link href={`${rolePrefix}/materi`}>
+                  <Button className="w-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs h-8 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 transition-colors">
+                    Buka Silabus <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
         {/* CARD 2: KEGIATAN */}
         <motion.div variants={itemVariants}>

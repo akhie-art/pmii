@@ -37,6 +37,8 @@ import { toast } from "sonner";
 import { db, SuratTemplate } from "@/lib/db";
 import {
   base64ToArrayBuffer,
+  arrayBufferToBase64,
+  getDocxArrayBuffer,
   fillDocxTemplate,
   parseTemplateContent,
   downloadDocxBlob
@@ -1014,10 +1016,20 @@ export default function LetterGeneratorDialog({
     }
   };
 
-  const applyTemplateSelection = (tmpl: SuratTemplate) => {
+  const applyTemplateSelection = async (tmpl: SuratTemplate) => {
     const parsed = parseTemplateContent(tmpl.content);
-    const b64 = tmpl.fileBase64 || parsed.fileBase64 || "";
+    let b64 = tmpl.fileBase64 || parsed.fileBase64 || "";
+    const fileUrl = tmpl.fileUrl || parsed.fileUrl;
     const ph = tmpl.placeholders || parsed.placeholders || [];
+
+    if (!b64 && fileUrl) {
+      try {
+        const buffer = await getDocxArrayBuffer({ fileUrl });
+        b64 = arrayBufferToBase64(buffer);
+      } catch (err) {
+        console.warn("Gagal memuat template DOCX dari Cloud Storage:", err);
+      }
+    }
 
     setActiveFileBase64(b64);
     setActivePlaceholders(ph);

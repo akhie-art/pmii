@@ -17,8 +17,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import type { UserAccount, UserRole } from "@/lib/db";
-import { AVAILABLE_MENUS, isMasterAdmin } from "./types";
+import type { UserAccount, UserRole, Role } from "@/lib/db";
+import { AVAILABLE_MENUS, isMasterAdmin, formatRoleName } from "./types";
 
 interface UserFormDialogProps {
   isOpen: boolean;
@@ -40,6 +40,7 @@ interface UserFormDialogProps {
   formAllowedMenus: string[];
   setFormAllowedMenus: React.Dispatch<React.SetStateAction<string[]>>;
   availableKomisariats: string[];
+  availableRoles?: Role[];
   onSubmit: (e: React.FormEvent) => void;
 }
 
@@ -63,9 +64,18 @@ export const UserFormDialog: React.FC<UserFormDialogProps> = ({
   formAllowedMenus,
   setFormAllowedMenus,
   availableKomisariats,
+  availableRoles,
   onSubmit,
 }) => {
   const isMaster = isEdit && isMasterAdmin(selectedUser);
+  const roleLower = (formRole || "").toLowerCase().trim();
+  const isCabangRole =
+    roleLower === "admin" ||
+    roleLower === "superadmin" ||
+    roleLower === "super_admin" ||
+    roleLower === "ketua_cabang" ||
+    roleLower === "pengurus_cabang" ||
+    roleLower.includes("cabang");
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -135,35 +145,70 @@ export const UserFormDialog: React.FC<UserFormDialogProps> = ({
             {/* Role + Status */}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Peran</label>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Peran Akun</label>
                 <Select
                   value={formRole.toLowerCase()}
                   disabled={isMaster}
                   onValueChange={(val: any) => {
                     if (!val) return;
                     setFormRole(val);
-                    setFormAllowedMenus(
-                      AVAILABLE_MENUS.filter((m) =>
-                        m.defaultRoles.map((r) => r.toLowerCase()).includes(val.toLowerCase())
-                      ).map((m) => m.href)
-                    );
+                    const matchedRole = availableRoles?.find((r) => r.code.toLowerCase() === val.toLowerCase());
+                    if (matchedRole?.allowed_menus && matchedRole.allowed_menus.length > 0) {
+                      setFormAllowedMenus(matchedRole.allowed_menus);
+                    } else {
+                      setFormAllowedMenus(
+                        AVAILABLE_MENUS.filter((m) =>
+                          m.defaultRoles.map((r) => r.toLowerCase()).includes(val.toLowerCase())
+                        ).map((m) => m.href)
+                      );
+                    }
                   }}
                 >
                   <SelectTrigger className="text-xs h-8 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
-                    <SelectValue placeholder="Peran" />
+                    <SelectValue placeholder="Pilih Peran" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
-                    <SelectItem value="admin" className="text-xs">Admin</SelectItem>
-                    <SelectItem value="pengurus" className="text-xs">Pengurus</SelectItem>
-                    <SelectItem value="instruktur" className="text-xs">Instruktur</SelectItem>
-                    <SelectItem value="anggota" className="text-xs">Anggota</SelectItem>
-                    <SelectItem value="peserta" className="text-xs">Peserta</SelectItem>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+                    {availableRoles && availableRoles.length > 0 ? (
+                      availableRoles.map((r) => (
+                        <SelectItem
+                          key={r.id}
+                          value={r.code.toLowerCase()}
+                          className="text-xs font-medium cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span>{formatRoleName(r.code)}</span>
+                            <span className="text-[10px] text-zinc-400 font-mono">({r.code})</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <>
+                        <SelectItem value="superadmin" className="text-xs font-medium text-rose-600 dark:text-rose-400">
+                          Super Administrator
+                        </SelectItem>
+                        <SelectItem value="admin" className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                          Pengurus Cabang (Akses Penuh)
+                        </SelectItem>
+                        <SelectItem value="pengurus" className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                          Pengurus Komisariat (Ketua / BPH)
+                        </SelectItem>
+                        <SelectItem value="instruktur" className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                          Instruktur Cabang
+                        </SelectItem>
+                        <SelectItem value="anggota" className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          Anggota / Kader
+                        </SelectItem>
+                        <SelectItem value="peserta" className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                          Peserta (Calon Anggota)
+                        </SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Status</label>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Status Akun</label>
                 <Select
                   value={formStatus}
                   disabled={isMaster}
@@ -183,9 +228,14 @@ export const UserFormDialog: React.FC<UserFormDialogProps> = ({
             </div>
 
             {/* Komisariat */}
-            {formRole.toUpperCase() !== "ADMIN" && (
+            {!isCabangRole ? (
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Komisariat</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Komisariat Kampus <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-zinc-400">Terkunci ke data kampus ini</span>
+                </div>
                 <Select value={formComm} onValueChange={(val) => { if (val) setFormComm(val); }}>
                   <SelectTrigger className="text-xs h-8 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
                     <SelectValue placeholder="Pilih komisariat" />
@@ -196,6 +246,10 @@ export const UserFormDialog: React.FC<UserFormDialogProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            ) : (
+              <div className="p-2 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-900/40 rounded-lg text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                <span className="font-semibold">Cakupan Wilayah:</span> Pengurus Cabang Grobogan (Memiliki akses ke seluruh komisariat).
               </div>
             )}
 

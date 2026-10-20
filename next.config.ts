@@ -21,11 +21,11 @@ const nextConfig: NextConfig = {
         destination: "/kader/:path*",
       },
       {
-        source: "/:role(admin|pengurus|instruktur)",
+        source: "/:role(admin|cabang|pc|pengurus|instruktur|superadmin|super_admin)",
         destination: "/dashboard",
       },
       {
-        source: "/:role(admin|pengurus|instruktur)/:path*",
+        source: "/:role(admin|cabang|pc|pengurus|instruktur|superadmin|super_admin)/:path*",
         destination: "/dashboard/:path*",
       },
     ];

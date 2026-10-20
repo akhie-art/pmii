@@ -3,12 +3,14 @@ import { isValidUUID } from "../utils";
 import { UserAccount } from "./types";
 
 export function getUserCredentials(): Record<string, string> {
-  if (typeof window === "undefined") return {};
+  const defaults: Record<string, string> = {};
+  if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem("PMII_USER_CREDENTIALS");
-    return raw ? JSON.parse(raw) : {};
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { ...defaults, ...parsed };
   } catch {
-    return {};
+    return defaults;
   }
 }
 
@@ -169,6 +171,7 @@ export async function createAuthUser(user: {
   name?: string;
   role?: string;
   commissariat?: string;
+  komisariat_id?: string;
   status?: string;
   allowedMenus?: string[];
 }): Promise<UserAccount | null> {
@@ -177,18 +180,35 @@ export async function createAuthUser(user: {
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase.rpc("create_auth_user", {
+      let res = await supabase.rpc("create_auth_user", {
         p_email: cleanEmail,
         p_password: pwd,
         p_name: user.name?.trim() || "",
         p_role: user.role || "pengurus",
         p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
         p_status: user.status || "AKTIF",
-        p_allowed_menus: user.allowedMenus || []
+        p_allowed_menus: user.allowedMenus || [],
+        p_komisariat_id: user.komisariat_id || null
       });
+
+      // Jika RPC versi sebelumnya belum menerima p_komisariat_id, fallback ke signature lama
+      if (res.error && res.error.message.includes("p_komisariat_id")) {
+        res = await supabase.rpc("create_auth_user", {
+          p_email: cleanEmail,
+          p_password: pwd,
+          p_name: user.name?.trim() || "",
+          p_role: user.role || "pengurus",
+          p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
+          p_status: user.status || "AKTIF",
+          p_allowed_menus: user.allowedMenus || []
+        });
+      }
+
+      const { data, error } = res;
 
       if (error) {
         console.warn("Notice create_auth_user:", error.message);
+        throw new Error(error.message);
       } else if (data) {
         if (pwd) {
           setUserPassword([data.id, data.user_id, cleanEmail, user.name], pwd);
@@ -201,13 +221,15 @@ export async function createAuthUser(user: {
           password: pwd,
           role: data.role || user.role || "pengurus",
           commissariat: data.commissariat || user.commissariat || "Ki Ageng Getas Pendawa",
+          komisariat_id: data.komisariat_id || user.komisariat_id,
           status: data.status || user.status || "AKTIF",
           createdAt: data.created_at || new Date().toISOString(),
           allowedMenus: data.allowed_menus || user.allowedMenus || []
         };
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Exception in create_auth_user RPC:", e);
+      throw e;
     }
   }
 
@@ -224,7 +246,7 @@ export async function updateAuthUser(user: Partial<UserAccount> & { id: string }
   }
   if (isSupabaseConfigured && supabase) {
     try {
-      const { error } = await supabase.rpc("update_auth_user", {
+      let { error } = await supabase.rpc("update_auth_user", {
         p_user_id: user.user_id || user.id,
         p_email: user.email ? user.email.toLowerCase().trim() : "",
         p_name: user.name || "",
@@ -232,8 +254,25 @@ export async function updateAuthUser(user: Partial<UserAccount> & { id: string }
         p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
         p_status: user.status || "AKTIF",
         p_allowed_menus: user.allowedMenus || [],
-        p_password: user.password && user.password.trim() ? user.password.trim() : null
+        p_password: user.password && user.password.trim() ? user.password.trim() : null,
+        p_komisariat_id: user.komisariat_id || null
       });
+
+      // Jika RPC versi lama belum ada p_komisariat_id, fallback tanpa p_komisariat_id
+      if (error && error.message.includes("p_komisariat_id")) {
+        const fallback = await supabase.rpc("update_auth_user", {
+          p_user_id: user.user_id || user.id,
+          p_email: user.email ? user.email.toLowerCase().trim() : "",
+          p_name: user.name || "",
+          p_role: user.role || "pengurus",
+          p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
+          p_status: user.status || "AKTIF",
+          p_allowed_menus: user.allowedMenus || [],
+          p_password: user.password && user.password.trim() ? user.password.trim() : null
+        });
+        error = fallback.error;
+      }
+
       if (error) {
         console.warn("Notice updating auth user:", error.message);
         return false;

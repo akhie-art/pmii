@@ -13,11 +13,12 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import type { UserAccount } from "@/lib/db";
-import { ROLE_LABELS, ROLE_BADGE, isMasterAdmin } from "./types";
+import type { UserAccount, Role } from "@/lib/db";
+import { getRoleBadgeClass, isMasterAdmin } from "./types";
 
 interface UserTableProps {
   users: UserAccount[];
+  roles?: Role[];
   selectedIds: string[];
   onToggleSelect: (userId: string) => void;
   onSelectAll: () => void;
@@ -29,6 +30,7 @@ interface UserTableProps {
 
 export const UserTable: React.FC<UserTableProps> = ({
   users,
+  roles,
   selectedIds,
   onToggleSelect,
   onSelectAll,
@@ -109,9 +111,15 @@ export const UserTable: React.FC<UserTableProps> = ({
                           <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block truncate max-w-[160px] sm:max-w-[200px]">
                             {u.name}
                           </span>
-                          {isMaster && (
-                            <span title="Master Administrator" className="text-amber-500 text-[10px] font-bold">★</span>
-                          )}
+                          {roleKey === "superadmin" || roleKey === "super_admin" ? (
+                            <span title="Super Administrator (Akses Global)" className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/60 rounded text-[9px] font-bold">
+                              ★ Superadmin
+                            </span>
+                          ) : isMaster ? (
+                            <span title="Ketua Cabang (Master Admin)" className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 rounded text-[9px] font-bold">
+                              ★ Master Cabang
+                            </span>
+                          ) : null}
                         </div>
                         <span className="text-[11px] text-zinc-400 dark:text-zinc-500 flex items-center gap-1 mt-0.5">
                           <Mail className="w-2.5 h-2.5" />
@@ -123,16 +131,30 @@ export const UserTable: React.FC<UserTableProps> = ({
 
                   {/* Role */}
                   <TableCell className="py-3 px-4 whitespace-nowrap">
-                    <Badge className={`text-[10px] font-medium border ${ROLE_BADGE[roleKey] || "bg-zinc-100 text-zinc-600"}`}>
-                      {ROLE_LABELS[roleKey] || u.role}
-                    </Badge>
+                    {(() => {
+                      const roleObj = roles?.find((r) => r.id === u.role_id || r.code.toLowerCase() === roleKey);
+                      const roleDisplayName = u.role_name || (roleObj as any)?.name || roleObj?.code || u.role;
+                      const roleBadgeClass = getRoleBadgeClass((roleObj as any)?.level, u.role);
+
+                      return (
+                        <Badge className={`text-[10px] font-medium border ${roleBadgeClass}`}>
+                          {roleDisplayName}
+                        </Badge>
+                      );
+                    })()}
                   </TableCell>
 
                   {/* Commissariat */}
                   <TableCell className="py-3 px-4 whitespace-nowrap">
                     <span className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
                       <Building className="w-3 h-3 text-zinc-400 shrink-0" />
-                      <span className="truncate max-w-[160px]">{u.commissariat || "Semua (Pusat)"}</span>
+                      <span className="truncate max-w-[160px]">
+                        {roleKey === "superadmin" || roleKey === "super_admin"
+                          ? "Pusat / Global (Semua Tenant)"
+                          : roleKey === "admin"
+                          ? "Pengurus Cabang Grobogan (Semua)"
+                          : (u.commissariat || "Belum Ditentukan")}
+                      </span>
                     </span>
                   </TableCell>
 

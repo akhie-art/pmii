@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   GraduationCap,
@@ -21,6 +21,12 @@ import { Card } from "@/components/ui/card";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 import { db, Kaderisasi } from "@/lib/db";
 import { supabase, isSupabaseConfigured, deleteStorageFile } from "@/lib/supabase";
+import {
+  isRecordInTenant,
+  getActiveTenant,
+  TENANT_CHANGED_EVENT,
+  isCabangOrAdmin
+} from "@/lib/tenancy";
 import type {
   KaderisasiLevel,
   SyllabusItem,
@@ -45,6 +51,8 @@ export default function KaderisasiPage() {
     error: (msg: string) => showError("Perhatian", msg)
   };
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [kaderisasiList, setKaderisasiList] = useState<Kaderisasi[]>([]);
   const [kurikulumData, setKurikulumData] = useState<Record<string, KaderisasiLevel>>({});
   const [loading, setLoading] = useState(true);
@@ -52,7 +60,11 @@ export default function KaderisasiPage() {
   const [activeTab, setActiveTab] = useState<"MATERIALS" | "SYLLABUS" | "QUIZ">("MATERIALS");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const selectedAgenda = kaderisasiList.find(k => k.id === selectedAgendaId) || kaderisasiList[0];
+  const tenantKaderisasiList = useMemo(() => {
+    return kaderisasiList.filter((k) => isRecordInTenant(currentUser, k, activeTenant));
+  }, [kaderisasiList, currentUser, activeTenant]);
+
+  const selectedAgenda = tenantKaderisasiList.find(k => k.id === selectedAgendaId) || tenantKaderisasiList[0];
   const selectedLevelId = selectedAgenda ? selectedAgenda.nama : "";
   const kaderisasiMateriList = selectedAgenda?.materi || [];
 
@@ -122,6 +134,27 @@ export default function KaderisasiPage() {
   });
 
   // Load from Supabase on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          setCurrentUser(u);
+          setActiveTenant(getActiveTenant(u) || "ALL");
+        } catch (e) {
+          console.error("Error reading user session:", e);
+        }
+      }
+
+      const handleTenant = (e: any) => {
+        setActiveTenant(e.detail?.activeTenant || "ALL");
+      };
+      window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    }
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -764,7 +797,7 @@ export default function KaderisasiPage() {
 
       {/* AGENDA CARDS */}
       <AgendaCards
-        kaderisasiList={kaderisasiList}
+        kaderisasiList={tenantKaderisasiList}
         selectedAgendaId={selectedAgenda?.id || ""}
         kurikulumData={kurikulumData}
         onSelectAgenda={handleLevelChange}

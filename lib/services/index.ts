@@ -1,22 +1,24 @@
 import { getCadres, saveCadres, getAnggota, saveAnggota, deleteCadre, deleteAnggota } from "./cadres";
-import { getEvents, saveEvents, getDefaultEventTimeline } from "./events";
-import { getRegistrations, saveRegistrations } from "./registrations";
+import { getEvents, saveEvents, deleteEvent, getDefaultEventTimeline } from "./events";
+import { getRegistrations, saveRegistrations, deleteRegistration } from "./registrations";
 import { getRequirements, saveRequirements } from "./requirements";
 import { getBoards, saveBoards } from "./boards";
-import { getCommissariats, saveCommissariats } from "./commissariats";
+import { getCommissariats, saveCommissariats, upsertCommissariat, deleteCommissariat } from "./commissariats";
 import { getUsers, saveUsers } from "./users";
 import { getKaderisasi, saveKaderisasi } from "./kaderisasi";
 import { getKurikulum, saveKurikulum } from "./kurikulum";
-import { getSurat, saveSurat, getSuratTemplates, saveSuratTemplates } from "./letters";
+import { getSurat, saveSurat, deleteSurat, getSuratTemplates, saveSuratTemplates, deleteSuratTemplate } from "./letters";
 import { getArsip, saveArsip } from "./archive";
 import {
   getEvaluations,
   saveEvaluations,
   deduplicateEvaluations,
   calculateEvaluationScore,
-  recalculateParticipantCumulative
+  recalculateParticipantCumulative,
+  syncEvaluationsWithRegistrations,
+  ensureEvaluationForRegistration
 } from "./evaluations";
-import { getArticles, saveArticles, likeArticle, formatArticleDate } from "./articles";
+import { getArticles, saveArticles, deleteArticle, likeArticle, formatArticleDate } from "./articles";
 import {
   getUserCredentials,
   setUserPassword,
@@ -27,6 +29,7 @@ import {
   createAuthUser,
   updateAuthUser
 } from "./credentials";
+import { getRoles, getRoleByCode, getRoleById, upsertRole, deleteRole, DEFAULT_ROLES } from "./roles";
 import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow } from "./core";
 
 // Unified db facade for 100% backward compatibility
@@ -44,10 +47,12 @@ export const db = {
   // Events / Kegiatan
   getEvents,
   saveEvents,
+  deleteEvent,
 
   // Registrations / Pendaftaran
   getRegistrations,
   saveRegistrations,
+  deleteRegistration,
 
   // Requirements / Persyaratan RTL
   getRequirements,
@@ -60,6 +65,8 @@ export const db = {
   // Commissariats / Komisariat
   getCommissariats,
   saveCommissariats,
+  upsertCommissariat,
+  deleteCommissariat,
 
   // Users & Auth
   getUsers,
@@ -72,8 +79,10 @@ export const db = {
   // Surat & Template
   getSurat,
   saveSurat,
+  deleteSurat,
   getSuratTemplates,
   saveSuratTemplates,
+  deleteSuratTemplate,
 
   // Arsip
   getArsip,
@@ -83,6 +92,8 @@ export const db = {
   deduplicateEvaluations,
   getEvaluations,
   saveEvaluations,
+  syncEvaluationsWithRegistrations,
+  ensureEvaluationForRegistration,
 
   // Kurikulum
   getKurikulum,
@@ -91,7 +102,15 @@ export const db = {
   // Articles
   getArticles,
   saveArticles,
+  deleteArticle,
   likeArticle,
+
+  // Roles & Multi-Tenancy Roles
+  getRoles,
+  getRoleByCode,
+  getRoleById,
+  upsertRole,
+  deleteRole,
 
   // Auth & Credentials helpers
   getUserCredentials,
@@ -114,6 +133,8 @@ export {
   calculateEvaluationScore,
   recalculateParticipantCumulative,
   deduplicateEvaluations,
+  syncEvaluationsWithRegistrations,
+  ensureEvaluationForRegistration,
   formatArticleDate,
   normalizeKomisariat,
   normalizeDateString,
@@ -121,6 +142,8 @@ export {
   upsertTableRow,
   deleteCadre,
   deleteAnggota,
+  deleteEvent,
+  deleteRegistration,
   getUserCredentials,
   setUserPassword,
   getUserPassword,
@@ -128,7 +151,13 @@ export {
   deleteUserFromAuth,
   deleteUsersFromAuth,
   createAuthUser,
-  updateAuthUser
+  updateAuthUser,
+  getRoles,
+  getRoleByCode,
+  getRoleById,
+  upsertRole,
+  deleteRole,
+  DEFAULT_ROLES
 };
 
 export { generateUUID, isValidUUID } from "../utils";

@@ -14,6 +14,9 @@ export interface DocumentItem {
   description: string;
   isStarred: boolean;
   parent?: string | null;
+  commissariat?: string;
+  komisariat?: string;
+  komisariat_id?: string | null;
   created_at?: string; // Disiapkan agar tidak error NOT NULL saat migrasi ke Supabase
 }
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { db } from "@/lib/db";
+import { safeSignOut } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Calendar,
@@ -60,6 +61,10 @@ export default function KaderLayout({
       if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
+          if (parsed?.needsOnboarding) {
+            router.replace("/onboarding");
+            return;
+          }
           const r = (parsed?.role || "").toLowerCase();
           if (r === "admin" || r === "pengurus" || r === "komisariat") {
             setIsStaffUser(true);
@@ -140,19 +145,25 @@ export default function KaderLayout({
     }
   }, [darkMode, mounted]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("PMII_ACTIVE_CADRE_ID");
-    localStorage.removeItem("PMII_LOGGED_IN_USER");
+  const handleLogout = async () => {
+    await safeSignOut();
     router.push("/login");
   };
 
   const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
   const rolePrefix = match ? `/${match[1]}` : `/${userRole || "peserta"}`;
+  const isPeserta = (match ? match[1] : (userRole || "peserta")) === "peserta";
+
+  useEffect(() => {
+    if (isPeserta && pathname && (pathname === `${rolePrefix}/materi` || pathname.startsWith(`${rolePrefix}/materi/`) || pathname === "/kader/materi")) {
+      router.replace(rolePrefix);
+    }
+  }, [isPeserta, pathname, rolePrefix, router]);
 
   const menuItems = [
     { name: "Dashboard", href: rolePrefix, icon: LayoutDashboard },
     { name: "Kegiatan", href: `${rolePrefix}/kegiatan`, icon: Calendar },
-    { name: "Materi Kaderisasi", href: `${rolePrefix}/materi`, icon: BookOpen },
+    ...(!isPeserta ? [{ name: "Materi Kaderisasi", href: `${rolePrefix}/materi`, icon: BookOpen }] : []),
   ];
 
   if (!mounted) {

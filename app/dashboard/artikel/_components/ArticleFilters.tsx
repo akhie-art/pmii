@@ -2,6 +2,13 @@ import React from "react";
 import { Search, Table as TableIcon, LayoutGrid } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 interface ArticleFiltersProps {
   searchQuery: string;
@@ -10,6 +17,10 @@ interface ArticleFiltersProps {
   setSelectedCategory: (val: string) => void;
   selectedStatus: string;
   setSelectedStatus: (val: string) => void;
+  tenantFilter?: string;
+  setTenantFilter?: (val: string) => void;
+  availableKomisariats?: string[];
+  isCabang?: boolean;
   viewMode: "table" | "grid";
   setViewMode: (mode: "table" | "grid") => void;
 }
@@ -21,21 +32,49 @@ export const ArticleFilters: React.FC<ArticleFiltersProps> = ({
   setSelectedCategory,
   selectedStatus,
   setSelectedStatus,
+  tenantFilter = "ALL",
+  setTenantFilter,
+  availableKomisariats = [],
+  isCabang = false,
   viewMode,
   setViewMode
 }) => {
   return (
     <Card className="p-3 sm:p-4 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3">
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input
-            type="text"
-            placeholder="Cari judul, penulis, tagar..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto flex-1">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              type="text"
+              placeholder="Cari judul, penulis, tagar..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+            />
+          </div>
+
+          {isCabang && setTenantFilter && (
+            <Select
+              value={tenantFilter}
+              onValueChange={(val) => {
+                if (val) setTenantFilter(val);
+              }}
+            >
+              <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[160px]">
+                <SelectValue placeholder="Semua Komisariat" />
+              </SelectTrigger>
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+                <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+                <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+                {availableKomisariats.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs">
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">

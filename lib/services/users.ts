@@ -15,13 +15,19 @@ export async function getUsers(defaultData: UserAccount[] = DEFAULT_USERS): Prom
       if (!error && Array.isArray(data)) {
         supabaseSuccess = true;
         authUsers = data.map((u: any) => ({
+          ...u,
           id: u.id || u.user_id,
           user_id: u.id || u.user_id,
           name: u.name || "",
           email: u.email || "",
           password: getUserPassword(u) || undefined,
           role: (u.role as UserRole) || "anggota",
-          commissariat: u.commissariat ? normalizeKomisariat(u.commissariat) : "Ki Ageng Getas Pendawa",
+          role_id: u.role_id,
+          role_name: u.role_name,
+          tenant_id: u.tenant_id || u.komisariat_id,
+          komisariat_id: u.komisariat_id || u.tenant_id,
+          commissariat: u.commissariat ? normalizeKomisariat(u.commissariat) : "",
+          needsOnboarding: typeof u.needsOnboarding === "boolean" ? u.needsOnboarding : (!u.commissariat && (u.role as string) !== "superadmin"),
           status: (u.status === "NONAKTIF" ? "NONAKTIF" : "AKTIF") as "AKTIF" | "NONAKTIF",
           createdAt: u.createdAt || u.created_at || new Date().toISOString(),
           allowedMenus: Array.isArray(u.allowedMenus) ? u.allowedMenus : [],
@@ -35,72 +41,61 @@ export async function getUsers(defaultData: UserAccount[] = DEFAULT_USERS): Prom
     }
   }
 
-  // 2. Pastikan DEFAULT_USERS (khususnya Master Admin admin@pmii.org) selalu tersedia
-  const combined: UserAccount[] = [...authUsers];
-  for (const def of defaultData) {
-    const exists = combined.some(u => 
-      (u.email && def.email && u.email.toLowerCase() === def.email.toLowerCase()) || 
-      u.id === def.id
-    );
-    if (!exists) {
-      combined.push({
-        ...def,
-        password: getUserPassword(def) || def.password
-      });
+  // Jika Supabase berhasil mengambil data, jadikan data Supabase sebagai sumber kebenaran tunggal
+  let finalUsers: UserAccount[] = [];
+
+  if (supabaseSuccess) {
+    finalUsers = authUsers;
+  } else {
+    // Fallback offline: Ambil dari localStorage cache jika koneksi Supabase gagal
+    if (typeof window !== "undefined") {
+      try {
+        const localUsersStr = localStorage.getItem(KEYS.USERS);
+        if (localUsersStr) {
+          const parsed = JSON.parse(localUsersStr);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            finalUsers = parsed;
+          }
+        }
+      } catch (e) {}
+    }
+    // Jika cache kosong juga, gunakan defaultData
+    if (finalUsers.length === 0) {
+      finalUsers = [...defaultData];
     }
   }
 
-  // Check if active session in localStorage has updated avatar
+  // Sinkronkan avatar dari sesi aktif jika ada
   if (typeof window !== "undefined") {
     try {
       const loggedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
       if (loggedUserStr) {
         const loggedUser = JSON.parse(loggedUserStr);
         if (loggedUser?.email && loggedUser?.avatar) {
-          const adminIdx = combined.findIndex(u => u.email.toLowerCase() === loggedUser.email.toLowerCase());
-          if (adminIdx !== -1) {
-            combined[adminIdx].avatar = loggedUser.avatar;
+          const idx = finalUsers.findIndex(u => u.email?.toLowerCase() === loggedUser.email.toLowerCase());
+          if (idx !== -1 && !finalUsers[idx].avatar) {
+            finalUsers[idx].avatar = loggedUser.avatar;
           }
         }
       }
     } catch (e) {}
   }
 
-  // Local storage fallback for offline / metadata enrich
-  if (typeof window !== "undefined") {
+  // Perbarui cache offline localStorage
+  if (typeof window !== "undefined" && finalUsers.length > 0) {
     try {
-      const localUsersStr = localStorage.getItem(KEYS.USERS);
-      if (localUsersStr) {
-        const localList: UserAccount[] = JSON.parse(localUsersStr);
-        for (const lu of localList) {
-          const idx = combined.findIndex(u => (u.email && lu.email && u.email.toLowerCase() === lu.email.toLowerCase()) || u.id === lu.id);
-          if (idx === -1) {
-            if (!supabaseSuccess) {
-              combined.push(lu);
-            }
-          } else {
-            if (lu.avatar && !combined[idx].avatar) combined[idx].avatar = lu.avatar;
-            if (lu.allowedMenus && (!combined[idx].allowedMenus || combined[idx].allowedMenus.length === 0)) {
-              combined[idx].allowedMenus = lu.allowedMenus;
-            }
-          }
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Simpan cache terbaru ke localStorage
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(KEYS.USERS, JSON.stringify(combined));
+      localStorage.setItem(KEYS.USERS, JSON.stringify(finalUsers));
     } catch {}
   }
 
-  return combined.map(u => ({
+  return finalUsers.map(u => ({
     ...u,
     password: getUserPassword(u) || u.password,
     role: (u.role as any) === "CABANG" ? "ADMIN" : u.role,
-    commissariat: u.commissariat ? normalizeKomisariat(u.commissariat) : "Ki Ageng Getas Pendawa"
+    tenant_id: (u as any).tenant_id || (u as any).komisariat_id,
+    komisariat_id: (u as any).komisariat_id || (u as any).tenant_id,
+    commissariat: u.commissariat ? normalizeKomisariat(u.commissariat) : "",
+    needsOnboarding: typeof u.needsOnboarding === "boolean" ? u.needsOnboarding : (!u.commissariat && (u.role as string) !== "superadmin")
   }));
 }
 

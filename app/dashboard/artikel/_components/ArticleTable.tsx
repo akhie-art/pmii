@@ -1,10 +1,11 @@
 import React from "react";
 import Image from "next/image";
-import { Eye, Edit, Trash2, Heart } from "lucide-react";
+import { Eye, Edit, Trash2, Heart, Newspaper } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
+import { isCabangRecord } from "@/lib/tenancy";
 
 interface ArticleTableProps {
   articles: Article[];
@@ -45,13 +46,18 @@ export const ArticleTable: React.FC<ArticleTableProps> = ({
                 {/* Article Title & Cover */}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="relative w-12 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 border border-zinc-200 dark:border-zinc-700">
-                      <Image
-                        src={art.image}
-                        alt={art.title}
-                        fill
-                        className="object-cover"
-                      />
+                    <div className="relative w-12 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
+                      {art.image ? (
+                        <Image
+                          src={art.image}
+                          alt={art.title}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <Newspaper className="w-4 h-4 text-zinc-400" />
+                      )}
                     </div>
                     <div className="min-w-0 max-w-xs sm:max-w-md">
                       <span className="font-bold text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 block truncate transition-colors">
@@ -60,6 +66,17 @@ export const ArticleTable: React.FC<ArticleTableProps> = ({
                       <span className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate block mt-0.5">
                         {art.excerpt}
                       </span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {isCabangRecord(art) ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.2 rounded">
+                            🏛️ Cabang
+                          </span>
+                        ) : art.commissariat ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-1.5 py-0.2 rounded truncate max-w-[150px]">
+                            🎓 {art.commissariat}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </td>

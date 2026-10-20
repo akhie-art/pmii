@@ -9,8 +9,14 @@ interface UserStatsProps {
 
 export const UserStats: React.FC<UserStatsProps> = ({ users }) => {
   const total = users.length;
-  const adminCount = users.filter((u) => u.role?.toLowerCase() === "admin").length;
-  const pengurusCount = users.filter((u) => u.role?.toLowerCase() === "pengurus" || u.role?.toLowerCase() === "komisariat").length;
+  const adminCount = users.filter((u) => {
+    const r = (u.role || "").toLowerCase();
+    return r === "admin" || r === "superadmin" || r === "super_admin" || r.includes("cabang");
+  }).length;
+  const pengurusCount = users.filter((u) => {
+    const r = (u.role || "").toLowerCase();
+    return r === "pengurus" || r === "komisariat" || r.includes("komisariat");
+  }).length;
   const activeCount = users.filter((u) => u.status === "AKTIF").length;
 
   return (
