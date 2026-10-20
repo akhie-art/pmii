@@ -14,6 +14,7 @@ interface CardExportData {
   eventName?: string; // only for peserta
   eventDate?: string; // only for peserta
   startDate?: string; // only for kta (Inauguration Date)
+  tenantLogoUrl?: string; // Dynamic tenant logo from database
 }
 
 function drawRoundedRect(
@@ -71,8 +72,16 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
 
     // Preload logo and QR code in parallel
     const qrData = data.idNumber || data.name || "PMII";
+    const targetLogoUrl = data.tenantLogoUrl || "/image/logo_komsat.png";
+
     const [logoImg, qrDataUrl] = await Promise.all([
-      loadImage("/image/logo_komsat.png"),
+      loadImage(targetLogoUrl).then(async (img) => {
+        if (img) return img;
+        if (targetLogoUrl !== "/image/logo_komsat.png") {
+          return await loadImage("/image/logo_komsat.png");
+        }
+        return null;
+      }),
       QRCode.toDataURL(qrData, {
         width: 280,
         margin: 1,

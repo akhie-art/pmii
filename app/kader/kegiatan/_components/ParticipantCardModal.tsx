@@ -14,7 +14,8 @@ import {
   DialogTitle,
   DialogClose
 } from "@/components/ui/dialog";
-import { getTenantNameById } from "@/lib/tenancy";
+import { getTenantNameById, normalizeTenantName } from "@/lib/tenancy";
+import { db } from "@/lib/db";
 import type { EventActivity, ParticipantRegistration } from "./types";
 
 interface ParticipantCardModalProps {
@@ -33,6 +34,7 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
   activeCadre
 }) => {
   const [cardQrDataUrl, setCardQrDataUrl] = useState<string>("");
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string>("/image/logo_komsat.png");
   const [isDownloading, setIsDownloading] = useState(false);
   const [isCachedOffline, setIsCachedOffline] = useState(false);
 
@@ -49,6 +51,53 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
       "Pengurus Cabang PMII Grobogan"
     );
   }, [event, activeCadre]);
+
+  // Ambil logo tenant dari database berdasarkan event atau organizer
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+
+    async function fetchTenantLogo() {
+      try {
+        const commList = await db.getCommissariats();
+        if (!isMounted || !commList || commList.length === 0) return;
+
+        const targetTenantId =
+          event?.tenant_id ||
+          (event as any)?.komisariat_id ||
+          activeCadre?.tenant_id;
+
+        const targetNorm = normalizeTenantName(organizerName);
+
+        const matched = commList.find((c) => {
+          if (targetTenantId && (c.id === targetTenantId || (c as any).tenant_id === targetTenantId)) {
+            return true;
+          }
+          if (c.name && normalizeTenantName(c.name) === targetNorm) {
+            return true;
+          }
+          if (c.university && normalizeTenantName(c.university) === targetNorm) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matched?.logo) {
+          setTenantLogoUrl(matched.logo);
+        } else {
+          setTenantLogoUrl("/image/logo_komsat.png");
+        }
+      } catch (err) {
+        console.warn("Gagal memuat logo tenant dari database:", err);
+      }
+    }
+
+    fetchTenantLogo();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, event, activeCadre, organizerName]);
 
   const participantName = useMemo(() => {
     return activeCadre?.name || registration?.cadreName || "Peserta Kegiatan";
@@ -110,7 +159,8 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
         commissariat: organizerName,
         level: event.level,
         eventName: event.name,
-        eventDate: event.date
+        eventDate: event.date,
+        tenantLogoUrl: tenantLogoUrl
       });
       toast.success("Kartu peserta berhasil diunduh dalam resolusi tinggi!");
     } catch (error) {
@@ -169,9 +219,12 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-xl bg-white/95 p-1 flex items-center justify-center shrink-0 border border-amber-500/40 shadow-xs">
                       <img
-                        src="/image/logo_komsat.png"
-                        alt="Logo PMII"
+                        src={tenantLogoUrl}
+                        alt={`Logo ${organizerName}`}
                         className="w-full h-full object-contain"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = "/image/logo_komsat.png";
+                        }}
                       />
                     </div>
                     <div>
