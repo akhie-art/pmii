@@ -16,6 +16,7 @@ import {
   ArrowLeft
 } from "lucide-react";
 
+import { normalizeTenantName } from "@/lib/tenancy";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -45,6 +46,10 @@ export default function KaderLayout({
   const [activeCadre, setActiveCadre] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>("peserta");
   const [isStaffUser, setIsStaffUser] = useState(false);
+  const [tenantInfo, setTenantInfo] = useState<{ name: string; logo: string | null }>({
+    name: "PMII Grobogan",
+    logo: null,
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -97,7 +102,11 @@ export default function KaderLayout({
       setDarkMode(savedTheme === "dark");
 
       const loadCadre = async () => {
-        const cadres = await db.getCadres([]);
+        const [cadres, commList] = await Promise.all([
+          db.getCadres([]),
+          db.getCommissariats().catch(() => [])
+        ]);
+
         let found = null;
         let parsedUser: any = null;
         if (savedUser) {
@@ -111,6 +120,29 @@ export default function KaderLayout({
         if (!found && activeCadreId) {
           found = cadres.find(c => c.id === activeCadreId);
         }
+
+        const targetComm = found?.commissariat || parsedUser?.commissariat || "PMII Grobogan";
+        const targetTenantId = found?.tenant_id || (found as any)?.komisariat_id || parsedUser?.tenant_id;
+        const targetNorm = normalizeTenantName(targetComm);
+
+        const matchedTenant = commList.find((c: any) =>
+          (targetTenantId && (c.id === targetTenantId || c.tenant_id === targetTenantId)) ||
+          (c.name && normalizeTenantName(c.name) === targetNorm) ||
+          (c.university && normalizeTenantName(c.university) === targetNorm)
+        );
+
+        if (matchedTenant) {
+          setTenantInfo({
+            name: matchedTenant.name,
+            logo: matchedTenant.logo || null,
+          });
+        } else {
+          setTenantInfo({
+            name: targetComm,
+            logo: null,
+          });
+        }
+
         if (found) {
           setActiveCadre(found);
           localStorage.setItem("PMII_ACTIVE_CADRE_ID", found.id);
@@ -189,21 +221,22 @@ export default function KaderLayout({
         <Sidebar collapsible="icon" className="border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 z-40">
           <SidebarHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs">
-                <Image
-                  src="/image/logo_komsat.png"
+              <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs overflow-hidden">
+                <img
+                  src={tenantInfo.logo || "/image/logo_komsat.png"}
                   alt="Logo"
-                  width={28}
-                  height={28}
                   className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "/image/logo_komsat.png";
+                  }}
                 />
               </div>
               <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
                 <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
                   Portal {userRole === "anggota" ? "Anggota" : "Peserta"}
                 </h3>
-                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                  PK PMII Ki Ageng Getas Pendawa
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={tenantInfo.name}>
+                  {tenantInfo.name}
                 </p>
               </div>
             </div>

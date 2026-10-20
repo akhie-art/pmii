@@ -44,7 +44,7 @@ import {
   getTargetStaffPrefix,
   isMenuAllowed
 } from "@/lib/auth-helpers";
-import { getTenantNameById } from "@/lib/tenancy";
+import { getTenantNameById, TENANT_CHANGED_EVENT, normalizeTenantName } from "@/lib/tenancy";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +80,79 @@ export default function DashboardLayout({
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarTenant, setSidebarTenant] = useState<{ name: string; logo: string | null }>({
+    name: "PC PMII Grobogan",
+    logo: null,
+  });
+
+  // Load dynamic tenant logo and name from database
+  useEffect(() => {
+    let isMounted = true;
+
+    const updateTenantLogoAndName = async (forcedTenant?: string) => {
+      try {
+        const commList = await db.getCommissariats();
+        if (!isMounted || !commList) return;
+
+        let targetTenant = forcedTenant;
+        if (!targetTenant && typeof window !== "undefined") {
+          targetTenant = localStorage.getItem("PMII_ACTIVE_TENANT") || undefined;
+        }
+
+        const isSuper = isUserSuperAdmin(currentUser?.role, currentUser?.email);
+        if (!isSuper) {
+          targetTenant = currentUser?.commissariat || currentUser?.tenant_id || targetTenant;
+        }
+
+        if (!targetTenant || targetTenant === "ALL") {
+          // Default Cabang Grobogan
+          const pc = commList.find((c) =>
+            c.name.toLowerCase().includes("cabang") ||
+            c.name.toLowerCase().includes("pc ")
+          );
+          setSidebarTenant({
+            name: isSuper ? "PC PMII Grobogan" : (currentUser?.commissariat || "PMII Grobogan"),
+            logo: pc?.logo || null,
+          });
+          return;
+        }
+
+        const targetNorm = normalizeTenantName(targetTenant);
+        const matched = commList.find((c) =>
+          c.id === targetTenant ||
+          (c as any).tenant_id === targetTenant ||
+          normalizeTenantName(c.name) === targetNorm ||
+          normalizeTenantName(c.university) === targetNorm
+        );
+
+        if (matched) {
+          setSidebarTenant({
+            name: matched.name,
+            logo: matched.logo || null,
+          });
+        } else {
+          setSidebarTenant({
+            name: targetTenant,
+            logo: null,
+          });
+        }
+      } catch (err) {
+        console.warn("Notice loading sidebar tenant logo:", err);
+      }
+    };
+
+    updateTenantLogoAndName();
+
+    const handleTenantChange = (e: any) => {
+      const newTenant = e.detail?.activeTenant;
+      updateTenantLogoAndName(newTenant);
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener(TENANT_CHANGED_EVENT, handleTenantChange);
+      return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenantChange);
+    }
+  }, [currentUser]);
 
   // Load saved theme
   useEffect(() => {
@@ -416,23 +489,22 @@ export default function DashboardLayout({
         <Sidebar collapsible="icon" className="border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 z-40">
           <SidebarHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs">
-                <Image
-                  src="/image/logo_komsat.png"
+              <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs overflow-hidden">
+                <img
+                  src={sidebarTenant.logo || "/image/logo_komsat.png"}
                   alt="Logo"
-                  width={28}
-                  height={28}
                   className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "/image/logo_komsat.png";
+                  }}
                 />
               </div>
               <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
                 <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
                   {isAdmin ? "Panel Administrator" : isInstruktur ? "Panel Tim Instruktur" : "Panel Pengurus"}
                 </h3>
-                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                  {isAdmin
-                    ? "PC PMII Grobogan"
-                    : (currentUser?.commissariat || "Pengurus PMII")}
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={sidebarTenant.name}>
+                  {sidebarTenant.name}
                 </p>
               </div>
             </div>
