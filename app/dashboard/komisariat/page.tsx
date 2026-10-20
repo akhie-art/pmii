@@ -33,7 +33,8 @@ import {
   setActiveTenant as setGlobalActiveTenant,
   TENANT_CHANGED_EVENT,
   isCabangOrAdmin,
-  DEFAULT_KOMISARIAT_LIST
+  DEFAULT_KOMISARIAT_LIST,
+  getTenantIdByName
 } from "@/lib/tenancy";
 import { isUserSuperAdmin } from "@/lib/auth-helpers";
 
@@ -101,7 +102,13 @@ export default function KomisariatPage() {
         try {
           const user = JSON.parse(stored);
           setCurrentUser(user);
-          setActiveTenant(getActiveTenant(user) || "ALL");
+          const isSuper = isUserSuperAdmin(user.role, user.email);
+          // Untuk Superadmin atau halaman Tenant, default selalu "ALL" agar seluruh data tenant tampil
+          if (isSuper || (pathname && pathname.includes("/tenant"))) {
+            setActiveTenant("ALL");
+          } else {
+            setActiveTenant(getActiveTenant(user) || "ALL");
+          }
         } catch {}
       }
 
@@ -113,7 +120,7 @@ export default function KomisariatPage() {
     }
 
     loadData();
-  }, []);
+  }, [pathname]);
 
   // Sync URL dynamically based on Superadmin role
   useEffect(() => {
@@ -135,19 +142,17 @@ export default function KomisariatPage() {
     ).length;
   };
 
-  // Filtered List
+  // Filtered List - Master list tenant/komisariat
   const filteredKomisariats = useMemo(() => {
     return komisariats.filter((k) => {
-      const matchTenant = isRecordInTenant(
-        currentUser,
-        {
-          commissariat: k.name,
-          komisariat_id: k.id,
-          tenant_id: k.id
-        },
-        activeTenant
-      );
-      if (!matchTenant) return false;
+      // Filter dropdown tenant: jika user secara spesifik memilih tenant tertentu
+      if (activeTenant && activeTenant !== "ALL") {
+        const targetNorm = normalizeTenantName(activeTenant);
+        const kNorm = normalizeTenantName(k.name);
+        const matchId = k.id === activeTenant || k.id === getTenantIdByName(activeTenant);
+        const matchName = kNorm.includes(targetNorm) || targetNorm.includes(kNorm);
+        if (!matchId && !matchName) return false;
+      }
 
       const matchesSearch =
         searchQuery === "" ||
@@ -160,7 +165,7 @@ export default function KomisariatPage() {
 
       return matchesSearch;
     });
-  }, [komisariats, searchQuery, currentUser, activeTenant]);
+  }, [komisariats, searchQuery, activeTenant]);
 
   // Handlers
   const handleOpenCreate = () => {
@@ -360,11 +365,12 @@ export default function KomisariatPage() {
                 <SelectValue placeholder="Semua Komisariat" />
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
-                <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
-                <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
-                {DEFAULT_KOMISARIAT_LIST.map((c) => (
-                  <SelectItem key={c} value={c} className="text-xs">
-                    {c}
+                <SelectItem value="ALL" className="text-xs">
+                  Semua {isTenantView ? "Tenant" : "Komisariat"}
+                </SelectItem>
+                {komisariats.map((c) => (
+                  <SelectItem key={c.id} value={c.name} className="text-xs">
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
