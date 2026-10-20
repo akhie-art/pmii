@@ -3,7 +3,9 @@ import { isValidUUID } from "../utils";
 import { UserAccount } from "./types";
 
 export function getUserCredentials(): Record<string, string> {
-  const defaults: Record<string, string> = {};
+  const defaults: Record<string, string> = {
+    "admin@pmii.org": "admin123",
+  };
   if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem("PMII_USER_CREDENTIALS");
