@@ -146,7 +146,10 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
       // Subheader
       ctx.fillStyle = "#f59e0b"; // gold
       ctx.font = "bold 13px sans-serif";
-      ctx.fillText("PK KI AGENG GETAS PENDAWA", 120, 78);
+      const subHeader = data.type === "peserta"
+        ? (data.eventName || "KARTU PESERTA RESMI").toUpperCase()
+        : (data.commissariat || "PENGURUS CABANG GROBOGAN").toUpperCase();
+      ctx.fillText(subHeader, 120, 78);
       ctx.restore();
 
       // Badge (top right)
@@ -247,7 +250,7 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
       ctx.textBaseline = "middle";
       const footerText = data.type === "peserta"
         ? "BAWA KARTU INI UNTUK BUKTI ABSENSI ACARA"
-        : `DILANTIK: ${data.startDate || "2026-05-22"}  |  ANGGOTA RESMI PMII KOTA SEMARANG`;
+        : `DILANTIK: ${data.startDate || "2026-05-22"}  |  ANGGOTA RESMI PMII KABUPATEN GROBOGAN`;
       ctx.fillText(footerText, 360, 442);
       ctx.restore();
 

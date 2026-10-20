@@ -666,9 +666,21 @@ export default function KomisariatKegiatanPage() {
   ): { success: boolean; message: string; participantName?: string } => {
     if (!code) return { success: false, message: "Kode QR kosong." };
 
+    let cleanCode = code.trim();
+    if (cleanCode.startsWith("{") && cleanCode.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(cleanCode);
+        cleanCode = parsed.reg || parsed.registrationNumber || parsed.id || cleanCode;
+      } catch {}
+    } else if (cleanCode.includes(":")) {
+      const parts = cleanCode.split(":");
+      cleanCode = parts[parts.length - 1] || cleanCode;
+    }
+
     const foundReg = registrations.find(
       (r) =>
-        r.registrationNumber?.toLowerCase() === code.trim().toLowerCase() &&
+        (r.registrationNumber?.toLowerCase() === cleanCode.toLowerCase() ||
+         r.id?.toLowerCase() === cleanCode.toLowerCase()) &&
         r.eventId === selectedEvent?.id
     );
 
