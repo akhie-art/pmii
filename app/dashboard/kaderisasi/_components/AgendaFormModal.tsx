@@ -28,7 +28,15 @@ import {
   AlignRight,
   FileText,
   FileImage,
-  Move
+  Move,
+  Sparkles,
+  Palette,
+  Layers,
+  Settings2,
+  Sliders,
+  HelpCircle,
+  Info,
+  CheckCircle2
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { Card } from "@/components/ui/card";
@@ -40,10 +48,12 @@ import {
   KaderisasiMateri,
   CertificateLayoutConfig,
   CertificateFieldConfig,
-  DEFAULT_CERT_CONFIG
-} from "@/lib/db";
+  DEFAULT_CERT_CONFIG,
+  generateCertificatePdf,
+  sanitizeCertFontSize
+} from "@/lib/services";
 import { generateUUID } from "@/lib/utils";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, deleteStorageFile } from "@/lib/supabase";
 import { CERT_FIELDS, DEFAULT_FORM_FIELDS, FONT_OPTIONS } from "./types";
 
 interface AgendaFormModalProps {
@@ -99,9 +109,24 @@ export function AgendaFormModal({
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [inspectorSubTab, setInspectorSubTab] = useState<"bidang" | "format" | "nomor">("format");
+  const [showGuides, setShowGuides] = useState<boolean>(true);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const [isLandscape, setIsLandscape] = useState<boolean>(false);
 
-  // Canvas Drag Ref
+  useEffect(() => {
+    if (!certificateTemplate) return;
+    const img = new Image();
+    img.onload = () => {
+      setIsLandscape(img.naturalWidth > img.naturalHeight);
+    };
+    img.src = certificateTemplate;
+  }, [certificateTemplate]);
+
+  // Canvas Drag & Viewport Refs
   const canvasRef = useRef<HTMLDivElement>(null);
+  const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const zoomLevelRef = useRef<number>(zoomLevel);
   const dragInfoRef = useRef<{
     isDragging: boolean;
     startX: number;
@@ -118,6 +143,11 @@ export function AgendaFormModal({
     canvasRect: null
   });
 
+  // Keep zoomLevelRef in sync for touch/gesture event handlers
+  useEffect(() => {
+    zoomLevelRef.current = zoomLevel;
+  }, [zoomLevel]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -131,7 +161,16 @@ export function AgendaFormModal({
           : [...DEFAULT_FORM_FIELDS]
       );
       setCertificateTemplate(agenda.certificateTemplate);
-      setCertConfig(agenda.certificateConfig || DEFAULT_CERT_CONFIG);
+      const loadedCfg = agenda.certificateConfig || DEFAULT_CERT_CONFIG;
+      setCertConfig({
+        ...loadedCfg,
+        nama: { ...loadedCfg.nama, fontSize: sanitizeCertFontSize("nama", loadedCfg.nama?.fontSize, 13) },
+        nomor: { ...loadedCfg.nomor, fontSize: sanitizeCertFontSize("nomor", loadedCfg.nomor?.fontSize, 13) },
+        nik: { ...loadedCfg.nik, fontSize: sanitizeCertFontSize("nik", loadedCfg.nik?.fontSize, 12) },
+        ttl: { ...loadedCfg.ttl, fontSize: sanitizeCertFontSize("ttl", loadedCfg.ttl?.fontSize, 12) },
+        jurusan: { ...loadedCfg.jurusan, fontSize: sanitizeCertFontSize("jurusan", loadedCfg.jurusan?.fontSize, 12) },
+        kampus: { ...loadedCfg.kampus, fontSize: sanitizeCertFontSize("kampus", loadedCfg.kampus?.fontSize, 12) },
+      });
     } else {
       setNama("");
       setTipe("FORMAL");
@@ -151,8 +190,21 @@ export function AgendaFormModal({
     setEditFieldLabel("");
     setEditFieldOptions("");
     setActiveCertField("nama");
-    setZoomLevel(100);
   }, [isOpen, agenda]);
+
+  // Auto-fit canvas zoom when switching to certificate tab
+  useEffect(() => {
+    if (activeTab !== "sertifikat" || !canvasViewportRef.current || !certificateTemplate) return;
+    const vp = canvasViewportRef.current;
+    const availW = vp.clientWidth - 48;
+    const availH = vp.clientHeight - 48;
+    const baseW = isLandscape ? 842 : 595;
+    const baseH = isLandscape ? 595 : 842;
+    if (availW > 0 && availH > 0) {
+      const fitRatio = Math.min(availW / baseW, availH / baseH, 1);
+      setZoomLevel(Math.max(30, Math.min(100, Math.round(fitRatio * 100))));
+    }
+  }, [activeTab, isLandscape, certificateTemplate]);
 
   // Window drag listeners for Canvas (mouse & touch)
   useEffect(() => {
@@ -194,7 +246,7 @@ export function AgendaFormModal({
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
+      if (dragInfoRef.current.isDragging && e.touches.length === 1) {
         handleMove(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
@@ -217,6 +269,157 @@ export function AgendaFormModal({
       window.removeEventListener("touchend", handleEnd);
     };
   }, [activeCertField]);
+
+  // Keyboard arrow keys for micro-adjustments on canvas
+  useEffect(() => {
+    if (activeTab !== "sertifikat" || !certificateTemplate) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl?.tagName === "INPUT" ||
+        activeEl?.tagName === "TEXTAREA" ||
+        activeEl?.tagName === "SELECT"
+      ) {
+        return;
+      }
+
+      const step = e.shiftKey ? 1 : 0.2;
+      let handled = false;
+
+      setCertConfig((prev) => {
+        const current = (prev as any)[activeCertField] || { x: 50, y: 50 };
+        const curX = current.x ?? 50;
+        const curY = current.y ?? 50;
+
+        let newX = curX;
+        let newY = curY;
+
+        if (e.key === "ArrowLeft") {
+          newX = Math.round(Math.max(0, curX - step) * 10) / 10;
+          handled = true;
+        } else if (e.key === "ArrowRight") {
+          newX = Math.round(Math.min(100, curX + step) * 10) / 10;
+          handled = true;
+        } else if (e.key === "ArrowUp") {
+          newY = Math.round(Math.max(0, curY - step) * 10) / 10;
+          handled = true;
+        } else if (e.key === "ArrowDown") {
+          newY = Math.round(Math.min(100, curY + step) * 10) / 10;
+          handled = true;
+        }
+
+        if (!handled) return prev;
+
+        return {
+          ...prev,
+          [activeCertField]: {
+            ...current,
+            x: newX,
+            y: newY
+          }
+        };
+      });
+
+      if (handled) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, certificateTemplate, activeCertField]);
+
+  // Touchpad pinch-to-zoom & touchscreen 2-finger pinch on canvas
+  useEffect(() => {
+    const el = canvasViewportRef.current;
+    if (!el || !certificateTemplate) return;
+
+    // 1. Trackpad pinch-to-zoom (Chrome / Safari / Edge / Firefox wheel with ctrlKey)
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        // Negative deltaY means fingers expanding (pinch out -> zoom in)
+        // Positive deltaY means fingers closing (pinch in -> zoom out)
+        const factor = 0.8;
+        const delta = -e.deltaY * factor;
+        setZoomLevel((prev) => {
+          const next = Math.min(250, Math.max(40, prev + delta));
+          return Math.round(next);
+        });
+      }
+    };
+
+    // 2. Safari macOS gesture events (WebKit GestureEvent)
+    let gestureStartZoom = 100;
+    const handleGestureStart = (e: any) => {
+      e.preventDefault();
+      gestureStartZoom = zoomLevelRef.current;
+    };
+
+    const handleGestureChange = (e: any) => {
+      e.preventDefault();
+      if (typeof e.scale === "number") {
+        const next = Math.min(250, Math.max(40, gestureStartZoom * e.scale));
+        setZoomLevel(Math.round(next));
+      }
+    };
+
+    const handleGestureEnd = (e: any) => {
+      e.preventDefault();
+    };
+
+    // 3. Touchscreen 2-finger pinch
+    let initialTouchDistance = 0;
+    let initialTouchZoom = 100;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        dragInfoRef.current.isDragging = false;
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        initialTouchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        initialTouchZoom = zoomLevelRef.current;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialTouchDistance > 0) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const scale = currentDist / initialTouchDistance;
+        const next = Math.min(250, Math.max(40, initialTouchZoom * scale));
+        setZoomLevel(Math.round(next));
+      }
+    };
+
+    const handleTouchEnd = () => {
+      initialTouchDistance = 0;
+    };
+
+    // passive: false is required to allow e.preventDefault() and stop page zoom
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    el.addEventListener("gesturestart", handleGestureStart as any, { passive: false });
+    el.addEventListener("gesturechange", handleGestureChange as any, { passive: false });
+    el.addEventListener("gestureend", handleGestureEnd as any, { passive: false });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    el.addEventListener("touchend", handleTouchEnd);
+    el.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener("gesturestart", handleGestureStart as any);
+      el.removeEventListener("gesturechange", handleGestureChange as any);
+      el.removeEventListener("gestureend", handleGestureEnd as any);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
+      el.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, [certificateTemplate, activeTab]);
 
   if (!isOpen) return null;
 
@@ -368,12 +571,9 @@ export function AgendaFormModal({
     });
   };
 
-  const handleUploadCertificateTemplate = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processTemplateFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Format file harus berupa gambar (JPG atau PNG).");
+      alert("Format berkas harus berupa gambar (PNG, JPG, atau JPEG).");
       return;
     }
 
@@ -384,15 +584,23 @@ export function AgendaFormModal({
       if (isSupabaseConfigured && supabase) {
         const fileExt = file.name.split(".").pop();
         const filePath = `cert-templates/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from("materials").upload(filePath, file);
+        const { error: uploadError } = await supabase.storage.from("materials").upload(filePath, file, {
+          upsert: true,
+          contentType: file.type
+        });
 
-        if (!uploadError) {
-          const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
-          finalUrl = data.publicUrl;
+        if (uploadError) {
+          throw new Error(`Gagal upload ke bucket Supabase: ${uploadError.message}`);
         }
-      }
 
-      if (!finalUrl) {
+        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+        finalUrl = data.publicUrl;
+
+        // Bersihkan template lama dari bucket Supabase jika sebelumnya ada
+        if (certificateTemplate && certificateTemplate.includes("cert-templates")) {
+          deleteStorageFile(certificateTemplate).catch(() => {});
+        }
+      } else {
         finalUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
@@ -402,11 +610,38 @@ export function AgendaFormModal({
       }
 
       setCertificateTemplate(finalUrl);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Upload template error:", err);
-      alert("Gagal mengunggah template piagam.");
+      alert(err?.message || "Gagal mengunggah template piagam.");
     } finally {
       setIsUploadingTemplate(false);
+    }
+  };
+
+  const handleUploadCertificateTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processTemplateFile(file);
+    }
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processTemplateFile(file);
     }
   };
 
@@ -415,6 +650,9 @@ export function AgendaFormModal({
   };
 
   const handleRemoveTemplate = () => {
+    if (certificateTemplate && certificateTemplate.includes("cert-templates")) {
+      deleteStorageFile(certificateTemplate).catch(() => {});
+    }
     setCertificateTemplate(undefined);
   };
 
@@ -422,72 +660,51 @@ export function AgendaFormModal({
     setCertConfig(DEFAULT_CERT_CONFIG);
   };
 
-  const handlePreviewPdf = () => {
+  const updateNumberSegment = (index: number, val: string) => {
+    const current = certConfig.numberSegments || ["010", "01", "091222", "001", "12", "2026"];
+    const updated = [...current] as [string, string, string, string, string, string];
+    updated[index] = val;
+    setCertConfig((prev) => ({
+      ...prev,
+      numberSegments: updated
+    }));
+  };
+
+  const handlePreviewPdf = async () => {
     if (!certificateTemplate) return;
 
     setIsGeneratingPdf(true);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const orientation = img.width > img.height ? "l" : "p";
-        const isF4 = (certConfig.paperSize || "F4") === "F4";
-        const standardWidth = isF4 ? 215 : 210;
-        const standardHeight = isF4 ? 330 : 297;
-        const pdfWidth = orientation === "l" ? standardHeight : standardWidth;
-        const pdfHeight = orientation === "l" ? standardWidth : standardHeight;
+    try {
+      const renderFields = CERT_FIELDS.map((f) => ({
+        key: f.key,
+        text:
+          f.key === "nomor" && certConfig.numberSegments
+            ? certConfig.numberSegments.join(".")
+            : f.sample,
+        fallbackX: f.key === "nomor" ? 50 : 35,
+        fallbackY: f.key === "nomor" ? 13.8 : 29.2,
+        fallbackSize: f.key === "nama" || f.key === "nomor" ? 13 : 12,
+        fallbackAlign: (f.key === "nomor" ? "center" : "left") as "center" | "left",
+        bold: f.key === "nama"
+      }));
 
-        const pdf = new jsPDF({
-          orientation,
-          unit: "mm",
-          format: [pdfWidth, pdfHeight],
-          compress: true
-        });
+      const blobUrl = await generateCertificatePdf({
+        templateUrl: certificateTemplate,
+        config: certConfig,
+        fields: renderFields,
+        outputType: "bloburl",
+        fileName: "Pratinjau_Sertifikat_A4.pdf"
+      });
 
-        pdf.addImage(img, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
-
-        const baseFont = certConfig.fontFamily?.toLowerCase().includes("times")
-          ? "times"
-          : certConfig.fontFamily?.toLowerCase().includes("courier")
-          ? "courier"
-          : "helvetica";
-
-        CERT_FIELDS.forEach((f) => {
-          const conf = (certConfig as any)[f.key] as CertificateFieldConfig | undefined;
-          if (conf && conf.enabled === false) return;
-
-          const posX = ((conf?.x ?? 50) / 100) * pdfWidth;
-          const posY = ((conf?.y ?? 50) / 100) * pdfHeight;
-          const ptSize = Math.max(8, conf?.fontSize ?? 13);
-          const isBold = conf?.bold ?? false;
-          const align = conf?.align || "left";
-
-          const textSample =
-            f.key === "nomor" && certConfig.numberSegments
-              ? certConfig.numberSegments.join(".")
-              : f.sample;
-
-          pdf.setFont(baseFont, isBold ? "bold" : "normal");
-          pdf.setFontSize(ptSize);
-          pdf.setTextColor(15, 23, 42);
-          pdf.text(textSample, posX, posY, { align, baseline: "top" });
-        });
-
-        const blobUrl = pdf.output("bloburl");
+      if (typeof blobUrl === "string") {
         window.open(blobUrl, "_blank");
-      } catch (err) {
-        console.error("Gagal membuat preview PDF:", err);
-      } finally {
-        setIsGeneratingPdf(false);
       }
-    };
-
-    img.onerror = () => {
+    } catch (err) {
+      console.error("Gagal membuat pratinjau PDF:", err);
+      alert("Gagal memproses pratinjau file PDF. Pastikan gambar template dapat diakses.");
+    } finally {
       setIsGeneratingPdf(false);
-      alert("Gagal memuat template gambar untuk preview.");
-    };
-
-    img.src = certificateTemplate;
+    }
   };
 
   const getFieldIcon = (key: string) => {
@@ -1011,82 +1228,127 @@ export function AgendaFormModal({
             {/* TAB 4: SERTIFIKAT */}
             {activeTab === "sertifikat" && (
               <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                {/* Header Actions for Template */}
-                <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-900/40">
-                      <Award className="w-4 h-4" />
+                {/* STUDIO TOOLBAR HEADER */}
+                <div className="p-3 sm:p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-xs flex flex-wrap items-center justify-between gap-3 shrink-0">
+                  {/* Left: Studio Info & Badges */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-blue-500/20">
+                      <Award className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
-                        <span>Desain & Titik Posisi Piagam</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                          Studio Desain Piagam & Sertifikat
+                        </span>
                         {certificateTemplate ? (
-                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
-                            Aktif
+                          <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Supabase Cloud Aktif
                           </span>
                         ) : (
-                          <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800">
-                            Belum Diatur
+                          <span className="text-[10.5px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-200/60 dark:border-amber-800/60">
+                            Belum Ada Template
                           </span>
                         )}
                       </div>
                       <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                         {certificateTemplate
-                          ? "Geser posisi teks langsung di atas piagam untuk menyesuaikan koordinat."
-                          : "Pilih template bawaan PMII atau unggah template gambar piagam baru."}
+                          ? "Tarik teks langsung di kanvas untuk penempatan presisi atau atur detail pada panel samping."
+                          : "Unggah gambar desain piagam resmi untuk mulai mengatur posisi teks kelulusan."}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/jpg"
-                        onChange={handleUploadCertificateTemplate}
-                        disabled={isUploadingTemplate}
-                        className="hidden"
-                      />
-                      <span className="h-8 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer shadow-2xs">
-                        <UploadCloud className="w-3.5 h-3.5" />
-                        <span>{isUploadingTemplate ? "Mengunggah..." : "Unggah Gambar"}</span>
-                      </span>
-                    </label>
-
-                    {!certificateTemplate && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSetDefaultTemplate}
-                        className="h-8 px-2.5 text-xs rounded-lg cursor-pointer"
-                      >
-                        Terapkan Bawaan PMII
-                      </Button>
+                  {/* Right: Quick Action Controls */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Zoom & View Controls */}
+                    {certificateTemplate && (
+                      <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
+                        <button
+                          type="button"
+                          onClick={() => setZoomLevel((z) => Math.max(40, z - 10))}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer"
+                          title="Perkecil Kanvas (Cubit Touchpad)"
+                        >
+                          <ZoomOut className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setZoomLevel(100)}
+                          className="font-mono text-[11px] font-semibold px-1.5 text-zinc-700 dark:text-zinc-200 hover:text-blue-600 transition-colors cursor-pointer"
+                          title="Reset ke 100% (Klik)"
+                        >
+                          {zoomLevel}%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setZoomLevel((z) => Math.min(250, z + 10))}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-white dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer"
+                          title="Perbesar Kanvas (Cubit Touchpad)"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowGuides(!showGuides)}
+                          className={`h-7 px-2 rounded-lg text-[10.5px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                            showGuides
+                              ? "bg-blue-600 text-white shadow-2xs"
+                              : "text-zinc-600 dark:text-zinc-400 hover:bg-white dark:hover:bg-zinc-700"
+                          }`}
+                          title="Tampilkan / Sembunyikan Garis Panduan Tengah"
+                        >
+                          <span>Panduan</span>
+                        </button>
+                      </div>
                     )}
 
-                    {certificateTemplate && (
+
+
+                    {/* Template Controls */}
+                    {certificateTemplate ? (
                       <>
                         <Button
                           type="button"
-                          variant="outline"
-                          size="sm"
                           disabled={isGeneratingPdf}
                           onClick={handlePreviewPdf}
-                          className="h-8 px-2.5 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/40 rounded-lg cursor-pointer flex items-center gap-1"
-                          title="Buka hasil cetak PDF di tab baru"
+                          className="h-8 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                          title="Buka hasil cetak PDF di tab browser baru"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{isGeneratingPdf ? "Menyiapkan..." : "Uji Cetak PDF"}</span>
+                          {isGeneratingPdf ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Menyiapkan...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Uji Cetak PDF</span>
+                            </>
+                          )}
                         </Button>
+
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/jpg"
+                            onChange={handleUploadCertificateTemplate}
+                            disabled={isUploadingTemplate}
+                            className="hidden"
+                          />
+                          <span className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>{isUploadingTemplate ? "Mengunggah..." : "Ganti Gambar"}</span>
+                          </span>
+                        </label>
 
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={handleResetCertConfig}
-                          className="h-8 px-2 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg cursor-pointer"
-                          title="Kembalikan koordinat teks ke standar"
+                          className="h-8 px-2.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl cursor-pointer"
+                          title="Kembalikan koordinat posisi ke standar"
                         >
                           <RotateCcw className="w-3.5 h-3.5 mr-1" />
                           <span>Reset</span>
@@ -1097,101 +1359,101 @@ export function AgendaFormModal({
                           variant="ghost"
                           size="sm"
                           onClick={handleRemoveTemplate}
-                          className="h-8 px-2 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
-                          title="Hapus template piagam"
+                          className="h-8 px-2.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl cursor-pointer"
+                          title="Hapus template piagam dari agenda ini"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/jpg"
+                            onChange={handleUploadCertificateTemplate}
+                            disabled={isUploadingTemplate}
+                            className="hidden"
+                          />
+                          <span className="h-8 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-sm shadow-blue-500/20">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>{isUploadingTemplate ? "Mengunggah ke Cloud..." : "Unggah Template (A4)"}</span>
+                          </span>
+                        </label>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSetDefaultTemplate}
+                          className="h-8 px-3 text-xs font-medium rounded-xl border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                        >
+                          Terapkan Bawaan PMII
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
 
                 {certificateTemplate ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch flex-1 min-h-0">
-                    {/* Visual Canvas Stage (7 cols on lg, 8 cols on xl) */}
-                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col bg-zinc-100 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden h-full min-h-[420px]">
-                      {/* Zoom and Paper Size Toolbar */}
-                      <div className="p-2 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 flex items-center justify-between gap-2 text-xs shrink-0">
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setZoomLevel((z) => Math.max(50, z - 10))}
-                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 cursor-pointer"
-                            title="Perkecil"
-                          >
-                            <ZoomOut className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="font-mono text-[11px] px-1 text-zinc-700 dark:text-zinc-300">
-                            {zoomLevel}%
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setZoomLevel((z) => Math.min(150, z + 10))}
-                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 cursor-pointer"
-                            title="Perbesar"
-                          >
-                            <ZoomIn className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-lg">
-                          <button
-                            type="button"
-                            onClick={() => setCertConfig((prev) => ({ ...prev, paperSize: "F4" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
-                              (certConfig.paperSize || "F4") === "F4"
-                                ? "bg-blue-600 text-white"
-                                : "text-zinc-600 dark:text-zinc-400"
-                            }`}
-                          >
-                            F4 (Folio PMII)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCertConfig((prev) => ({ ...prev, paperSize: "A4" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
-                              certConfig.paperSize === "A4"
-                                ? "bg-blue-600 text-white"
-                                : "text-zinc-600 dark:text-zinc-400"
-                            }`}
-                          >
-                            A4
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Interactive Canvas */}
-                      <div className="p-4 sm:p-6 overflow-auto flex items-center justify-center flex-1 min-h-0">
+                  /* WORKSPACE STUDIO: KANVAS KIRI + INSPECTOR KANAN */
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-stretch flex-1 min-h-0">
+                    {/* VISUAL CANVAS STAGE (8 COLS) */}
+                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden h-full min-h-[460px] bg-slate-100 dark:bg-zinc-950 bg-[radial-gradient(#94a3b8_1px,transparent_1px)] dark:bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:18px_18px]">
+                      {/* Interactive Canvas Viewport */}
+                      <div
+                        ref={canvasViewportRef}
+                        className="p-4 sm:p-8 overflow-auto flex items-center justify-center flex-1 min-h-0 relative select-none"
+                      >
                         <div
                           ref={canvasRef}
                           style={{
+                            width: isLandscape ? "842px" : "595px",
+                            height: isLandscape ? "595px" : "842px",
+                            aspectRatio: isLandscape ? "297 / 210" : "210 / 297",
                             transform: `scale(${zoomLevel / 100})`,
                             transformOrigin: "center center",
-                            fontFamily: certConfig.fontFamily || '"Arial Narrow", Arial, sans-serif'
+                            fontFamily: certConfig.fontFamily || 'Poppins, var(--font-poppins), sans-serif'
                           }}
-                          className="relative max-w-full shadow-lg border border-zinc-300 dark:border-zinc-700 select-none bg-white rounded transition-transform duration-100"
+                          className="relative shrink-0 shadow-2xl border border-zinc-300/80 dark:border-zinc-700 select-none bg-white rounded-md transition-transform duration-75"
                         >
+                          {/* Background Image Template */}
                           <img
                             src={certificateTemplate}
-                            alt="Template Sertifikat"
-                            className="w-full h-auto block select-none pointer-events-none rounded"
+                            alt="Template Piagam Resmi"
+                            className="w-full h-full object-fill block select-none pointer-events-none rounded-md"
                           />
 
+                          {/* Center Alignment Guides */}
+                          {showGuides && (
+                            <>
+                              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l border-dashed border-blue-500/35 pointer-events-none z-10" />
+                              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-dashed border-blue-500/35 pointer-events-none z-10" />
+                            </>
+                          )}
+
                           {/* Text Markers Layer */}
-                          <div className="absolute inset-0 select-none text-slate-900 pointer-events-auto">
+                          <div className="absolute inset-0 select-none pointer-events-auto">
                             {CERT_FIELDS.map((f) => {
+                              const defaultX = f.key === "nomor" ? 50 : 35;
+                              const defaultAlign = f.key === "nomor" ? "center" : "left";
                               const conf = (certConfig as any)[f.key] || {
-                                x: 50,
-                                y: 50,
-                                fontSize: 13,
-                                bold: false,
-                                align: "left",
-                                enabled: true
+                                x: defaultX,
+                                y: f.key === "nomor" ? 13.8 : 29.2,
+                                fontSize: f.key === "nama" || f.key === "nomor" ? 13 : 12,
+                                bold: f.key === "nama",
+                                align: defaultAlign,
+                                enabled: true,
+                                color: "#0f172a"
                               };
                               const isActive = activeCertField === f.key;
                               const isEnabled = conf.enabled !== false;
-                              const align = conf.align || "left";
+                              const align = conf.align || defaultAlign;
+
+                              const textSample =
+                                f.key === "nomor" && certConfig.numberSegments
+                                  ? certConfig.numberSegments.join(".")
+                                  : f.sample;
 
                               return (
                                 <div
@@ -1223,27 +1485,37 @@ export function AgendaFormModal({
                                         ? "translateX(-100%)"
                                         : "none",
                                     textAlign: align,
-                                    fontSize: `${Math.max(8, (conf.fontSize || 12) * 0.9)}px`,
-                                    lineHeight: 1
+                                    fontSize: `${sanitizeCertFontSize(f.key, conf.fontSize, f.key === "nama" || f.key === "nomor" ? 13 : 12)}px`,
+                                    lineHeight: 1,
+                                    color: conf.color || "#0f172a"
                                   }}
-                                  className={`absolute cursor-grab active:cursor-grabbing px-1 py-0.5 select-none transition-all ${
+                                  className={`absolute cursor-grab active:cursor-grabbing p-0 select-none transition-shadow ${
                                     !isEnabled
                                       ? "opacity-35 line-through border border-dashed border-zinc-400 bg-zinc-200/50"
                                       : isActive
-                                      ? "ring-2 ring-blue-600 bg-blue-500/15 text-slate-950 font-bold z-30 rounded-[2px]"
-                                      : "hover:ring-1 hover:ring-blue-400 hover:bg-blue-50/40 text-slate-900 z-10 rounded-[2px]"
-                                  } ${conf.bold ? "font-bold" : "font-normal"} whitespace-nowrap`}
-                                  title={`${f.label} (Klik & tarik untuk menggeser)`}
+                                      ? "ring-2 ring-blue-600 bg-blue-500/10 font-bold z-30 rounded-[2px]"
+                                      : "hover:ring-1 hover:ring-blue-400 hover:bg-blue-50/20 z-10 rounded-[2px]"
+                                  } ${conf.bold ? "font-bold" : "font-normal"} whitespace-nowrap group`}
+                                  title={`${f.label} (Klik & tarik untuk memindahkan)`}
                                 >
+                                  {/* Selection Handles (4 Corners) */}
                                   {isActive && (
-                                    <div className="absolute -top-4.5 left-0 bg-blue-600 text-white text-[8.5px] font-mono px-1 py-0.2 rounded shadow pointer-events-none whitespace-nowrap z-40">
-                                      {f.label} • X:{conf.x}% Y:{conf.y}%
-                                    </div>
+                                    <>
+                                      <div className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-blue-600 border border-white shadow-xs pointer-events-none" />
+                                      <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-600 border border-white shadow-xs pointer-events-none" />
+                                      <div className="absolute -bottom-1 -left-1 w-2 h-2 rounded-full bg-blue-600 border border-white shadow-xs pointer-events-none" />
+                                      <div className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-blue-600 border border-white shadow-xs pointer-events-none" />
+
+                                      {/* Floating Tag */}
+                                      <div className="absolute -top-5 left-0 bg-blue-600 text-white text-[9px] font-mono font-bold px-1.5 py-0.2 rounded shadow-md pointer-events-none whitespace-nowrap z-40 flex items-center gap-1">
+                                        <span>{f.label}</span>
+                                        <span className="opacity-75">|</span>
+                                        <span>X:{conf.x}% Y:{conf.y}%</span>
+                                      </div>
+                                    </>
                                   )}
 
-                                  {f.key === "nomor" && certConfig.numberSegments
-                                    ? certConfig.numberSegments.join(".")
-                                    : f.sample}
+                                  {textSample}
                                 </div>
                               );
                             })}
@@ -1251,262 +1523,395 @@ export function AgendaFormModal({
                         </div>
                       </div>
 
-                      <div className="p-2 border-t border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 text-[10px] text-zinc-500 flex items-center justify-center gap-1.5 shrink-0">
-                        <Move className="w-3 h-3 text-blue-500" />
-                        <span>Tarik teks langsung di atas kanvas atau ubah koordinat di panel samping.</span>
+                      {/* Canvas Footer Status & Keyboard Hint */}
+                      <div className="p-2.5 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 text-[11px] text-zinc-600 dark:text-zinc-400 flex items-center justify-between gap-2 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
+                            <Move className="w-3.5 h-3.5" />
+                            <span>Interaksi:</span>
+                          </span>
+                          <span className="hidden sm:inline">Klik & tarik teks di kanvas.</span>
+                          <span>Gunakan tombol panah keyboard (↑ ↓ ← →) untuk pergeseran presisi.</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 hidden md:flex">
+                          <span>Shift + Panah = Geser Cepat</span>
+                          <span>•</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-sans font-semibold">🤏 Cubit Touchpad = Zoom</span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Inspector Panel (5 cols on lg, 4 cols on xl) */}
-                    <div className="lg:col-span-5 xl:col-span-4 space-y-3 overflow-y-auto pr-1 h-full">
-                      {/* Font Family Selector */}
-                      <div className="space-y-1">
-                        <label className="text-[10.5px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase">
-                          Jenis Huruf (Font)
-                        </label>
-                        <select
-                          value={certConfig.fontFamily || '"Arial Narrow", Arial, sans-serif'}
-                          onChange={(e) =>
-                            setCertConfig((prev) => ({ ...prev, fontFamily: e.target.value }))
-                          }
-                          className="w-full text-xs h-8 px-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 cursor-pointer"
-                        >
-                          {FONT_OPTIONS.map((font) => (
-                            <option key={font.value} value={font.value}>
-                              {font.label}
-                            </option>
-                          ))}
-                        </select>
+                    {/* INSPECTOR PANEL (4-5 COLS) */}
+                    <div className="lg:col-span-5 xl:col-span-4 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-xs h-full">
+                      {/* Inspector Header with Sub-Tabs */}
+                      <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/70 p-2 shrink-0">
+                        <div className="grid grid-cols-3 gap-1 bg-zinc-200/60 dark:bg-zinc-800/60 p-0.5 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setInspectorSubTab("bidang")}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              inspectorSubTab === "bidang"
+                                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+                                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>Bidang</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setInspectorSubTab("format")}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              inspectorSubTab === "format"
+                                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+                                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            <Sliders className="w-3.5 h-3.5" />
+                            <span>Format Teks</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setInspectorSubTab("nomor")}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              inspectorSubTab === "nomor"
+                                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+                                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            <Hash className="w-3.5 h-3.5" />
+                            <span>Penomoran</span>
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Fields Layer Selector */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-[10.5px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase">
-                          <span>Bidang Teks Piagam</span>
-                          <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400">
-                            {CERT_FIELDS.filter((f) => (certConfig as any)[f.key]?.enabled !== false).length} / {CERT_FIELDS.length} Aktif
-                          </span>
-                        </div>
+                      {/* Inspector Content Area */}
+                      <div className="p-3 sm:p-4 overflow-y-auto flex-1 space-y-4">
+                        {/* TAB 1: LIST OF LAYERS / BIDANG */}
+                        {inspectorSubTab === "bidang" && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-500 uppercase tracking-wider px-1">
+                              <span>Daftar Bidang Teks Piagam</span>
+                              <span className="font-mono text-blue-600 dark:text-blue-400">
+                                {CERT_FIELDS.filter((f) => (certConfig as any)[f.key]?.enabled !== false).length} / {CERT_FIELDS.length} Aktif
+                              </span>
+                            </div>
 
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {CERT_FIELDS.map((f) => {
-                            const conf = (certConfig as any)[f.key] || { x: 50, y: 50, enabled: true };
-                            const isActive = activeCertField === f.key;
-                            const fEnabled = conf.enabled !== false;
-                            const IconComp = getFieldIcon(f.key);
+                            <div className="space-y-1.5">
+                              {CERT_FIELDS.map((f) => {
+                                const conf = (certConfig as any)[f.key] || { x: 50, y: 50, enabled: true };
+                                const isActive = activeCertField === f.key;
+                                const fEnabled = conf.enabled !== false;
+                                const IconComp = getFieldIcon(f.key);
 
-                            return (
-                              <div
-                                key={f.key}
-                                onClick={() => setActiveCertField(f.key)}
-                                className={`p-1.5 rounded-lg border text-left cursor-pointer transition-all flex items-center justify-between gap-1 ${
-                                  isActive
-                                    ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 shadow-2xs"
-                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300"
-                                } ${!fEnabled ? "opacity-45" : ""}`}
-                              >
-                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                return (
                                   <div
-                                    className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${
+                                    key={f.key}
+                                    onClick={() => {
+                                      setActiveCertField(f.key);
+                                      setInspectorSubTab("format");
+                                    }}
+                                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-2 ${
                                       isActive
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-                                    }`}
+                                        ? "bg-blue-50/80 dark:bg-blue-950/40 border-blue-500/80 shadow-xs ring-1 ring-blue-500/30"
+                                        : "bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+                                    } ${!fEnabled ? "opacity-45" : ""}`}
                                   >
-                                    <IconComp className="w-3 h-3" />
+                                    <div className="flex items-center gap-2.5 overflow-hidden">
+                                      <div
+                                        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                          isActive
+                                            ? "bg-blue-600 text-white shadow-2xs"
+                                            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                                        }`}
+                                      >
+                                        <IconComp className="w-3.5 h-3.5" />
+                                      </div>
+                                      <div className="overflow-hidden">
+                                        <div className="text-xs font-bold truncate text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                          <span>{f.label}</span>
+                                          {isActive && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] font-mono text-zinc-400 flex items-center gap-2">
+                                          <span>X: {conf.x}%</span>
+                                          <span>Y: {conf.y}%</span>
+                                          <span>•</span>
+                                          <span>{conf.fontSize || 13}px</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateCurrentField({ enabled: !fEnabled });
+                                        }}
+                                        className="h-7 w-7 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                        title={fEnabled ? "Sembunyikan bidang" : "Tampilkan bidang"}
+                                      >
+                                        {fEnabled ? (
+                                          <Eye className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                        ) : (
+                                          <EyeOff className="w-4 h-4 text-zinc-400" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
-                                  <div className="overflow-hidden">
-                                    <div className="text-[10.5px] font-semibold truncate text-zinc-900 dark:text-zinc-100">
-                                      {f.label}
-                                    </div>
-                                    <div className="text-[8.5px] font-mono text-zinc-400">
-                                      X:{conf.x}% Y:{conf.y}%
-                                    </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* TAB 2: FORMAT TEKS & TIPOGRAFI */}
+                        {inspectorSubTab === "format" && (
+                          <div className="space-y-4">
+                            {/* Active Field Header Banner */}
+                            <div className="p-3 rounded-xl border border-blue-200/70 dark:border-blue-900/50 bg-blue-50/60 dark:bg-blue-950/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                                  {CERT_FIELDS.find((f) => f.key === activeCertField)?.label.slice(0, 1)}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                                    {CERT_FIELDS.find((f) => f.key === activeCertField)?.label}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 font-mono">
+                                    Sampel: {CERT_FIELDS.find((f) => f.key === activeCertField)?.sample}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => updateCurrentField({ enabled: !isCurFieldEnabled })}
+                                className={`text-[10.5px] font-bold px-2 py-0.5 rounded-md cursor-pointer transition-colors ${
+                                  isCurFieldEnabled
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                    : "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                                }`}
+                              >
+                                {isCurFieldEnabled ? "Aktif" : "Nonaktif"}
+                              </button>
+                            </div>
+
+
+
+                            {/* Typography: Size, Bold, Alignment */}
+                            <div className="space-y-3 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40">
+                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-500 block">
+                                Tipografi & Format
+                              </span>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                {/* Font Size */}
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Ukuran Huruf</span>
+                                  <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateCurrentField({ fontSize: Math.max(8, (curField.fontSize || 13) - 1) })}
+                                      className="h-6 w-6 rounded-lg flex items-center justify-center text-xs font-bold text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                                      {curField.fontSize || 13}pt
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateCurrentField({ fontSize: Math.min(36, (curField.fontSize || 13) + 1) })}
+                                      className="h-6 w-6 rounded-lg flex items-center justify-center text-xs font-bold text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                    >
+                                      +
+                                    </button>
                                   </div>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateCurrentField({ enabled: !fEnabled });
-                                  }}
-                                  className="h-5 w-5 rounded flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 cursor-pointer shrink-0"
-                                  title={fEnabled ? "Sembunyikan bidang" : "Tampilkan bidang"}
-                                >
-                                  {fEnabled ? (
-                                    <Eye className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                  ) : (
-                                    <EyeOff className="w-3 h-3 text-zinc-400" />
-                                  )}
-                                </button>
+                                {/* Bold Format */}
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Gaya Huruf</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentField({ bold: !curField.bold })}
+                                    className={`w-full h-8 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                                      curField.bold
+                                        ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                    }`}
+                                  >
+                                    <Bold className="w-3.5 h-3.5" />
+                                    <span>{curField.bold ? "Tebal (Bold)" : "Normal"}</span>
+                                  </button>
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
 
-                      {/* Active Field Properties Box */}
-                      <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 space-y-2.5">
-                        <div className="flex items-center justify-between text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                          <span>Pengaturan: {CERT_FIELDS.find((f) => f.key === activeCertField)?.label}</span>
-                          <button
-                            type="button"
-                            onClick={() => updateCurrentField({ enabled: !isCurFieldEnabled })}
-                            className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                          >
-                            {isCurFieldEnabled ? "Sembunyikan" : "Aktifkan"}
-                          </button>
-                        </div>
-
-                        {/* Coordinates Manual Slider / Inputs */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[10px] font-medium text-zinc-500">
-                              <span>Posisi X</span>
-                              <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{curField.x}%</span>
+                              {/* Alignment */}
+                              <div className="space-y-1 pt-1">
+                                <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Perataan Teks (Alignment)</span>
+                                <div className="grid grid-cols-3 gap-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentField({ align: "left" })}
+                                    className={`h-7 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors ${
+                                      curAlign === "left"
+                                        ? "bg-blue-600 text-white shadow-2xs"
+                                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                                    }`}
+                                  >
+                                    <AlignLeft className="w-3.5 h-3.5" />
+                                    <span>Kiri</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentField({ align: "center" })}
+                                    className={`h-7 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors ${
+                                      curAlign === "center"
+                                        ? "bg-blue-600 text-white shadow-2xs"
+                                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                                    }`}
+                                  >
+                                    <AlignCenter className="w-3.5 h-3.5" />
+                                    <span>Tengah</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentField({ align: "right" })}
+                                    className={`h-7 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors ${
+                                      curAlign === "right"
+                                        ? "bg-blue-600 text-white shadow-2xs"
+                                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                                    }`}
+                                  >
+                                    <AlignRight className="w-3.5 h-3.5" />
+                                    <span>Kanan</span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              value={curField.x ?? 50}
-                              onChange={(e) => updateCurrentField({ x: parseFloat(e.target.value) })}
-                              className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                            />
-                          </div>
 
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[10px] font-medium text-zinc-500">
-                              <span>Posisi Y</span>
-                              <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{curField.y}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              value={curField.y ?? 50}
-                              onChange={(e) => updateCurrentField({ y: parseFloat(e.target.value) })}
-                              className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Typography & Alignment */}
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-200/70 dark:border-zinc-800/70">
-                          {/* Font Size */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-medium text-zinc-500">Ukuran Huruf</span>
-                            <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-0.5">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateCurrentField({
-                                    fontSize: Math.max(8, (curField.fontSize || 13) - 1)
-                                  })
-                                }
-                                className="h-6 w-6 rounded flex items-center justify-center text-xs font-bold text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-                              >
-                                -
-                              </button>
-                              <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                {curField.fontSize || 13}px
+                            {/* Global Font Family Selector */}
+                            <div className="space-y-1.5 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40">
+                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-500 block">
+                                Jenis Huruf Piagam (Global)
                               </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateCurrentField({
-                                    fontSize: Math.min(32, (curField.fontSize || 13) + 1)
-                                  })
+                              <select
+                                value={certConfig.fontFamily || '"Arial Narrow", Arial, sans-serif'}
+                                onChange={(e) =>
+                                  setCertConfig((prev) => ({ ...prev, fontFamily: e.target.value }))
                                 }
-                                className="h-6 w-6 rounded flex items-center justify-center text-xs font-bold text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                className="w-full text-xs h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 cursor-pointer font-medium"
                               >
-                                +
-                              </button>
+                                {FONT_OPTIONS.map((font) => (
+                                  <option key={font.value} value={font.value}>
+                                    {font.label}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                           </div>
+                        )}
 
-                          {/* Bold Format */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-medium text-zinc-500">Format Huruf</span>
-                            <button
-                              type="button"
-                              onClick={() => updateCurrentField({ bold: !curField.bold })}
-                              className={`w-full h-7 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                                curField.bold
-                                  ? "bg-blue-600 text-white border-blue-600"
-                                  : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"
-                              }`}
-                            >
-                              <Bold className="w-3.5 h-3.5" />
-                              <span>{curField.bold ? "Tebal" : "Normal"}</span>
-                            </button>
-                          </div>
-                        </div>
+                        {/* TAB 3: SEGMEN NOMOR RESMI */}
+                        {inspectorSubTab === "nomor" && (
+                          <div className="space-y-4">
+                            {/* Live Number Banner */}
+                            <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/30 text-center space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 tracking-wider">
+                                Pratinjau Nomor Piagam Resmi
+                              </span>
+                              <div className="text-base font-black font-mono text-zinc-900 dark:text-zinc-100 tracking-wide">
+                                {(certConfig.numberSegments || ["010", "01", "091222", "001", "12", "2026"]).join(".")}
+                              </div>
+                              <p className="text-[10.5px] text-zinc-500">
+                                Segmen [001] otomatis diganti dengan nomor registrasi urut masing-masing peserta saat kelulusan.
+                              </p>
+                            </div>
 
-                        {/* Alignment Buttons */}
-                        <div className="space-y-1 pt-1 border-t border-zinc-200/70 dark:border-zinc-800/70">
-                          <span className="text-[10px] font-medium text-zinc-500">Perataan Teks</span>
-                          <div className="grid grid-cols-3 gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                            <button
-                              type="button"
-                              onClick={() => updateCurrentField({ align: "left" })}
-                              className={`h-6 rounded text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
-                                curAlign === "left"
-                                  ? "bg-blue-600 text-white"
-                                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
-                              }`}
-                            >
-                              <AlignLeft className="w-3 h-3" />
-                              <span>Kiri</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateCurrentField({ align: "center" })}
-                              className={`h-6 rounded text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
-                                curAlign === "center"
-                                  ? "bg-blue-600 text-white"
-                                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
-                              }`}
-                            >
-                              <AlignCenter className="w-3 h-3" />
-                              <span>Tengah</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateCurrentField({ align: "right" })}
-                              className={`h-6 rounded text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
-                                curAlign === "right"
-                                  ? "bg-blue-600 text-white"
-                                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
-                              }`}
-                            >
-                              <AlignRight className="w-3 h-3" />
-                              <span>Kanan</span>
-                            </button>
+                            {/* Segment Inputs (6 fields) */}
+                            <div className="space-y-2.5">
+                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-500 px-1 block">
+                                Konfigurasi 6 Segmen Kode Nomor
+                              </span>
+
+                              {[
+                                { idx: 0, label: "Segmen 1: No. SK / Kode Dokumen", desc: "Contoh: 010" },
+                                { idx: 1, label: "Segmen 2: Jenis / Tingkat Kaderisasi", desc: "Contoh: 01 (Mapaba), 02 (PKD)" },
+                                { idx: 2, label: "Segmen 3: Kode Wilayah / Komisariat", desc: "Contoh: 091222" },
+                                { idx: 3, label: "Segmen 4: Nomor Urut Peserta", desc: "Default: 001 (Dinamis per kader)" },
+                                { idx: 4, label: "Segmen 5: Bulan Pelaksanaan", desc: "Contoh: 12" },
+                                { idx: 5, label: "Segmen 6: Tahun Kegiatan", desc: "Contoh: 2026" }
+                              ].map((seg) => {
+                                const currentSegs = certConfig.numberSegments || ["010", "01", "091222", "001", "12", "2026"];
+                                return (
+                                  <div
+                                    key={seg.idx}
+                                    className="p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/40 space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                      <span>{seg.label}</span>
+                                      <span className="text-[10px] text-zinc-400 font-normal">{seg.desc}</span>
+                                    </div>
+                                    <Input
+                                      value={currentSegs[seg.idx] || ""}
+                                      onChange={(e) => updateNumberSegment(seg.idx, e.target.value.trim())}
+                                      placeholder="Nilai kode segmen"
+                                      className="h-8 text-xs font-mono font-bold bg-white dark:bg-zinc-900 rounded-lg"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 ) : (
-                  /* Empty Template State */
-                  <div className="py-12 px-6 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-3 bg-zinc-50/50 dark:bg-zinc-950/40">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto border border-blue-200/50 dark:border-blue-900/40">
-                      <FileImage className="w-6 h-6" />
+                  /* EMPTY STATE: MODERN DRAG & DROP UPLOAD ZONE */
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`py-16 px-6 sm:px-12 rounded-3xl border-2 border-dashed text-center space-y-4 transition-all duration-200 flex-1 flex flex-col items-center justify-center ${
+                      isDragOver
+                        ? "border-blue-500 bg-blue-50/30 dark:bg-blue-950/30 scale-[0.99]"
+                        : "border-zinc-300/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 hover:border-zinc-400"
+                    }`}
+                  >
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/60 dark:to-indigo-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto border border-blue-200/50 dark:border-blue-900/40 shadow-sm">
+                      <UploadCloud className="w-8 h-8" />
                     </div>
-                    <div className="space-y-1 max-w-sm mx-auto">
-                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                        Belum Ada Template Sertifikat
+
+                    <div className="space-y-1.5 max-w-md mx-auto">
+                      <h4 className="text-base font-extrabold text-zinc-900 dark:text-zinc-100">
+                        Unggah Template Desain Piagam Resmi
                       </h4>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Unggah gambar desain piagam resmi atau gunakan template bawaan PMII untuk mengatur posisi teks cetak otomatis.
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        Tarik & lepas berkas gambar piagam kosong ke sini, atau klik tombol di bawah untuk memilih gambar dari perangkat Anda.
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-center gap-2 pt-2">
+                    {/* Format Specifications Badge */}
+                    <div className="flex items-center gap-2 flex-wrap justify-center text-[10.5px] font-medium text-zinc-500 dark:text-zinc-400 pt-1">
+                      <span className="px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                        📐 Ukuran Kertas: <strong>A4 Landscape (297 × 210 mm)</strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                        🖼️ Format: <strong>PNG / JPG (Rekomendasi 300 DPI)</strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                        ☁️ Storage: <strong>Bucket Supabase Cloud</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2.5 pt-3 flex-wrap">
                       <label className="cursor-pointer">
                         <input
                           type="file"
@@ -1515,9 +1920,9 @@ export function AgendaFormModal({
                           disabled={isUploadingTemplate}
                           className="hidden"
                         />
-                        <span className="h-8.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs">
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <span>{isUploadingTemplate ? "Mengunggah..." : "Unggah Template Piagam"}</span>
+                        <span className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/25 transition-all">
+                          <UploadCloud className="w-4 h-4" />
+                          <span>{isUploadingTemplate ? "Mengunggah ke Supabase..." : "Pilih Berkas Gambar"}</span>
                         </span>
                       </label>
 
@@ -1525,9 +1930,9 @@ export function AgendaFormModal({
                         type="button"
                         variant="outline"
                         onClick={handleSetDefaultTemplate}
-                        className="h-8.5 px-4 text-xs font-medium rounded-xl cursor-pointer"
+                        className="h-10 px-5 text-xs font-semibold rounded-xl border-zinc-300 dark:border-zinc-800 cursor-pointer shadow-2xs"
                       >
-                        Terapkan Bawaan PMII
+                        Terapkan Template Standar PMII
                       </Button>
                     </div>
                   </div>

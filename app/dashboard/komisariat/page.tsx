@@ -228,16 +228,25 @@ export default function KomisariatPage() {
   };
 
   const handleDeleteConfirm = async (k: CommissariatList) => {
-    const updated = komisariats.filter((item) => item.id !== k.id);
-    const success = await db.saveCommissariats(updated);
+    try {
+      // 1. Hapus permanen record dari database Supabase dan localStorage
+      const deleteSuccess = await db.deleteCommissariat(k.id);
 
-    if (success) {
+      // 2. Sinkronkan sisa data di state dan tabel
+      const updated = komisariats.filter((item) => item.id !== k.id);
       setKomisariats(updated);
-      showSuccess(
-        `${isTenantView ? "Tenant" : "Komisariat"} Dihapus`,
-        `${isTenantView ? "Tenant" : "Komisariat"} ${k.name} berhasil dihapus dari sistem.`
-      );
-    } else {
+      await db.saveCommissariats(updated);
+
+      if (deleteSuccess) {
+        showSuccess(
+          `${isTenantView ? "Tenant" : "Komisariat"} Dihapus`,
+          `${isTenantView ? "Tenant" : "Komisariat"} ${k.name} berhasil dihapus dari sistem.`
+        );
+      } else {
+        throw new Error("Gagal menghapus record dari database.");
+      }
+    } catch (err) {
+      console.error("Gagal menghapus tenant:", err);
       showError(
         "Gagal Menghapus",
         `Terjadi kesalahan saat menghapus ${isTenantView ? "tenant" : "komisariat"}.`

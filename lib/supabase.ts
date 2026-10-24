@@ -188,7 +188,8 @@ export function extractStorageInfo(rawUrl: string): { bucket: string; path: stri
     cleanUrl.startsWith("kaderisasi/") ||
     cleanUrl.startsWith("agenda-modul/") ||
     cleanUrl.startsWith("req-files/") ||
-    cleanUrl.startsWith("registrations/")
+    cleanUrl.startsWith("registrations/") ||
+    cleanUrl.startsWith("cert-templates/")
   ) {
     return {
       bucket: "materials",

@@ -170,9 +170,9 @@ export const DEFAULT_FORM_FIELDS: FormField[] = [
 ];
 
 export const FONT_OPTIONS: { value: string; label: string }[] = [
-  { value: '"Arial Narrow", Arial, sans-serif', label: "Arial Narrow (Standar PMII)" },
+  { value: 'Poppins, var(--font-poppins), sans-serif', label: "Poppins (Bawaan PMII)" },
+  { value: '"Arial Narrow", Arial, sans-serif', label: "Arial Narrow" },
   { value: 'Arial, "Helvetica Neue", Helvetica, sans-serif', label: "Arial Standard" },
-  { value: '"Poppins", var(--font-poppins), sans-serif', label: "Poppins" },
   { value: '"Times New Roman", Times, serif', label: "Times New Roman" },
   { value: 'Calibri, Candara, Segoe, sans-serif', label: "Calibri" },
 ];

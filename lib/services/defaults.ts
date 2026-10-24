@@ -35,15 +35,15 @@ export const KEYS = {
 export const DEFAULT_SURAT_TEMPLATES: SuratTemplate[] = [];
 
 export const DEFAULT_CERT_CONFIG: CertificateLayoutConfig = {
-  nama: { x: 148.5, y: 110, fontSize: 24, color: "#0f172a", align: "center", fontWeight: "bold" },
-  nomor: { x: 148.5, y: 88, fontSize: 13, color: "#1e3a8a", align: "center", fontWeight: "normal" },
-  nik: { x: 148.5, y: 122, fontSize: 12, color: "#334155", align: "center", fontWeight: "normal" },
-  ttl: { x: 148.5, y: 130, fontSize: 12, color: "#334155", align: "center", fontWeight: "normal" },
-  jurusan: { x: 148.5, y: 138, fontSize: 12, color: "#334155", align: "center", fontWeight: "normal" },
-  kampus: { x: 148.5, y: 146, fontSize: 12, color: "#334155", align: "center", fontWeight: "bold" },
-  fontFamily: '"Arial Narrow", Arial, sans-serif',
-  paperSize: "F4",
-  numberSegments: ["010", "01", "091222", "001", "12", "2025"]
+  nama: { x: 35.0, y: 29.2, fontSize: 13, color: "#0f172a", align: "left", fontWeight: "bold", bold: true, enabled: true },
+  nomor: { x: 50.0, y: 13.8, fontSize: 13, color: "#1e3a8a", align: "center", fontWeight: "normal", bold: false, enabled: true },
+  nik: { x: 35.0, y: 31.4, fontSize: 12, color: "#0f172a", align: "left", fontWeight: "normal", bold: false, enabled: true },
+  ttl: { x: 35.0, y: 33.6, fontSize: 12, color: "#0f172a", align: "left", fontWeight: "normal", bold: false, enabled: true },
+  jurusan: { x: 35.0, y: 35.8, fontSize: 12, color: "#0f172a", align: "left", fontWeight: "normal", bold: false, enabled: true },
+  kampus: { x: 35.0, y: 38.0, fontSize: 12, color: "#0f172a", align: "left", fontWeight: "normal", bold: false, enabled: true },
+  fontFamily: 'Poppins, var(--font-poppins), sans-serif',
+  paperSize: "A4",
+  numberSegments: ["010", "01", "091222", "001", "12", "2026"]
 };
 
 export const DEFAULT_CADRES: CadreFollowUp[] = [];
@@ -98,25 +98,6 @@ export const DEFAULT_COMMISSARIATS: CommissariatList[] = [
     university: "Sekolah Tinggi Agama Islam Walisembilan Semarang",
     contactEmail: "jokosuro@pmii.org",
     establishedYear: 2021,
-    structure: {
-      period: "2026 - 2027",
-      chairman: "",
-      secretary: "",
-      treasurer: "",
-      chairman_id: null,
-      secretary_id: null,
-      treasurer_id: null
-    },
-    rayons: [],
-    level: "KOMISARIAT",
-    type: "KOMISARIAT"
-  },
-  {
-    id: "22222222-2222-2222-2222-222222222222",
-    name: "Komisariat Ki Ageng Tarub",
-    university: "Sekolah Tinggi Agama Islam Walisembilan Semarang",
-    contactEmail: "kiagengtarub@pmii.org",
-    establishedYear: 2019,
     structure: {
       period: "2026 - 2027",
       chairman: "",

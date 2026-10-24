@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Award, Download, Printer } from "lucide-react";
+import { Award, Download } from "lucide-react";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogClose
 } from "@/components/ui/dialog";
-import { DEFAULT_CERT_CONFIG } from "@/lib/db";
+import { DEFAULT_CERT_CONFIG, generateCertificatePdf, sanitizeCertFontSize } from "@/lib/services";
 import type {
   EventActivity,
   ParticipantRegistration,
@@ -50,7 +50,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const certCfg: CertificateLayoutConfig =
     matchedKaderisasi?.certificateConfig || DEFAULT_CERT_CONFIG;
   const fontFam =
-    certCfg.fontFamily || '"Arial Narrow", "Helvetica Neue Condensed", Arial, sans-serif';
+    certCfg.fontFamily || 'Poppins, var(--font-poppins), sans-serif';
 
   const formatIndonesianDate = (dateInput: string | Date | undefined | null): string => {
     if (!dateInput) return "";
@@ -166,11 +166,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     configuredSegments[5] || "2026"
   ].join(".");
 
-  const eventDateText =
-    formatIndonesianDate(event.date) ||
-    formatIndonesianDate(new Date());
-
-
   const getPdfFont = (fontFamilyStr?: string): "helvetica" | "times" | "courier" => {
     if (!fontFamilyStr) return "helvetica";
     const lower = fontFamilyStr.toLowerCase();
@@ -183,96 +178,86 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     return "helvetica";
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!templateImage) {
-      window.print();
+      toast.error("Template piagam resmi belum diunggah panitia.");
       return;
     }
 
     setIsGeneratingPdf(true);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const orientation = img.width > img.height ? "l" : "p";
-        const pdf = new jsPDF({
-          orientation,
-          unit: "mm",
-          format: "a4",
-          compress: true
-        });
+    try {
+      const renderFields = [
+        {
+          key: "nomor",
+          text: certOfficialNumber,
+          fallbackX: 50.0,
+          fallbackY: 13.8,
+          fallbackSize: 13,
+          fallbackAlign: "center" as const,
+          bold: false
+        },
+        {
+          key: "nama",
+          text: cadreName,
+          fallbackX: 35.0,
+          fallbackY: 29.2,
+          fallbackSize: 13,
+          fallbackAlign: "left" as const,
+          bold: true
+        },
+        {
+          key: "nik",
+          text: cadreNik,
+          fallbackX: 35.0,
+          fallbackY: 31.4,
+          fallbackSize: 12,
+          fallbackAlign: "left" as const,
+          bold: false
+        },
+        {
+          key: "ttl",
+          text: cadreTtl,
+          fallbackX: 35.0,
+          fallbackY: 33.6,
+          fallbackSize: 12,
+          fallbackAlign: "left" as const,
+          bold: false
+        },
+        {
+          key: "jurusan",
+          text: cadreJurusan,
+          fallbackX: 35.0,
+          fallbackY: 35.8,
+          fallbackSize: 12,
+          fallbackAlign: "left" as const,
+          bold: false
+        },
+        {
+          key: "kampus",
+          text: cadreKampus,
+          fallbackX: 35.0,
+          fallbackY: 38.0,
+          fallbackSize: 12,
+          fallbackAlign: "left" as const,
+          bold: false
+        }
+      ];
 
-        const pdfWidth = orientation === "l" ? 297 : 210;
-        const pdfHeight = orientation === "l" ? 210 : 297;
+      await generateCertificatePdf({
+        templateUrl: templateImage,
+        config: certCfg,
+        fields: renderFields,
+        outputType: "save",
+        fileName: `Sertifikat_${event.level || "PMII"}_${cadreName.replace(/\s+/g, "_")}.pdf`
+      });
 
-        // Render background template
-        pdf.addImage(img, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
-
-        const baseFont = getPdfFont(fontFam);
-
-        // Render vector text directly into PDF (crisp, selectable, correct point size)
-        const drawVectorField = (
-          fieldCfg: CertificateFieldConfig | undefined,
-          fallbackX: number,
-          fallbackY: number,
-          fallbackSize: number,
-          fallbackBold: boolean,
-          text: string,
-          fallbackAlign: "left" | "center" | "right" = "left",
-          underline = false
-        ) => {
-          if (fieldCfg && fieldCfg.enabled === false) return;
-
-          const posX = ((fieldCfg?.x ?? fallbackX) / 100) * pdfWidth;
-          const posY = ((fieldCfg?.y ?? fallbackY) / 100) * pdfHeight;
-          const configSize = fieldCfg?.fontSize ?? fallbackSize;
-          const ptSize = Math.max(8, configSize);
-          const isBold = fieldCfg?.bold ?? fallbackBold;
-          const align = fieldCfg?.align ?? fallbackAlign;
-
-          pdf.setFont(baseFont, isBold ? "bold" : "normal");
-          pdf.setFontSize(ptSize);
-          pdf.setTextColor(15, 23, 42); // #0f172a
-          pdf.text(text, posX, posY, { align, baseline: "top" });
-
-          if (underline) {
-            const textW = pdf.getTextWidth(text);
-            const startX =
-              align === "center"
-                ? posX - textW / 2
-                : align === "right"
-                ? posX - textW
-                : posX;
-            pdf.setDrawColor(15, 23, 42);
-            pdf.setLineWidth(0.35); // mm
-            const lineY = posY + (ptSize * 0.352778) + 0.8;
-            pdf.line(startX, lineY, startX + textW, lineY);
-          }
-        };
-
-        drawVectorField(certCfg.nomor, 43.5, 12.5, 13, false, certOfficialNumber);
-        drawVectorField(certCfg.nama, 35.0, 29.5, 13, true, cadreName);
-        drawVectorField(certCfg.nik, 35.0, 31.8, 13, false, cadreNik);
-        drawVectorField(certCfg.ttl, 35.0, 34.0, 13, false, cadreTtl);
-        drawVectorField(certCfg.jurusan, 35.0, 36.2, 13, false, cadreJurusan);
-        drawVectorField(certCfg.kampus, 35.0, 38.3, 13, false, cadreKampus);
-
-        pdf.save(`Sertifikat_${event.level}_${cadreName.replace(/\s+/g, "_")}.pdf`);
-        toast.success("Sertifikat resmi (PDF) berhasil diunduh!");
-      } catch (err) {
-        console.error("Gagal membuat PDF:", err);
-        toast.error("Gagal memproses file PDF. Silakan coba lagi.");
-      } finally {
-        setIsGeneratingPdf(false);
-      }
-    };
-
-    img.onerror = () => {
+      toast.success("Sertifikat resmi (PDF) berhasil diunduh!");
+    } catch (err) {
+      console.error("Gagal membuat PDF:", err);
+      toast.error("Gagal memproses file PDF. Silakan coba lagi.");
+    } finally {
       setIsGeneratingPdf(false);
-      toast.error("Gagal memuat template gambar sertifikat.");
-    };
-
-    img.src = templateImage;
+    }
   };
 
   const renderFieldElement = (
@@ -286,17 +271,20 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   ) => {
     if (fieldCfg && fieldCfg.enabled === false) return null;
 
-    const x = fieldCfg?.x ?? fallbackX;
-    const y = fieldCfg?.y ?? fallbackY;
-    const fontSize = fieldCfg?.fontSize ?? fallbackSize;
+    let rawX = fieldCfg?.x ?? fallbackX;
+    let rawY = fieldCfg?.y ?? fallbackY;
+    if (rawX > 100) rawX = fallbackX;
+    if (rawY > 100) rawY = fallbackY;
+
+    const fontSize = sanitizeCertFontSize("", fieldCfg?.fontSize ?? fallbackSize, fallbackSize);
     const isBold = fieldCfg?.bold ?? fallbackBold;
     const align = fieldCfg?.align ?? fallbackAlign;
 
     return (
       <div
         style={{
-          top: `${y}%`,
-          left: `${x}%`,
+          top: `${rawY}%`,
+          left: `${rawX}%`,
           transform:
             align === "center"
               ? "translateX(-50%)"
@@ -304,11 +292,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               ? "translateX(-100%)"
               : "none",
           textAlign: align,
-          fontSize: `clamp(9px, calc(${fontSize} * (100cqw / 450)), 32px)`,
+          fontSize: `calc(${fontSize} * 0.168cqw)`,
           fontWeight: isBold ? "bold" : "normal",
-          lineHeight: 1
+          lineHeight: 1,
+          color: fieldCfg?.color || "#0f172a"
         }}
-        className="absolute whitespace-nowrap"
+        className="absolute whitespace-nowrap p-0 select-none"
       >
         {text}
       </div>
@@ -346,97 +335,37 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   style={{ fontFamily: fontFam }}
                 >
                   {/* 1. Nomor Piagam */}
-                  {renderFieldElement(certCfg.nomor, 43.5, 12.5, 13, false, certOfficialNumber)}
+                  {renderFieldElement(certCfg.nomor, 50.0, 13.8, 13, false, certOfficialNumber, "center")}
 
                   {/* 2. Nama Peserta */}
-                  {renderFieldElement(certCfg.nama, 35.0, 29.5, 13, true, cadreName)}
+                  {renderFieldElement(certCfg.nama, 35.0, 29.2, 13, true, cadreName, "left")}
 
                   {/* 3. NIK */}
-                  {renderFieldElement(certCfg.nik, 35.0, 31.8, 13, false, cadreNik)}
+                  {renderFieldElement(certCfg.nik, 35.0, 31.4, 12, false, cadreNik, "left")}
 
                   {/* 4. TTL */}
-                  {renderFieldElement(certCfg.ttl, 35.0, 34.0, 13, false, cadreTtl)}
+                  {renderFieldElement(certCfg.ttl, 35.0, 33.6, 12, false, cadreTtl, "left")}
 
                   {/* 5. Jurusan */}
-                  {renderFieldElement(certCfg.jurusan, 35.0, 36.2, 13, false, cadreJurusan)}
+                  {renderFieldElement(certCfg.jurusan, 35.0, 35.8, 12, false, cadreJurusan, "left")}
 
                   {/* 6. Perguruan Tinggi */}
-                  {renderFieldElement(certCfg.kampus, 35.0, 38.3, 13, false, cadreKampus)}
+                  {renderFieldElement(certCfg.kampus, 35.0, 38.0, 12, false, cadreKampus, "left")}
                 </div>
               </div>
             ) : (
-              /* FORMAT DIGITAL CARD MODERN */
-              <div className="relative p-6 sm:p-10 rounded-2xl border-4 border-double border-amber-500/60 bg-gradient-to-br from-amber-50/40 via-white to-blue-50/40 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900 text-center text-zinc-900 dark:text-zinc-100 space-y-6 shadow-sm overflow-hidden">
+              /* EMPTY STATE: TEMPLATE RESMI BELUM DIUNGGAH */
+              <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
+                  <Award className="w-6 h-6" />
+                </div>
                 <div className="space-y-1">
-                  <div className="flex items-center justify-center gap-3 mb-2">
-                    <img
-                      src="/image/logo_komsat.png"
-                      alt="Logo PMII"
-                      className="w-14 h-14 object-contain"
-                    />
-                  </div>
-                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                    PENGURUS KOMISARIAT
-                  </h3>
-                  <h2 className="text-sm sm:text-base font-black tracking-wider text-blue-700 dark:text-blue-400 uppercase">
-                    PERGERAKAN MAHASISWA ISLAM INDONESIA
-                  </h2>
-                  <p className="text-[11px] text-zinc-500 font-serif">
-                    KOMISARIAT KI AGENG GETAS PENDAWA
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                    Template Piagam Resmi Belum Diunggah
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm">
+                    Panitia atau pengurus belum mengunggah berkas template piagam resmi untuk kegiatan kaderisasi ini. Silakan hubungi admin komisariat.
                   </p>
-                </div>
-
-                <div className="py-2">
-                  <span className="text-[10px] font-mono tracking-widest text-amber-600 dark:text-amber-400 font-bold block uppercase">
-                    No. Sertifikat: SERT-PMII-{event.level}-{registration?.registrationNumber || "LULUS-2026"}
-                  </span>
-                  <h1 className="text-2xl sm:text-3xl font-black font-serif text-amber-600 dark:text-amber-400 uppercase tracking-wide mt-1">
-                    SERTIFIKAT KELULUSAN
-                  </h1>
-                </div>
-
-                <div className="space-y-2 max-w-lg mx-auto">
-                  <p className="text-xs text-zinc-500 font-serif italic">
-                    Diberikan dengan penuh kehormatan kepada:
-                  </p>
-                  <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 border-b-2 border-amber-500/40 pb-2 inline-block px-6">
-                    {cadreName}
-                  </h3>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 font-serif pt-1 leading-relaxed">
-                    Telah mengikuti secara aktif dan dinyatakan <strong>LULUS</strong> dalam kegiatan kaderisasi formal:
-                  </p>
-                  <div className="text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase pt-0.5">
-                    {event.name} ({event.level})
-                  </div>
-                  <p className="text-[11px] text-zinc-500 font-serif">
-                    Diselenggarakan pada tanggal {eventDateText} oleh PK PMII Ki Ageng Getas Pendawa.
-                  </p>
-                </div>
-
-                <div className="pt-6 grid grid-cols-2 gap-6 max-w-md mx-auto text-center text-xs">
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-zinc-400 block font-serif">Ketua Komisariat</span>
-                    <div className="h-10 flex items-center justify-center">
-                      <span className="text-xs font-script font-bold text-blue-700 dark:text-blue-400">
-                        [ Tanda Tangan Digital ]
-                      </span>
-                    </div>
-                    <span className="font-bold text-zinc-800 dark:text-zinc-200 block border-t border-zinc-300 dark:border-zinc-700 pt-1">
-                      BPH PK PMII KGP
-                    </span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-zinc-400 block font-serif">Sekretaris Komisariat</span>
-                    <div className="h-10 flex items-center justify-center">
-                      <span className="text-xs font-script font-bold text-blue-700 dark:text-blue-400">
-                        [ Tanda Tangan Digital ]
-                      </span>
-                    </div>
-                    <span className="font-bold text-zinc-800 dark:text-zinc-200 block border-t border-zinc-300 dark:border-zinc-700 pt-1">
-                      Sekretaris Kaderisasi
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
@@ -454,9 +383,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             </Button>
             <Button
               type="button"
-              disabled={isGeneratingPdf}
+              disabled={isGeneratingPdf || !templateImage}
               onClick={handleDownloadPdf}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-5 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-5 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
             >
               {isGeneratingPdf ? (
                 <>

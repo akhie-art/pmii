@@ -18,7 +18,6 @@ export const DEFAULT_TENANT_MAP: Record<string, string> = {
   "f9fd547e-117e-4d39-b8cc-2ff9a818a8d9": "Pengurus Cabang PMII Grobogan",
   "c0000000-0000-0000-0000-000000000001": "Pengurus Cabang PMII Grobogan",
   "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f": "Komisariat Ki Ageng Getas Pendawa",
-  "22222222-2222-2222-2222-222222222222": "Komisariat Ki Ageng Tarub",
   "2342112a-7413-4151-9998-3a13e833902f": "Komisariat Ajisaka",
   "2eae53a7-28ff-40b5-95f1-69f85d179d8e": "Komisariat Joko Suro",
   "33333333-3333-3333-3333-333333333333": "Komisariat Ajisaka",
@@ -29,7 +28,6 @@ export const DEFAULT_KOMISARIAT_MAP = DEFAULT_TENANT_MAP;
 
 export const DEFAULT_KOMISARIAT_LIST = [
   "Komisariat Ki Ageng Getas Pendawa",
-  "Komisariat Ki Ageng Tarub",
   "Komisariat Ajisaka",
   "Komisariat Joko Suro",
 ];

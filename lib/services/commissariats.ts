@@ -42,7 +42,10 @@ export async function saveCommissariats(commList: CommissariatList[]): Promise<b
     rayons: c.rayons || [],
     created_at: (c as any).created_at || new Date().toISOString(),
   })) as unknown as CommissariatList[];
-  return saveTableData<CommissariatList>("komisariat", KEYS.COMMISSARIATS, normalized);
+  return saveTableData<CommissariatList>("komisariat", KEYS.COMMISSARIATS, normalized, {
+    allowDeletion: true,
+    forceWipeAll: true
+  });
 }
 
 export async function upsertCommissariat(comm: CommissariatList): Promise<boolean> {

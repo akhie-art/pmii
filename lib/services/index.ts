@@ -161,3 +161,4 @@ export {
 };
 
 export { generateUUID, isValidUUID } from "../utils";
+export * from "./certificatePdf";
