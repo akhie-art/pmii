@@ -24,9 +24,9 @@ export const metadata: Metadata = {
   title: "Portal PMII - Admin & Database Organisasi",
   description: "Aplikasi pengelolaan administrasi, database anggota, dan arsip digital PMII.",
   icons: {
-    icon: "/image/logo_komsat.png",
-    shortcut: "/image/logo_komsat.png",
-    apple: "/image/logo_komsat.png",
+    icon: "/image/logopmii.png",
+    shortcut: "/image/logopmii.png",
+    apple: "/image/logopmii.png",
   },
 };
 
@@ -45,6 +45,16 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('PMII_THEME');
+                  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                  } else if (saved === 'light') {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch(e) {}
+              })();
               (function() {
                 try {
                   var clean = function(node) {

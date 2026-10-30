@@ -23,6 +23,7 @@ import {
   FileCheck
 } from "lucide-react";
 import { db, SuratTemplate, generateUUID } from "@/lib/db";
+import { deleteStorageFile } from "@/lib/supabase";
 import {
   arrayBufferToBase64,
   base64ToArrayBuffer,
@@ -33,7 +34,8 @@ import {
   downloadDocxBlob,
   uploadFileToStorage,
   getDocxArrayBuffer,
-  formatBytes
+  formatBytes,
+  OFFICIAL_PMII_TEMPLATE_URL
 } from "./docx-template-helper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +90,8 @@ export function TemplateManagerDialog({
   // Konsep Pengisi Template DOCX (PizZip + Docxtemplater + docx-preview)
   const [formFileBase64, setFormFileBase64] = useState<string>("");
   const [formFileUrl, setFormFileUrl] = useState<string>("");
+  const [previousFileUrl, setPreviousFileUrl] = useState<string | null>(null);
+  const [isLoadingSample, setIsLoadingSample] = useState(false);
   const [uploadedFileSize, setUploadedFileSize] = useState<string>("");
   const [formPlaceholders, setFormPlaceholders] = useState<string[]>([]);
   const [formTestValues, setFormTestValues] = useState<Record<string, string>>({});
@@ -169,6 +173,7 @@ export function TemplateManagerDialog({
   // Open Editor for New Template
   const handleAddNew = () => {
     setEditingTemplateId(null);
+    setPreviousFileUrl(null);
     setFormName("");
     setFormSubject("");
     setFormClassification("Permohonan");
@@ -207,6 +212,7 @@ export function TemplateManagerDialog({
     setFormFileBase64(b64);
     const fUrl = tmpl.fileUrl || parsed.fileUrl || "";
     setFormFileUrl(fUrl);
+    setPreviousFileUrl(fUrl || null);
     const fSize = tmpl.fileSize || parsed.fileSize || "";
     setUploadedFileSize(fSize);
     const ph = tmpl.placeholders || parsed.placeholders || [];
@@ -248,10 +254,17 @@ export function TemplateManagerDialog({
     }
   };
 
+  const MAX_DOCX_SIZE = 10 * 1024 * 1024; // 10 MB
+
   // Proses file Word (.docx) - Konsep Pengisi Template DOCX
   const processDocxFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".docx")) {
       toast.error("Format file harus .docx (Microsoft Word)");
+      return;
+    }
+
+    if (file.size > MAX_DOCX_SIZE) {
+      toast.error(`Ukuran file terlalu besar (${formatBytes(file.size)}). Batas maksimal adalah 10 MB.`);
       return;
     }
 
@@ -325,6 +338,28 @@ export function TemplateManagerDialog({
       processDocxFile(file);
     }
     e.target.value = "";
+  };
+
+  // Memuat Template Resmi Master PMII secara langsung ke editor
+  const handleLoadOfficialSample = async () => {
+    setIsLoadingSample(true);
+    try {
+      const response = await fetch(OFFICIAL_PMII_TEMPLATE_URL);
+      if (!response.ok) throw new Error("Gagal mengambil file contoh master.");
+      const blob = await response.blob();
+      const sampleFile = new File([blob], "Template-Surat-Resmi-PMII.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      });
+      await processDocxFile(sampleFile);
+      if (!formName.trim()) setFormName("Format Surat Resmi PMII");
+      if (!formSubject.trim()) setFormSubject("Surat Resmi PMII");
+      toast.success("Template Master PMII resmi berhasil dimuat ke editor!");
+    } catch (e: any) {
+      console.error("Gagal memuat template master resmi:", e);
+      toast.error("Gagal memuat template resmi: " + (e?.message || "File tidak ditemukan."));
+    } finally {
+      setIsLoadingSample(false);
+    }
   };
 
   // Uji Coba Pengisian Placeholder (docxtemplater + PizZip + docx-preview)
@@ -430,6 +465,14 @@ export function TemplateManagerDialog({
       }
 
       await db.saveSuratTemplates(updated);
+
+      // Bersihkan file lama di Supabase Storage jika file diganti saat edit
+      if (editingTemplateId && previousFileUrl && formFileUrl && previousFileUrl !== formFileUrl) {
+        deleteStorageFile(previousFileUrl).catch((err) => {
+          console.warn("Gagal menghapus file lama dari storage:", err);
+        });
+      }
+
       setTemplates(updated);
       setIsEditorOpen(false);
       if (onTemplatesUpdated) onTemplatesUpdated(updated.length);
@@ -834,6 +877,44 @@ export function TemplateManagerDialog({
                 <p className="text-[11px] text-zinc-400 leading-tight">
                   💡 <strong>Tips:</strong> Tulis placeholder utuh seperti <code className="text-blue-600 dark:text-blue-400">{"{{nama}}"}</code> atau <code className="text-blue-600 dark:text-blue-400">{"{{nomor}}"}</code> tanpa mengganti format font di tengah kata agar tidak terpecah oleh Word.
                 </p>
+
+                {/* Banner Template Master PMII Resmi */}
+                <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="text-xs font-bold text-blue-900 dark:text-blue-200">
+                      Contoh Format Resmi PMII
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
+                    Format Word baku dengan kop surat resmi, garis ganda, nomor surat, dan kolom tanda tangan siap pakai.
+                  </p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isLoadingSample || isUploadingDocx}
+                      onClick={handleLoadOfficialSample}
+                      className="h-7 text-[11px] font-medium bg-white dark:bg-zinc-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 hover:bg-blue-100/60 dark:hover:bg-blue-900/50 rounded-lg flex items-center gap-1 cursor-pointer"
+                    >
+                      {isLoadingSample ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3 h-3 text-blue-600" />
+                      )}
+                      <span>Muat Contoh Resmi</span>
+                    </Button>
+                    <a
+                      href={OFFICIAL_PMII_TEMPLATE_URL}
+                      download="Template-Surat-Resmi-PMII.docx"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline px-1 py-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Unduh .docx</span>
+                    </a>
+                  </div>
+                </div>
               </div>
 
               {/* SECTION 2: IDENTITAS TEMPLATE */}

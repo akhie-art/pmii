@@ -6,7 +6,9 @@ import {
   Globe,
   Image as ImageIcon,
   Trash2,
-  Loader2
+  Loader2,
+  UserCheck,
+  RefreshCw
 } from "lucide-react";
 
 function Instagram({ className }: { className?: string }) {
@@ -30,12 +32,16 @@ function Instagram({ className }: { className?: string }) {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { OrganizationSettings, SystemSettings } from "./types";
+import { isUserKomisariat } from "@/lib/auth-helpers";
+import type { OrganizationSettings, SystemSettings, AdministrationSettings } from "./types";
 
 interface OrganizationTabProps {
   settings: SystemSettings;
   currentUser: any;
   updateOrgField: (key: keyof OrganizationSettings, value: string) => void;
+  updateAdminField?: (key: keyof AdministrationSettings, value: string) => void;
+  onSyncFromBPH?: () => void;
+  isSyncingBPH?: boolean;
   onLogoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveLogo: () => void;
   isUploadingLogo?: boolean;
@@ -45,12 +51,15 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
   settings,
   currentUser,
   updateOrgField,
+  updateAdminField,
+  onSyncFromBPH,
+  isSyncingBPH = false,
   onLogoChange,
   onRemoveLogo,
   isUploadingLogo = false
 }) => {
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const isKomisariat = currentUser?.role === "komisariat" || currentUser?.role === "pengurus_komisariat";
+  const isKomisariat = isUserKomisariat(currentUser?.role, currentUser?.commissariat);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -90,6 +99,62 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
                 onChange={(e) => updateOrgField("period", e.target.value)}
                 className="text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
               />
+            </div>
+          </div>
+
+          {/* Pimpinan Organisasi / Penandatangan Administrasi */}
+          <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Pimpinan Organisasi & Penandatangan</span>
+                </h4>
+                <p className="text-[10px] text-zinc-400">
+                  Nama Ketua dan Sekretaris untuk kop surat dan pengesahan resmi.
+                </p>
+              </div>
+
+              {onSyncFromBPH && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isSyncingBPH}
+                  onClick={onSyncFromBPH}
+                  className="h-7 px-2.5 text-[11px] font-medium border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                  title="Sinkronkan otomatis dari nama fungsionaris BPH di Halaman Pengurus"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncingBPH ? "animate-spin" : ""}`} />
+                  <span>{isSyncingBPH ? "Menyinkronkan..." : "Sinkron dari BPH"}</span>
+                </Button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Nama Ketua {isKomisariat ? "Komisariat" : "Cabang"}
+                </label>
+                <Input
+                  value={settings.administration.headOfBranch || ""}
+                  onChange={(e) => updateAdminField?.("headOfBranch", e.target.value)}
+                  placeholder="Contoh: Sahabat Ahmad Fauzi"
+                  className="text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Nama Sekretaris {isKomisariat ? "Komisariat" : "Cabang"}
+                </label>
+                <Input
+                  value={settings.administration.secretaryGeneral || ""}
+                  onChange={(e) => updateAdminField?.("secretaryGeneral", e.target.value)}
+                  placeholder="Contoh: Sahabat Ali Ridho"
+                  className="text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg h-9"
+                />
+              </div>
             </div>
           </div>
 

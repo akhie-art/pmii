@@ -97,7 +97,8 @@ export const TABLES_WITHOUT_COMMISSARIAT = [
   "kader",
   "pendaftaran",
   "persyaratan",
-  "kaderisasi"
+  "kaderisasi",
+  "pengajuan_sk"
 ];
 
 /**

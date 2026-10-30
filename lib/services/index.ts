@@ -31,6 +31,7 @@ import {
 } from "./credentials";
 import { getRoles, getRoleByCode, getRoleById, upsertRole, deleteRole, DEFAULT_ROLES } from "./roles";
 import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow } from "./core";
+import { getPengajuanSK, savePengajuanSK, deletePengajuanSK } from "./pengajuan-sk";
 
 // Unified db facade for 100% backward compatibility
 export const db = {
@@ -83,6 +84,11 @@ export const db = {
   getSuratTemplates,
   saveSuratTemplates,
   deleteSuratTemplate,
+
+  // Pengajuan SK
+  getPengajuanSK,
+  savePengajuanSK,
+  deletePengajuanSK,
 
   // Arsip
   getArsip,
@@ -157,8 +163,12 @@ export {
   getRoleById,
   upsertRole,
   deleteRole,
-  DEFAULT_ROLES
+  DEFAULT_ROLES,
+  getPengajuanSK,
+  savePengajuanSK,
+  deletePengajuanSK
 };
 
 export { generateUUID, isValidUUID } from "../utils";
 export * from "./certificatePdf";
+export * from "./pengajuan-sk";

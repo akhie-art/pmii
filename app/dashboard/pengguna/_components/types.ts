@@ -19,6 +19,7 @@ export const AVAILABLE_MENUS: MenuItemConfig[] = [
   { group: "Kaderisasi & Pembinaan", name: "Kegiatan & Acara", href: "/dashboard/kegiatan", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Kaderisasi & Pembinaan", name: "Verifikasi RKTL", href: "/dashboard/verifikasi", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang"] },
   { group: "Administrasi & Dokumen", name: "Surat Menyurat", href: "/dashboard/surat", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
+  { group: "Administrasi & Dokumen", name: "Pengajuan SK", href: "/dashboard/pengajuan-sk", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Administrasi & Dokumen", name: "Arsip Dokumen", href: "/dashboard/arsip", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Publikasi & Media", name: "Artikel & Berita", href: "/dashboard/artikel", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Konfigurasi & Pengaturan", name: "Manajemen Pengguna", href: "/dashboard/pengguna", defaultRoles: ["admin", "superadmin", "ketua_cabang"] },

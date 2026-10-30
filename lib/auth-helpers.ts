@@ -37,9 +37,32 @@ export function isUserPengurus(role?: string): boolean {
     r === "pk" ||
     r === "pengurus komisariat" ||
     r === "pengurus_komisariat" ||
+    r === "ketua_komisariat" ||
+    r === "ketua komisariat" ||
     r.includes("pengurus") ||
     r.includes("komisariat")
   );
+}
+
+export function isUserKomisariat(role?: string, commissariat?: string): boolean {
+  if (!role && !commissariat) return false;
+  const r = (role || "").toLowerCase().trim();
+  if (isUserAdmin(r)) return false;
+  if (
+    r === "komisariat" ||
+    r === "pengurus_komisariat" ||
+    r === "pengurus komisariat" ||
+    r === "ketua_komisariat" ||
+    r === "ketua komisariat" ||
+    r === "pk" ||
+    r.includes("komisariat")
+  ) {
+    return true;
+  }
+  if (commissariat && !commissariat.toLowerCase().includes("cabang")) {
+    return true;
+  }
+  return false;
 }
 
 export function isUserInstruktur(role?: string): boolean {
@@ -88,6 +111,11 @@ export function isMenuAllowed(
     normalizedItem === "/dashboard/profil" ||
     normalizedItem === ""
   ) {
+    return true;
+  }
+
+  // Super Administrator selalu memiliki akses ke seluruh menu
+  if (isUserSuperAdmin(user.role)) {
     return true;
   }
 

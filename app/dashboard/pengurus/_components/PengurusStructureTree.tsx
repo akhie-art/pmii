@@ -4,7 +4,8 @@ import {
   Plus,
   UserPlus,
   Edit2,
-  Trash2
+  Trash2,
+  Printer
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,9 +46,9 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
   );
 
   return (
-    <div className="space-y-4">
+    <div id="pmii-structure-diagram" className="space-y-4">
       {/* ACTION TOOLBAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl print:hidden">
         <div>
           <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
             <GitFork className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -58,6 +59,16 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => window.print()}
+            className="h-8 px-3 text-xs border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer flex items-center gap-1.5"
+            title="Cetak atau Simpan Bagan ke PDF"
+          >
+            <Printer className="w-3.5 h-3.5 text-zinc-500" />
+            <span>Cetak / PDF</span>
+          </Button>
           <Button
             size="sm"
             variant="outline"

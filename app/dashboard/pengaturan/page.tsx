@@ -16,10 +16,12 @@ import {
 
 import { db, setUserPassword } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { isUserKomisariat } from "@/lib/auth-helpers";
 import {
   DEFAULT_SETTINGS,
   type SystemSettings,
-  type OrganizationSettings
+  type OrganizationSettings,
+  type AdministrationSettings
 } from "./_components/types";
 import { OrganizationTab } from "./_components/OrganizationTab";
 import { SecurityTab } from "./_components/SecurityTab";
@@ -115,10 +117,8 @@ export default function PengaturanPage() {
         }
       }
 
-      // 3. Jika user adalah Pengurus Komisariat lokal, load data komisariat spesifik
-      const isKomisariatUser =
-        loggedUser &&
-        (loggedUser.role === "komisariat" || loggedUser.role === "pengurus_komisariat");
+      // 3. Jika user adalah Pengurus/Ketua Komisariat lokal, load data komisariat spesifik
+      const isKomisariatUser = isUserKomisariat(loggedUser?.role, loggedUser?.commissariat);
 
       if (isKomisariatUser && isSupabaseConfigured && supabase) {
         try {
@@ -171,22 +171,25 @@ export default function PengaturanPage() {
           console.warn("[PengaturanPage] Supabase save error:", err);
         }
 
-        // Jika user adalah Pengurus Komisariat, simpan pembaruan ke tabel tenant
-        const isKomisariatUser =
-          currentUser &&
-          (currentUser.role === "komisariat" || currentUser.role === "pengurus_komisariat");
+        // Jika user adalah Pengurus/Ketua Komisariat, simpan pembaruan ke tabel tenant
+        const isKomisariatUser = isUserKomisariat(currentUser?.role, currentUser?.commissariat);
 
-        const targetTenantId = currentUser?.tenant_id || currentUser?.komisariat_id;
-        if (isKomisariatUser && targetTenantId) {
+        if (isKomisariatUser) {
           try {
-            await supabase
+            const targetTenantId = currentUser?.tenant_id || currentUser?.komisariat_id;
+            const tenantUpdateQuery = supabase
               .from("tenant")
               .update({
                 name: settings.organization.cabangName,
                 contactEmail: settings.organization.email,
                 logo: settings.organization.logo
-              })
-              .eq("id", targetTenantId);
+              });
+
+            if (targetTenantId) {
+              await tenantUpdateQuery.eq("id", targetTenantId);
+            } else if (currentUser?.commissariat) {
+              await tenantUpdateQuery.ilike("name", `%${currentUser.commissariat}%`);
+            }
           } catch (e) {
             console.warn("[PengaturanPage] Error updating tenant row:", e);
           }
@@ -200,7 +203,7 @@ export default function PengaturanPage() {
 
       showToast("Pengaturan berhasil disimpan ke cloud database!");
       setSuccessMessage(
-        currentUser?.role === "komisariat"
+        isUserKomisariat(currentUser?.role, currentUser?.commissariat)
           ? "Pengaturan profil komisariat berhasil diperbarui dan tersimpan aman di database."
           : "Pengaturan identitas dan administrasi Pengurus Cabang Grobogan berhasil diperbarui di database."
       );
@@ -346,6 +349,57 @@ export default function PengaturanPage() {
     }));
   };
 
+  const updateAdminField = (key: keyof AdministrationSettings, value: any) => {
+    setSettings((prev) => ({
+      ...prev,
+      administration: {
+        ...prev.administration,
+        [key]: value
+      }
+    }));
+  };
+
+  const [isSyncingBPH, setIsSyncingBPH] = useState(false);
+
+  const handleSyncFromBPH = async () => {
+    setIsSyncingBPH(true);
+    try {
+      const boards = await db.getBoards();
+      const ketua = boards.find(
+        (m: any) => m.department === "BPH" && m.position.toLowerCase().includes("ketua")
+      );
+      const sekretaris = boards.find(
+        (m: any) => m.department === "BPH" && m.position.toLowerCase().includes("sekretaris")
+      );
+
+      if (!ketua && !sekretaris) {
+        showToast("Belum ada fungsionaris Ketua atau Sekretaris di BPH Halaman Pengurus.");
+        return;
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        administration: {
+          ...prev.administration,
+          headOfBranch: ketua?.name || prev.administration.headOfBranch,
+          secretaryGeneral: sekretaris?.name || prev.administration.secretaryGeneral
+        }
+      }));
+
+      const syncResult = [
+        ketua?.name ? `Ketua: ${ketua.name}` : null,
+        sekretaris?.name ? `Sekretaris: ${sekretaris.name}` : null
+      ].filter(Boolean).join(" & ");
+
+      showToast(`Berhasil disinkronkan dari Struktur BPH: ${syncResult}!`);
+    } catch (e) {
+      console.error("Gagal sinkronisasi dari BPH:", e);
+      showToast("Gagal mengambil data dari struktur kepengurusan.");
+    } finally {
+      setIsSyncingBPH(false);
+    }
+  };
+
   if (!mounted) {
     return (
       <div className="space-y-6">
@@ -355,8 +409,7 @@ export default function PengaturanPage() {
     );
   }
 
-  const isKomisariat =
-    currentUser?.role === "komisariat" || currentUser?.role === "pengurus_komisariat";
+  const isKomisariat = isUserKomisariat(currentUser?.role, currentUser?.commissariat);
 
   return (
     <div className="space-y-6 text-zinc-900 dark:text-zinc-100 font-sans pb-10">
@@ -444,6 +497,9 @@ export default function PengaturanPage() {
             settings={settings}
             currentUser={currentUser}
             updateOrgField={updateOrgField}
+            updateAdminField={updateAdminField}
+            onSyncFromBPH={handleSyncFromBPH}
+            isSyncingBPH={isSyncingBPH}
             onLogoChange={handleLogoChange}
             onRemoveLogo={handleRemoveLogo}
             isUploadingLogo={isUploadingLogo}

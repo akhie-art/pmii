@@ -27,6 +27,7 @@ import {
   Newspaper,
   Award,
   ChevronDown,
+  FileCheck,
 } from "lucide-react";
 
 // Import shadcn/ui components
@@ -442,6 +443,7 @@ export default function DashboardLayout({
           groupLabel: "Administrasi & Dokumen",
           items: [
             { name: "Surat Menyurat", href: `${staffPrefix}/surat`, icon: Mail },
+            { name: "Pengajuan SK", href: `${staffPrefix}/pengajuan-sk`, icon: FileCheck },
             { name: "Arsip Dokumen", href: `${staffPrefix}/arsip`, icon: FolderOpen },
           ]
         },

@@ -8,7 +8,7 @@ export const DEFAULT_ROLES: Role[] = [
     code: "superadmin",
     allowed_menus: [
       "/admin", "/admin/kegiatan", "/admin/anggota", "/admin/kaderisasi",
-      "/admin/pengurus", "/admin/surat", "/admin/arsip", "/admin/artikel",
+      "/admin/pengurus", "/admin/surat", "/admin/pengajuan-sk", "/admin/arsip", "/admin/artikel",
       "/admin/penilaian", "/admin/rekap-nilai", "/admin/verifikasi",
       "/admin/pengguna", "/admin/komisariat", "/admin/pengaturan", "/admin/profil"
     ]
@@ -18,7 +18,7 @@ export const DEFAULT_ROLES: Role[] = [
     code: "admin",
     allowed_menus: [
       "/admin", "/admin/kegiatan", "/admin/anggota", "/admin/kaderisasi",
-      "/admin/pengurus", "/admin/surat", "/admin/arsip", "/admin/artikel",
+      "/admin/pengurus", "/admin/surat", "/admin/pengajuan-sk", "/admin/arsip", "/admin/artikel",
       "/admin/penilaian", "/admin/rekap-nilai", "/admin/verifikasi",
       "/admin/pengguna", "/admin/komisariat", "/admin/pengaturan", "/admin/profil"
     ]
@@ -28,8 +28,8 @@ export const DEFAULT_ROLES: Role[] = [
     code: "pengurus",
     allowed_menus: [
       "/pengurus", "/pengurus/kegiatan", "/pengurus/anggota", "/pengurus/kaderisasi",
-      "/pengurus/pengurus", "/pengurus/surat", "/pengurus/arsip", "/pengurus/artikel",
-      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil"
+      "/pengurus/pengurus", "/pengurus/surat", "/pengurus/pengajuan-sk", "/pengurus/arsip", "/pengurus/artikel",
+      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil", "/pengurus/pengaturan"
     ]
   },
   {
@@ -59,7 +59,7 @@ export const DEFAULT_ROLES: Role[] = [
     code: "ketua_cabang",
     allowed_menus: [
       "/admin", "/admin/kegiatan", "/admin/anggota", "/admin/kaderisasi",
-      "/admin/pengurus", "/admin/surat", "/admin/arsip", "/admin/artikel",
+      "/admin/pengurus", "/admin/surat", "/admin/pengajuan-sk", "/admin/arsip", "/admin/artikel",
       "/admin/penilaian", "/admin/rekap-nilai", "/admin/verifikasi",
       "/admin/pengguna", "/admin/komisariat", "/admin/pengaturan", "/admin/profil"
     ]
@@ -69,8 +69,8 @@ export const DEFAULT_ROLES: Role[] = [
     code: "ketua_komisariat",
     allowed_menus: [
       "/pengurus", "/pengurus/kegiatan", "/pengurus/anggota", "/pengurus/kaderisasi",
-      "/pengurus/pengurus", "/pengurus/surat", "/pengurus/arsip", "/pengurus/artikel",
-      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil"
+      "/pengurus/pengurus", "/pengurus/surat", "/pengurus/pengajuan-sk", "/pengurus/arsip", "/pengurus/artikel",
+      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil", "/pengurus/pengaturan"
     ]
   },
   {
@@ -78,7 +78,7 @@ export const DEFAULT_ROLES: Role[] = [
     code: "pengurus_cabang",
     allowed_menus: [
       "/admin", "/admin/kegiatan", "/admin/anggota", "/admin/kaderisasi",
-      "/admin/pengurus", "/admin/surat", "/admin/arsip", "/admin/artikel",
+      "/admin/pengurus", "/admin/surat", "/admin/pengajuan-sk", "/admin/arsip", "/admin/artikel",
       "/admin/penilaian", "/admin/rekap-nilai", "/admin/verifikasi",
       "/admin/komisariat", "/admin/profil"
     ]
@@ -88,8 +88,8 @@ export const DEFAULT_ROLES: Role[] = [
     code: "pengurus_komisariat",
     allowed_menus: [
       "/pengurus", "/pengurus/kegiatan", "/pengurus/anggota", "/pengurus/kaderisasi",
-      "/pengurus/surat", "/pengurus/arsip", "/pengurus/artikel",
-      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil"
+      "/pengurus/surat", "/pengurus/pengajuan-sk", "/pengurus/arsip", "/pengurus/artikel",
+      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil", "/pengurus/pengaturan"
     ]
   }
 ];

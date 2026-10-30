@@ -56,13 +56,48 @@ export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      if (e.target?.result) {
-        setFormData((prev) => ({
-          ...prev,
-          image: e.target!.result as string
-        }));
+      const src = e.target?.result as string;
+      if (!src) return;
+
+      const img = new window.Image();
+      img.onload = () => {
+        const maxWidth = 1200;
+        const maxHeight = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/webp", 0.82);
+          setFormData((prev) => ({
+            ...prev,
+            image: compressedDataUrl
+          }));
+          showToast("Gambar berhasil diunggah & dioptimasi!");
+        } else {
+          setFormData((prev) => ({ ...prev, image: src }));
+          showToast("Gambar berhasil diunggah!");
+        }
+      };
+      img.onerror = () => {
+        setFormData((prev) => ({ ...prev, image: src }));
         showToast("Gambar berhasil diunggah!");
-      }
+      };
+      img.src = src;
     };
     reader.readAsDataURL(file);
   };
@@ -189,7 +224,7 @@ export const ArticleFormModal: React.FC<ArticleFormModalProps> = ({
                   </div>
                   <div className="flex items-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
                     <span className="px-3 py-2 text-xs font-mono text-zinc-400 bg-zinc-100/70 dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 select-none">
-                      pmii.id/artikel/
+                      pmii.or.id/artikel/
                     </span>
                     <input
                       type="text"

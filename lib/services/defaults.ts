@@ -10,7 +10,8 @@ import {
   Kaderisasi,
   Article,
   CertificateLayoutConfig,
-  SuratTemplate
+  SuratTemplate,
+  PengajuanSK
 } from "./types";
 
 // LocalStorage Keys
@@ -30,7 +31,35 @@ export const KEYS = {
   EVALUATIONS: "PMII_PARTICIPANT_EVALUATIONS",
   SURAT: "PMII_SURAT_DATA",
   SURAT_TEMPLATES: "PMII_SURAT_TEMPLATES",
+  PENGAJUAN_SK: "PMII_PENGAJUAN_SK",
 };
+
+export const DEFAULT_PENGAJUAN_SK: PengajuanSK[] = [
+  {
+    id: "sk-001-getas-pendawa",
+    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
+    periode: "2026 - 2027",
+    tanggal_pengajuan: "2026-10-20",
+    status: "DIAJUKAN",
+    catatan_revisi: "",
+    diverifikasi_oleh: "",
+    tanggal_verifikasi: "",
+    created_at: "2026-10-20T08:30:00.000Z",
+    updated_at: "2026-10-20T08:30:00.000Z"
+  },
+  {
+    id: "sk-002-rayon-syariah",
+    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
+    periode: "2026 - 2027",
+    tanggal_pengajuan: "2026-09-15",
+    status: "DISETUJUI",
+    diverifikasi_oleh: "Admin PC PMII Grobogan",
+    tanggal_verifikasi: "2026-09-18",
+    tanggal_sk_terbit: "2026-09-18",
+    created_at: "2026-09-15T10:00:00.000Z",
+    updated_at: "2026-09-18T14:20:00.000Z"
+  }
+];
 
 export const DEFAULT_SURAT_TEMPLATES: SuratTemplate[] = [];
 
@@ -146,6 +175,7 @@ export const DEFAULT_USERS: UserAccount[] = [
       "/admin/kaderisasi",
       "/admin/pengurus",
       "/admin/surat",
+      "/admin/pengajuan-sk",
       "/admin/arsip",
       "/admin/artikel",
       "/admin/penilaian",

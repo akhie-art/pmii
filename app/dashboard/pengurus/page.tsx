@@ -24,6 +24,7 @@ import {
   CABANG_TENANT_ID,
   getTenantIdByName
 } from "@/lib/tenancy";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 import {
   type BoardMember,
@@ -104,6 +105,28 @@ export default function KomisariatPengurusPage() {
     };
     window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
+    // Muat divisi organisasi dari cloud Supabase dengan fallback LocalStorage
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from("pengaturan")
+        .select("value")
+        .eq("key", "organization_divisions")
+        .maybeSingle()
+        .then(
+          ({ data }) => {
+            if (data?.value && Array.isArray(data.value) && data.value.length > 0) {
+              setDivisions(data.value);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("PMII_ORGANIZATION_DIVISIONS", JSON.stringify(data.value));
+              }
+            }
+          },
+          (err: any) => {
+            console.warn("Failed to load divisions from cloud:", err);
+          }
+        );
+    }
+
     const savedDivs = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_DIVISIONS") : null;
     if (savedDivs) {
       try {
@@ -130,10 +153,23 @@ export default function KomisariatPengurusPage() {
     };
   }, []);
 
-  const saveDivisions = (newDivs: string[]) => {
+  const saveDivisions = async (newDivs: string[]) => {
     setDivisions(newDivs);
     if (typeof window !== "undefined") {
       localStorage.setItem("PMII_ORGANIZATION_DIVISIONS", JSON.stringify(newDivs));
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from("pengaturan")
+          .upsert({
+            key: "organization_divisions",
+            value: newDivs,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "key" });
+      } catch (e) {
+        console.warn("Failed to save divisions to cloud:", e);
+      }
     }
   };
 
@@ -489,6 +525,7 @@ export default function KomisariatPengurusPage() {
         setSelectedCadreData={setSelectedCadreData}
         allDepartments={allDepartments}
         activeCampus={activeCampus}
+        boardMembers={boardMembers}
         onSubmit={handleSaveMember}
       />
 

@@ -36,6 +36,42 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 /**
+ * Membersihkan tag internal XML Microsoft Word yang sering memecah placeholder
+ * Contoh: Word sering menyisipkan <w:proofErr w:type="spellStart"/> atau <w:lang/>
+ * di tengah kata "{{nama}}" yang menyebabkan docxtemplater gagal mendeteksi atau mengisi tag.
+ */
+export function cleanDocxXml(zip: PizZip): PizZip {
+  try {
+    const xmlFiles = Object.keys(zip.files).filter(
+      (path) =>
+        path === "word/document.xml" ||
+        path.startsWith("word/header") ||
+        path.startsWith("word/footer")
+    );
+
+    for (const fileName of xmlFiles) {
+      const file = zip.file(fileName);
+      if (!file) continue;
+      const content = file.asText();
+      if (!content) continue;
+
+      // Hapus tag proofing error, noProof, dan markup bahasa yang memecah run teks
+      const cleaned = content
+        .replace(/<w:proofErr[^>]*\/>/g, "")
+        .replace(/<w:noProof\/>/g, "")
+        .replace(/<w:lang[^>]*\/>/g, "");
+
+      zip.file(fileName, cleaned);
+    }
+  } catch (err) {
+    console.warn("Gagal normalisasi XML Word:", err);
+  }
+  return zip;
+}
+
+export const OFFICIAL_PMII_TEMPLATE_URL = "/templates/template-surat-resmi-pmii.docx";
+
+/**
  * Ekstrak seluruh placeholder {{...}} dari dokumen Word (.docx)
  * Menggunakan pendekatan yang sama persis seperti file Pengisi Template DOCX (1).html
  */
@@ -45,7 +81,8 @@ export function extractDocxPlaceholders(arrayBuffer: ArrayBuffer): {
   error?: string;
 } {
   try {
-    const zip = new PizZip(arrayBuffer);
+    const rawZip = new PizZip(arrayBuffer);
+    const zip = cleanDocxXml(rawZip);
     const doc = new Docxtemplater(zip, {
       delimiters: { start: "{{", end: "}}" },
       paragraphLoop: true,
@@ -91,7 +128,8 @@ export function fillDocxTemplate(
   error?: string;
 } {
   try {
-    const zip = new PizZip(arrayBuffer);
+    const rawZip = new PizZip(arrayBuffer);
+    const zip = cleanDocxXml(rawZip);
     const doc = new Docxtemplater(zip, {
       delimiters: { start: "{{", end: "}}" },
       paragraphLoop: true,

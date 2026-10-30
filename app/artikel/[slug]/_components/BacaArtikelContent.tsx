@@ -33,7 +33,7 @@ export function BacaArtikelContent() {
   const router = useRouter();
   const rawSlug = params?.slug as string;
 
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [article, setArticle] = useState<Article | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
@@ -47,26 +47,20 @@ export function BacaArtikelContent() {
   // Sync theme
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("PMII_THEME");
-      if (savedTheme) {
-        setDarkMode(savedTheme === "dark");
-      } else {
-        setDarkMode(document.documentElement.classList.contains("dark"));
-      }
-    }
+    setDarkMode(document.documentElement.classList.contains("dark"));
   }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
-    if (darkMode) {
+  const toggleTheme = () => {
+    const nextDark = !darkMode;
+    setDarkMode(nextDark);
+    if (nextDark) {
       document.documentElement.classList.add("dark");
       localStorage.setItem("PMII_THEME", "dark");
     } else {
       document.documentElement.classList.remove("dark");
       localStorage.setItem("PMII_THEME", "light");
     }
-  }, [darkMode, mounted]);
+  };
 
   // Fetch article by slug or id
   useEffect(() => {
@@ -195,8 +189,8 @@ export function BacaArtikelContent() {
           <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white border border-zinc-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shadow-xs shrink-0">
               <Image
-                src="/image/logo_komsat.png"
-                alt="Logo PK PMII Ki Ageng Getas Pendawa"
+                src="/image/logopmii.png"
+                alt="Logo PC PMII Grobogan"
                 width={36}
                 height={36}
                 className="w-full h-full object-contain"
@@ -205,7 +199,7 @@ export function BacaArtikelContent() {
             </div>
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-[11px] sm:text-sm tracking-tight text-zinc-900 dark:text-zinc-100 leading-tight truncate">
-                PK PMII KI AGENG GETAS PENDAWA
+                PC PMII GROBOGAN
               </span>
               <span className="hidden md:block text-[10px] text-zinc-500 dark:text-zinc-400 font-medium tracking-wide mt-0.5">
                 Portal Resmi Kaderisasi & Tata Kelola
@@ -213,10 +207,26 @@ export function BacaArtikelContent() {
             </div>
           </Link>
 
+          {/* Quick Navigation Anchor Links (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-6 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <Link href="/#alur" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Alur Kaderisasi
+            </Link>
+            <Link href="/#layanan" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Layanan Digital
+            </Link>
+            <Link href="/artikel" className="text-blue-600 dark:text-blue-400 font-semibold transition-colors">
+              Artikel & Wawasan
+            </Link>
+            <Link href="/#verifikasi" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Cek Status Anggota
+            </Link>
+          </nav>
+
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* DARK / LIGHT MODE TOGGLE */}
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={toggleTheme}
               title={darkMode ? "Beralih ke Mode Terang (Light Mode)" : "Beralih ke Mode Gelap (Dark Mode)"}
               className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
               aria-label="Toggle theme"
@@ -227,14 +237,6 @@ export function BacaArtikelContent() {
                 <Moon className="w-4 h-4 text-blue-600" />
               )}
             </button>
-
-            <Link
-              href="/register"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-medium transition-colors"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Daftar Anggota</span>
-            </Link>
 
             <Link
               href="/login"
@@ -362,7 +364,7 @@ export function BacaArtikelContent() {
                         </span>
                       </div>
                       <span className="text-xs text-zinc-500 dark:text-zinc-400 block mt-0.5">
-                        {article.authorRole} • PK PMII Ki Ageng Getas Pendawa
+                        {article.authorRole} • PC PMII Grobogan
                       </span>
                     </div>
                   </div>
@@ -508,7 +510,7 @@ export function BacaArtikelContent() {
                     {article.authorName}
                   </h4>
                   <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Menjabat sebagai {article.authorRole} di Pengurus Komisariat PMII Ki Ageng Getas Pendawa. Aktif menulis kajian ilmiah, opini sosial politik, dan penguatan kaderisasi Aswaja.
+                    Menjabat sebagai {article.authorRole} di PC PMII Grobogan. Aktif menulis kajian ilmiah, opini sosial politik, dan penguatan kaderisasi Aswaja.
                   </p>
                 </div>
               </div>
@@ -619,7 +621,7 @@ export function BacaArtikelContent() {
         <div className="container mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
             <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-              PK PMII Ki Ageng Getas Pendawa
+              PC PMII Grobogan
             </span>
             <span className="hidden sm:inline text-zinc-400">•</span>
             <span>© 2026 Hak cipta dilindungi.</span>

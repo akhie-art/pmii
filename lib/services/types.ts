@@ -601,3 +601,36 @@ export interface ArsipItem {
   created_at?: string;
 }
 
+export type StatusPengajuanSK = "DRAFT" | "DIAJUKAN" | "REVISI" | "DISETUJUI" | "DITOLAK";
+
+export interface PengajuanSK {
+  id: string;
+  tenant_id?: string | null;
+  periode: string;
+  tanggal_pengajuan: string;
+  status: StatusPengajuanSK;
+  
+  // Berkas kelengkapan persyaratan
+  berkas_surat_permohonan?: string;
+  berkas_susunan_pengurus?: string;
+  berkas_berita_acara?: string; // Berita Acara RTK
+  berkas_berita_acara_rtk?: string; // Alias Berita Acara RTK
+  berkas_berita_acara_formatur?: string; // Berita Acara Tim Formatur
+  berkas_lpj?: string; // LPJ Pengurus Demisioner
+  berkas_cv_pengurus?: string; // CV / Biodata Pengurus
+  berkas_presensi?: string; // Data Rekap Anggota
+  berkas_tambahan?: string;
+
+  // Catatan Verifikasi oleh Admin Cabang
+  catatan_revisi?: string;
+  diverifikasi_oleh?: string;
+  tanggal_verifikasi?: string;
+  
+  // Penerbitan SK Resmi Cabang
+  tanggal_sk_terbit?: string;
+  file_sk_resmi?: string;
+  
+  created_at?: string;
+  updated_at?: string;
+}
+

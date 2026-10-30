@@ -26,14 +26,22 @@ import {
   Clock,
   Building,
   Check,
-  Calendar
+  Calendar,
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { db, DEFAULT_ARTICLES, formatArticleDate } from "@/lib/db";
-import type { CadreFollowUp, Article } from "@/lib/db";
+import type { Article } from "@/lib/db";
+
+interface PublicVerifiedCadre {
+  name: string;
+  level: string;
+  commissariat: string;
+  status: string;
+}
 
 const HERO_SLIDES = [
   {
@@ -80,9 +88,9 @@ const HERO_SLIDES = [
 const ARTICLE_CATEGORIES = ["Semua", "Kaderisasi", "Opini & Pergerakan", "Tata Kelola"];
 
 export function LandingContent() {
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [cadres, setCadres] = useState<CadreFollowUp[]>([]);
+  const [cadresCount, setCadresCount] = useState<number>(1250);
 
   // Hero Carousel State
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -93,27 +101,26 @@ export function LandingContent() {
   const [articles, setArticles] = useState<Article[]>(DEFAULT_ARTICLES);
   const [selectedArticleCategory, setSelectedArticleCategory] = useState<string>("Semua");
 
-  // Quick Verification State
+  // Quick Verification State (Secure API)
   const [verifyQuery, setVerifyQuery] = useState("");
-  const [verifyResult, setVerifyResult] = useState<CadreFollowUp | null | "NOT_FOUND">(null);
+  const [verifyResult, setVerifyResult] = useState<PublicVerifiedCadre | null | "NOT_FOUND">(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("PMII_THEME");
-      if (savedTheme) {
-        setDarkMode(savedTheme === "dark");
-      } else {
-        setDarkMode(document.documentElement.classList.contains("dark"));
-      }
-    }
+    setDarkMode(document.documentElement.classList.contains("dark"));
 
-    db.getCadres().then((data) => {
-      setCadres(data);
-    }).catch((err) => {
-      console.error("Failed to fetch cadres count:", err);
-    });
+    // Fetch public aggregate stats without loading all member rosters
+    fetch("/api/public-stats")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.cadresCount === "number") {
+          setCadresCount(data.cadresCount);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch public stats:", err);
+      });
 
     db.getArticles().then((arts) => {
       setArticles(arts ? arts.filter((a) => a.status === "DITAMPILKAN") : []);
@@ -122,6 +129,18 @@ export function LandingContent() {
       setArticles([]);
     });
   }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !darkMode;
+    setDarkMode(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("PMII_THEME", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("PMII_THEME", "light");
+    }
+  };
 
   // Hero Carousel Autoplay
   useEffect(() => {
@@ -148,33 +167,28 @@ export function LandingContent() {
     setCurrentSlide(index);
   };
 
-  useEffect(() => {
-    if (!mounted) return;
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("PMII_THEME", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("PMII_THEME", "light");
-    }
-  }, [darkMode, mounted]);
-
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!verifyQuery.trim()) return;
+    const query = verifyQuery.trim();
+    if (!query) return;
 
     setIsVerifying(true);
-    setTimeout(() => {
-      const query = verifyQuery.trim().toLowerCase();
-      const match = cadres.find(
-        (c) =>
-          c.name.toLowerCase().includes(query) ||
-          c.id.toLowerCase() === query
-      );
+    setVerifyResult(null);
 
-      setVerifyResult(match || "NOT_FOUND");
+    try {
+      const res = await fetch(`/api/verify-cadre?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (res.ok && data.found && data.cadre) {
+        setVerifyResult(data.cadre);
+      } else {
+        setVerifyResult("NOT_FOUND");
+      }
+    } catch (err) {
+      console.error("Error verifying cadre:", err);
+      setVerifyResult("NOT_FOUND");
+    } finally {
       setIsVerifying(false);
-    }, 400);
+    }
   };
 
   const features = [
@@ -243,7 +257,7 @@ export function LandingContent() {
     }
   ];
 
-  const displayCadresCount = cadres.length > 0 ? cadres.length : 1250;
+  const displayCadresCount = cadresCount;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 flex flex-col justify-between font-sans transition-colors duration-200 selection:bg-blue-600 selection:text-white">
@@ -254,8 +268,8 @@ export function LandingContent() {
           <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white border border-zinc-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shadow-xs shrink-0">
               <Image
-                src="/image/logo_komsat.png"
-                alt="Logo PK PMII Ki Ageng Getas Pendawa"
+                src="/image/logopmii.png"
+                alt="Logo PC PMII Grobogan"
                 width={36}
                 height={36}
                 className="w-full h-full object-contain"
@@ -264,7 +278,7 @@ export function LandingContent() {
             </div>
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-[11px] sm:text-sm tracking-tight text-zinc-900 dark:text-zinc-100 leading-tight truncate">
-                PK PMII KI AGENG GETAS PENDAWA
+                PC PMII GROBOGAN
               </span>
               <span className="hidden md:block text-[10px] text-zinc-500 dark:text-zinc-400 font-medium tracking-wide mt-0.5">
                 Portal Resmi Kaderisasi & Tata Kelola
@@ -272,10 +286,26 @@ export function LandingContent() {
             </div>
           </Link>
 
+          {/* Quick Navigation Anchor Links (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-6 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <a href="#alur" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Alur Kaderisasi
+            </a>
+            <a href="#layanan" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Layanan Digital
+            </a>
+            <a href="#artikel" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Artikel & Wawasan
+            </a>
+            <a href="#verifikasi" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Cek Status Anggota
+            </a>
+          </nav>
+
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* DARK / LIGHT MODE TOGGLE BUTTON */}
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={toggleTheme}
               title={darkMode ? "Beralih ke Mode Terang (Light Mode)" : "Beralih ke Mode Gelap (Dark Mode)"}
               className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
               aria-label="Toggle theme"
@@ -287,13 +317,6 @@ export function LandingContent() {
               )}
             </button>
 
-            <Link
-              href="/register"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-medium transition-colors"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Daftar Anggota</span>
-            </Link>
 
             <Link
               href="/login"
@@ -325,7 +348,18 @@ export function LandingContent() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: slideDirection > 0 ? -30 : 30 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-12 items-center"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.2}
+              onDragEnd={(e, { offset, velocity }) => {
+                const swipe = offset.x;
+                if (swipe < -40 || velocity.x < -200) {
+                  handleNextSlide();
+                } else if (swipe > 40 || velocity.x > 200) {
+                  handlePrevSlide();
+                }
+              }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-12 items-center cursor-grab active:cursor-grabbing"
             >
               {/* Left Column: Headline, Subheading, Trust Badges */}
               <div className="lg:col-span-7 space-y-4 sm:space-y-5 text-center lg:text-left">
@@ -451,7 +485,7 @@ export function LandingContent() {
       </section>
 
       {/* 4. ALUR KADERISASI FORMAL PMII */}
-      <section className="py-16 md:py-24 container mx-auto px-4 sm:px-6">
+      <section id="alur" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto space-y-3 mb-12">
           <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
             Kurikulum Nasional
@@ -502,7 +536,7 @@ export function LandingContent() {
       </section>
 
       {/* 5. FITUR LAYANAN UTAMA */}
-      <section className="py-16 md:py-24 bg-zinc-100/60 dark:bg-zinc-900/40 border-y border-zinc-200 dark:border-zinc-800 transition-colors">
+      <section id="layanan" className="py-16 md:py-24 bg-zinc-100/60 dark:bg-zinc-900/40 border-y border-zinc-200 dark:border-zinc-800 transition-colors scroll-mt-20">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto space-y-3 mb-12">
             <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
@@ -544,10 +578,19 @@ export function LandingContent() {
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-blue-600 dark:text-blue-400 font-medium">
-                    <span>Buka modul</span>
-                    <ChevronRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
-                  </div>
+                  <Link
+                    href={feat.href}
+                    className="pt-4 mt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:underline"
+                  >
+                    <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span className="text-[11px]">Akses Terbatas</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span>Masuk Portal</span>
+                      <ChevronRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </Link>
                 </Card>
               );
             })}
@@ -556,7 +599,7 @@ export function LandingContent() {
       </section>
 
       {/* 6. SECTION ARTIKEL & OPINI PERGERAKAN */}
-      <section className="py-16 md:py-24 container mx-auto px-4 sm:px-6">
+      <section id="artikel" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 scroll-mt-20">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
           <div className="space-y-3 max-w-xl">
             <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
@@ -669,7 +712,7 @@ export function LandingContent() {
       </section>
 
       {/* 7. QUICK VERIFICATION WIDGET */}
-      <section className="py-16 md:py-24 container mx-auto px-4 sm:px-6">
+      <section id="verifikasi" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 scroll-mt-20">
         <div className="max-w-xl mx-auto text-center space-y-3 mb-8">
           <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
             Verifikasi Mandiri

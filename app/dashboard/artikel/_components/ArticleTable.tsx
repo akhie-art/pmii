@@ -1,8 +1,9 @@
 import React from "react";
 import Image from "next/image";
-import { Eye, Edit, Trash2, Heart, Newspaper } from "lucide-react";
+import { Eye, Edit, Trash2, Heart, Newspaper, ChevronLeft, ChevronRight, Building2, GraduationCap } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
 import { isCabangRecord } from "@/lib/tenancy";
@@ -22,6 +23,19 @@ export const ArticleTable: React.FC<ArticleTableProps> = ({
   onOpenEdit,
   onConfirmDelete
 }) => {
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const pageSize = 10;
+  const totalPages = Math.ceil(articles.length / pageSize) || 1;
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [articles.length, totalPages, currentPage]);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedArticles = articles.slice(startIndex, startIndex + pageSize);
+
   return (
     <Card className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-xs">
       <div className="overflow-x-auto">
@@ -38,7 +52,7 @@ export const ArticleTable: React.FC<ArticleTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {articles.map((art) => (
+            {paginatedArticles.map((art) => (
               <tr
                 key={art.id}
                 className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors"
@@ -69,11 +83,13 @@ export const ArticleTable: React.FC<ArticleTableProps> = ({
                       <div className="flex items-center gap-1.5 mt-1">
                         {isCabangRecord(art) ? (
                           <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.2 rounded">
-                            🏛️ Cabang
+                            <Building2 className="w-2.5 h-2.5" />
+                            <span>Cabang</span>
                           </span>
                         ) : art.commissariat ? (
                           <span className="inline-flex items-center gap-1 text-[9px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-1.5 py-0.2 rounded truncate max-w-[150px]">
-                            🎓 {art.commissariat}
+                            <GraduationCap className="w-2.5 h-2.5" />
+                            <span>{art.commissariat}</span>
                           </span>
                         ) : null}
                       </div>
@@ -177,6 +193,44 @@ export const ArticleTable: React.FC<ArticleTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Footer */}
+      {articles.length > pageSize && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 text-xs text-zinc-500">
+          <div>
+            Menampilkan <span className="font-semibold text-zinc-700 dark:text-zinc-300">{startIndex + 1}</span>–
+            <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+              {Math.min(startIndex + pageSize, articles.length)}
+            </span> dari{" "}
+            <span className="font-semibold text-zinc-700 dark:text-zinc-300">{articles.length}</span> artikel
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="h-7 text-xs px-2.5 rounded-lg cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5 mr-0.5" />
+              Sebelumnya
+            </Button>
+            <span className="px-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Hal. {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="h-7 text-xs px-2.5 rounded-lg cursor-pointer"
+            >
+              Selanjutnya
+              <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

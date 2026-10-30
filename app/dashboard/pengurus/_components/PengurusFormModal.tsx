@@ -1,5 +1,5 @@
-import React from "react";
-import { Edit2, UserPlus } from "lucide-react";
+import React, { useMemo } from "react";
+import { Edit2, UserPlus, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,7 @@ interface PengurusFormModalProps {
   setSelectedCadreData: (data: any) => void;
   allDepartments: string[];
   activeCampus: string;
+  boardMembers?: BoardMember[];
   onSubmit: (e: React.FormEvent) => void;
 }
 
@@ -48,8 +49,18 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
   setSelectedCadreData,
   allDepartments,
   activeCampus,
+  boardMembers = [],
   onSubmit
 }) => {
+  // Cek apakah kader sudah terdaftar di posisi lain pada kepengurusan
+  const existingPosition = useMemo(() => {
+    if (!formName || !boardMembers.length) return null;
+    return boardMembers.find(
+      (m) =>
+        m.name.toLowerCase().trim() === formName.toLowerCase().trim() &&
+        m.id !== editingMember?.id
+    );
+  }, [formName, boardMembers, editingMember]);
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
@@ -146,6 +157,21 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block truncate">
                       Komisariat: {selectedCadreData.commissariat || activeCampus}
                     </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Peringatan jika kader sudah menjabat di posisi lain */}
+              {existingPosition && (
+                <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="font-semibold text-[11px]">Peringatan Posisi Aktif:</p>
+                    <p className="text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+                      Kader <strong>{existingPosition.name}</strong> saat ini sudah terdaftar sebagai{" "}
+                      <span className="font-semibold underline">{existingPosition.position}</span> di bidang{" "}
+                      <span className="font-semibold">{existingPosition.department}</span>.
+                    </p>
                   </div>
                 </div>
               )}
