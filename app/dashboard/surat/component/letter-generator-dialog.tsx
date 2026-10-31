@@ -300,9 +300,7 @@ export default function LetterGeneratorDialog({
   ];
 
   const baseSingleNomor = `${numBox1}.${numBox2}-${numBox3}.${numBox4}.${numBox5}.${numBox6}.${numBox7}.${numBox8}.${numBox9}`;
-  const activeSenderTitle =
-    customTemplates.find((t) => t.id === createTemplate)?.senderTitle ||
-    "Sahabat Ketua Umum";
+  const activeSenderTitle = "Sahabat Ketua Umum";
 
   // Parsing Daftar Penerima Surat Massal
   const parsedBulkRecipients = React.useMemo(() => {
@@ -1018,7 +1016,7 @@ export default function LetterGeneratorDialog({
 
   const applyTemplateSelection = async (tmpl: SuratTemplate) => {
     const parsed = parseTemplateContent(tmpl.content);
-    let b64 = tmpl.fileBase64 || parsed.fileBase64 || "";
+    let b64 = parsed.fileBase64 || "";
     const fileUrl = tmpl.fileUrl || parsed.fileUrl;
     const ph = tmpl.placeholders || parsed.placeholders || [];
 
@@ -1034,11 +1032,9 @@ export default function LetterGeneratorDialog({
     setActiveFileBase64(b64);
     setActivePlaceholders(ph);
 
-    setCreateSubject(tmpl.subject);
-    setCreateClassification(
-      (tmpl.classification as "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi") || "Undangan"
-    );
-    setCreateSenderLocation(tmpl.senderLocation || "Purwodadi");
+    setCreateSubject(tmpl.name || "");
+    setCreateClassification("Permohonan");
+    setCreateSenderLocation("Purwodadi");
 
     const months = [
       "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -1050,9 +1046,9 @@ export default function LetterGeneratorDialog({
     ph.forEach((k) => {
       const lk = k.toLowerCase();
       if (lk === "nomor" || lk === "no") initVals[k] = currentPreviewNomor;
-      else if (lk === "perihal" || lk === "hal") initVals[k] = tmpl.subject || "";
+      else if (lk === "perihal" || lk === "hal") initVals[k] = tmpl.name || "";
       else if (lk === "penerima" || lk === "kepada") initVals[k] = createRecipient || "";
-      else if (lk === "lokasi" || lk === "kota") initVals[k] = tmpl.senderLocation || "Purwodadi";
+      else if (lk === "lokasi" || lk === "kota") initVals[k] = "Purwodadi";
       else if (lk === "tanggal" || lk === "hari_tanggal") initVals[k] = letterDate || today;
       else initVals[k] = "";
     });
@@ -1941,11 +1937,6 @@ export default function LetterGeneratorDialog({
                               <SelectItem key={t.id} value={t.id}>
                                 <div className="flex items-center justify-between w-full gap-2">
                                   <span className="truncate">{t.name}</span>
-                                  {t.classification && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 shrink-0">
-                                      {t.classification}
-                                    </span>
-                                  )}
                                 </div>
                               </SelectItem>
                             ))}

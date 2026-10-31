@@ -22,7 +22,7 @@ import {
   UserCheck,
   Loader2,
 } from "lucide-react";
-import { CommissariatList, KomisariatFormData, DEFAULT_FORM_DATA } from "./types";
+import { CommissariatList, KomisariatFormData, DEFAULT_FORM_DATA, getKomisariatBph } from "./types";
 import { normalizeTenantName } from "@/lib/tenancy";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -52,6 +52,7 @@ export function KomisariatModal({
 
   useEffect(() => {
     if (editingItem) {
+      const detectedBph = getKomisariatBph(editingItem, boardMembers);
       setFormData({
         id: editingItem.id,
         name: editingItem.name || "",
@@ -62,13 +63,13 @@ export function KomisariatModal({
         establishedYear: editingItem.establishedYear,
         contactEmail: editingItem.contactEmail || "",
         structure: {
-          chairman: editingItem.structure?.chairman || "",
+          chairman: editingItem.structure?.chairman || (detectedBph.chairman !== "-" ? detectedBph.chairman : ""),
           chairman_id: editingItem.structure?.chairman_id || null,
-          secretary: editingItem.structure?.secretary || "",
+          secretary: editingItem.structure?.secretary || (detectedBph.secretary !== "-" ? detectedBph.secretary : ""),
           secretary_id: editingItem.structure?.secretary_id || null,
-          treasurer: editingItem.structure?.treasurer || "",
+          treasurer: editingItem.structure?.treasurer || (detectedBph.treasurer !== "-" ? detectedBph.treasurer : ""),
           treasurer_id: editingItem.structure?.treasurer_id || null,
-          period: editingItem.structure?.period || "2026 - 2027",
+          period: editingItem.structure?.period || (detectedBph.period ? detectedBph.period : "2026 - 2027"),
         },
       });
     } else {

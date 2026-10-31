@@ -33,6 +33,7 @@ import {
   DEFAULT_DIVISIONS,
   getSystemPeriod
 } from "./_components/types";
+import { isUserSuperAdmin, isUserAdmin } from "@/lib/auth-helpers";
 import { PengurusFilters } from "./_components/PengurusFilters";
 import { PengurusGrid } from "./_components/PengurusGrid";
 import { PengurusStructureTree } from "./_components/PengurusStructureTree";
@@ -84,10 +85,21 @@ export default function KomisariatPengurusPage() {
   const [divisions, setDivisions] = useState<string[]>(DEFAULT_DIVISIONS);
   const allDepartments = ["BPH", ...divisions];
 
+  // Dynamic Komisariats list for filter
+  const [availableKomisariats, setAvailableKomisariats] = useState<string[]>(DEFAULT_KOMISARIAT_LIST);
+
   // Filters state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+
+  // RBAC permissions check
+  const isSuperAdmin = isUserSuperAdmin(currentUser?.role, currentUser?.email);
+  const userRole = (currentUser?.role || "").toLowerCase().trim();
+  const isKetuaCabang = userRole === "ketua_cabang" || userRole === "ketua cabang";
+  const isKetuaKomisariat = userRole === "ketua_komisariat" || userRole === "ketua komisariat";
+  const isAdmin = userRole === "admin" || isUserAdmin(currentUser?.role) || isSuperAdmin;
+  const canDelete = isAdmin || isKetuaCabang || isKetuaKomisariat;
 
   // Form Modal state (Combined Add & Edit)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -152,7 +164,7 @@ export default function KomisariatPengurusPage() {
   const [isDeletingMember, setIsDeletingMember] = useState(false);
 
   // Feedback Modal
-  const { showToast, FeedbackModalComponent } = useFeedbackModal();
+  const { showToast, showError, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
     const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
@@ -218,10 +230,19 @@ export default function KomisariatPengurusPage() {
 
     Promise.all([
       db.getBoards(),
-      db.getCadres([])
-    ]).then(([boardsData, cadresData]) => {
+      db.getCadres([]),
+      db.getCommissariats ? db.getCommissariats().catch(() => []) : Promise.resolve([])
+    ]).then(([boardsData, cadresData, commData]) => {
       setBoardMembers(boardsData as any);
       setCadres(cadresData as any);
+      if (Array.isArray(commData) && commData.length > 0) {
+        const names = commData
+          .map((k: any) => k.name)
+          .filter((name: string) => name && !name.toLowerCase().includes("pengurus cabang"));
+        if (names.length > 0) {
+          setAvailableKomisariats(names);
+        }
+      }
       setMounted(true);
     });
 
@@ -321,7 +342,7 @@ export default function KomisariatPengurusPage() {
         divisions.some((d) => d.toLowerCase() === trimmed.toLowerCase() && d.toLowerCase() !== editingDept.toLowerCase()) ||
         trimmed.toLowerCase() === "bph"
       ) {
-        alert("Nama bidang sudah digunakan.");
+        showError("Nama Bidang Digunakan", "Nama bidang sudah digunakan atau merupakan bidang khusus (BPH).");
         return;
       }
       const updatedDivs = divisions.map((d) => (d === editingDept ? trimmed : d));
@@ -338,7 +359,7 @@ export default function KomisariatPengurusPage() {
         divisions.some((d) => d.toLowerCase() === trimmed.toLowerCase()) ||
         trimmed.toLowerCase() === "bph"
       ) {
-        alert("Nama bidang sudah ada.");
+        showError("Nama Bidang Digunakan", "Nama bidang sudah digunakan atau merupakan bidang khusus (BPH).");
         return;
       }
       const updatedDivs = [...divisions, trimmed];
@@ -351,7 +372,20 @@ export default function KomisariatPengurusPage() {
     setEditingDept(null);
   };
 
+  const handleOpenDeleteDeptModal = (dept: string) => {
+    if (!canDelete) {
+      showError("Akses Ditolak", "Hanya Ketua Cabang, Ketua Komisariat, atau Superadmin yang memiliki izin untuk menghapus bidang organisasi.");
+      return;
+    }
+    setDeptToDelete(dept);
+  };
+
   const handleConfirmDeleteDept = async () => {
+    if (!canDelete) {
+      showError("Akses Ditolak", "Anda tidak memiliki izin untuk menghapus bidang organisasi.");
+      setDeptToDelete(null);
+      return;
+    }
     if (!deptToDelete) return;
     const targetDept = deptToDelete;
     const updatedDivs = divisions.filter((d) => d !== targetDept);
@@ -475,7 +509,20 @@ export default function KomisariatPengurusPage() {
     resetForm();
   };
 
+  const handleOpenDeleteMember = (member: BoardMember) => {
+    if (!canDelete) {
+      showError("Akses Ditolak", "Hanya Ketua Cabang, Ketua Komisariat, atau Superadmin yang memiliki izin untuk menghapus data pengurus.");
+      return;
+    }
+    setMemberToDelete(member);
+  };
+
   const confirmDelete = async () => {
+    if (!canDelete) {
+      showError("Akses Ditolak", "Hanya Ketua Cabang, Ketua Komisariat, atau Superadmin yang memiliki izin untuk menghapus data pengurus.");
+      setMemberToDelete(null);
+      return;
+    }
     if (!memberToDelete) return;
     const target = memberToDelete;
     setIsDeletingMember(true);
@@ -500,7 +547,7 @@ export default function KomisariatPengurusPage() {
 
   const handleExportToExcel = () => {
     if (filteredMembers.length === 0) {
-      alert("Tidak ada data pengurus untuk diekspor.");
+      showError("Tidak Ada Data", "Tidak ada data pengurus untuk diekspor.");
       return;
     }
     setIsExporting(true);
@@ -553,7 +600,7 @@ export default function KomisariatPengurusPage() {
       showToast(`Berhasil mengekspor ${filteredMembers.length} data pengurus ke Excel.`);
     } catch (err) {
       console.error("Failed to export pengurus data", err);
-      alert("Gagal mengekspor data ke Excel.");
+      showError("Gagal Ekspor", "Gagal mengekspor data ke Excel.");
     } finally {
       setIsExporting(false);
     }
@@ -593,7 +640,7 @@ export default function KomisariatPengurusPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500">
           <Link
-            href="/dashboard"
+            href={isCabangOrAdmin(currentUser) ? "/admin" : "/pengurus"}
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
             Dashboard
@@ -673,7 +720,7 @@ export default function KomisariatPengurusPage() {
                 setActiveTenant(val);
                 setGlobalActiveTenant(val);
               }}
-              availableKomisariats={DEFAULT_KOMISARIAT_LIST}
+              availableKomisariats={availableKomisariats}
               isCabang={isCabangOrAdmin(currentUser)}
               allDepartments={allDepartments}
             />
@@ -682,7 +729,8 @@ export default function KomisariatPengurusPage() {
               filteredMembers={filteredMembers}
               getMemberAvatar={getMemberAvatar}
               onEdit={handleOpenEditModal}
-              onDelete={(m) => setMemberToDelete(m)}
+              onDelete={handleOpenDeleteMember}
+              canDelete={canDelete}
             />
           </div>
         )}
@@ -695,11 +743,12 @@ export default function KomisariatPengurusPage() {
             getMemberAvatar={getMemberAvatar}
             onOpenAddModal={handleOpenAddModal}
             onOpenEditModal={handleOpenEditModal}
-            onDeleteMember={(m) => setMemberToDelete(m)}
+            onDeleteMember={handleOpenDeleteMember}
             onOpenAddDeptModal={handleOpenAddDeptModal}
             onOpenEditDeptModal={handleOpenEditDeptModal}
-            onDeleteDept={(dept) => setDeptToDelete(dept)}
+            onDeleteDept={handleOpenDeleteDeptModal}
             isCabangLevel={isCabangLevel}
+            canDelete={canDelete}
           />
         )}
       </div>
@@ -751,6 +800,11 @@ export default function KomisariatPengurusPage() {
         deptToDelete={deptToDelete}
         onCloseDeleteDept={() => setDeptToDelete(null)}
         onConfirmDeleteDept={handleConfirmDeleteDept}
+        memberCountInDept={
+          deptToDelete
+            ? boardMembers.filter((m) => m.department === deptToDelete).length
+            : 0
+        }
       />
 
       {FeedbackModalComponent}

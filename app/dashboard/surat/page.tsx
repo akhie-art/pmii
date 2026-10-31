@@ -39,7 +39,9 @@ import {
   Copy,
   ExternalLink,
   Paperclip,
-  RotateCcw
+  RotateCcw,
+  Building,
+  GraduationCap
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -431,6 +433,8 @@ export default function SuratPage() {
       <TemplateManagerDialog
         isOpen={isTemplateManagerOpen}
         onOpenChange={setIsTemplateManagerOpen}
+        currentUser={currentUser}
+        activeTenant={activeTenant}
         onTemplatesUpdated={(count) => {
           if (count !== undefined) setTemplateCount(count);
         }}
@@ -493,6 +497,8 @@ export default function SuratPage() {
         /* TAB TEMPLATE SURAT (Inline View) */
         <TemplateManagerDialog
           inline={true}
+          currentUser={currentUser}
+          activeTenant={activeTenant}
           onTemplatesUpdated={(count) => {
             if (count !== undefined) setTemplateCount(count);
           }}
@@ -672,11 +678,13 @@ export default function SuratPage() {
                         <div className="flex items-center gap-1.5 mt-1">
                           {isCabangRecord(mail) ? (
                             <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.2 rounded">
-                              🏛️ Tingkat Cabang
+                              <Building className="w-2.5 h-2.5" />
+                              <span>Tingkat Cabang</span>
                             </span>
                           ) : mail.commissariat ? (
                             <span className="inline-flex items-center gap-1 text-[9px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-1.5 py-0.2 rounded truncate max-w-[150px]">
-                              🎓 {mail.commissariat}
+                              <GraduationCap className="w-2.5 h-2.5 shrink-0" />
+                              <span className="truncate">{mail.commissariat}</span>
                             </span>
                           ) : null}
                         </div>

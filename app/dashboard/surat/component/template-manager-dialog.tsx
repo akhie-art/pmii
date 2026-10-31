@@ -20,10 +20,21 @@ import {
   RefreshCw,
   Sparkles,
   FileCode,
-  FileCheck
+  FileCheck,
+  Lightbulb,
+  Building,
+  GraduationCap
 } from "lucide-react";
 import { db, SuratTemplate, generateUUID } from "@/lib/db";
 import { deleteStorageFile } from "@/lib/supabase";
+import {
+  isRecordInTenant,
+  enforceTenantWrite,
+  getActiveTenant,
+  isCabangOrAdmin,
+  CABANG_TENANT_ID,
+  TENANT_CHANGED_EVENT
+} from "@/lib/tenancy";
 import {
   arrayBufferToBase64,
   base64ToArrayBuffer,
@@ -63,28 +74,30 @@ interface TemplateManagerDialogProps {
   onOpenChange?: (open: boolean) => void;
   onTemplatesUpdated?: (count?: number) => void;
   inline?: boolean;
+  currentUser?: any;
+  activeTenant?: string;
 }
 
 export function TemplateManagerDialog({
   isOpen = false,
   onOpenChange = () => {},
   onTemplatesUpdated,
-  inline = false
+  inline = false,
+  currentUser: propCurrentUser,
+  activeTenant: propActiveTenant
 }: TemplateManagerDialogProps) {
+  const [localUser, setLocalUser] = useState<any>(null);
+  const [currentTenant, setCurrentTenant] = useState<string>("ALL");
+  const uncommittedFileUrlRef = useRef<string | null>(null);
+
   const [templates, setTemplates] = useState<SuratTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedClassification, setSelectedClassification] = useState<string>("ALL");
 
   // Form Editor Modal State (Create / Edit)
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
-  const [formSubject, setFormSubject] = useState("");
-  const [formClassification, setFormClassification] = useState<
-    "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi"
-  >("Permohonan");
-  const [formLocation, setFormLocation] = useState("Purwodadi");
   const [formContent, setFormContent] = useState("");
 
   // Konsep Pengisi Template DOCX (PizZip + Docxtemplater + docx-preview)
@@ -110,6 +123,29 @@ export function TemplateManagerDialog({
   const [templateToDelete, setTemplateToDelete] = useState<{ id: string; name: string; fileUrl?: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Sync user and active tenant
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+      if (stored) {
+        try {
+          setLocalUser(JSON.parse(stored));
+        } catch {}
+      }
+      setCurrentTenant(getActiveTenant() || "ALL");
+      const handleTenant = (e: any) => {
+        setCurrentTenant(e.detail?.activeTenant || "ALL");
+      };
+      window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      return () => {
+        window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      };
+    }
+  }, []);
+
+  const currentUser = propCurrentUser || localUser;
+  const activeTenant = propActiveTenant || currentTenant;
+
   // Load templates from database
   const loadTemplates = async () => {
     setIsLoading(true);
@@ -133,7 +169,7 @@ export function TemplateManagerDialog({
     }
   }, [isOpen, inline]);
 
-  // Render ulang preview dokumen Word saat modal editor dibuka
+  // Render ulang preview dokumen Word saat modal editor dibuka atau berkas berubah
   useEffect(() => {
     if (isEditorOpen && (formFileBase64 || formFileUrl) && editorCanvasRef.current) {
       const canvasEl = editorCanvasRef.current;
@@ -158,34 +194,41 @@ export function TemplateManagerDialog({
         }
       });
     }
-  }, [isEditorOpen]);
+  }, [isEditorOpen, formFileBase64, formFileUrl]);
 
-  // Filter templates
+  // Filter templates berdasarkan Tenant dan Pencarian
   const filteredTemplates = templates.filter((t) => {
-    const matchesSearch =
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.subject.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesClass =
-      selectedClassification === "ALL" || t.classification === selectedClassification;
-    return matchesSearch && matchesClass;
+    const inTenant = isRecordInTenant(
+      currentUser,
+      {
+        commissariat: t.commissariat,
+        komisariat_id: t.komisariat_id,
+        tenant_id: t.tenant_id || t.komisariat_id
+      },
+      activeTenant
+    );
+    const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return inTenant && matchesSearch;
   });
+
+  // Tutup Editor dan bersihkan berkas yang diunggah jika batal
+  const handleCloseEditor = () => {
+    if (uncommittedFileUrlRef.current && uncommittedFileUrlRef.current !== previousFileUrl) {
+      deleteStorageFile(uncommittedFileUrlRef.current).catch((err) => {
+        console.warn("Membersihkan berkas uncommitted storage:", err);
+      });
+      uncommittedFileUrlRef.current = null;
+    }
+    setIsEditorOpen(false);
+  };
 
   // Open Editor for New Template
   const handleAddNew = () => {
+    uncommittedFileUrlRef.current = null;
     setEditingTemplateId(null);
     setPreviousFileUrl(null);
     setFormName("");
-    setFormSubject("");
-    setFormClassification("Permohonan");
-    setFormLocation("Purwodadi");
-    setFormContent(
-      `<p style="margin:0 0 6px 0;"><strong><em>Assalamualaikum Warahmatullahi Wabarakatuh</em></strong></p>
-<p style="margin:0 0 6px 0;">Salam silaturrahim teriring doa kami sampaikan semoga Sahabat senantiasa dalam lindungan-Nya...</p>
-<p style="margin:0 0 8px 0;">[Tuliskan maksud dan tujuan surat di sini]</p>
-<p style="margin:8px 0 6px 0;">Demikian surat ini kami sampaikan. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.</p>
-<p style="margin:8px 0 2px 0;"><strong><em>Wallahul Muwaffieq Ilaa Aqwamith Tharieq</em></strong></p>
-<p style="margin:0 0 12px 0;"><strong><em>Wassalamualaikum Warahmatullahi Wabarakatuh</em></strong></p>`
-    );
+    setFormContent("");
     setFormFileBase64("");
     setFormFileUrl("");
     setUploadedFileSize("");
@@ -199,25 +242,18 @@ export function TemplateManagerDialog({
   const handleEdit = (tmpl: SuratTemplate) => {
     setEditingTemplateId(tmpl.id);
     setFormName(tmpl.name);
-    setFormSubject(tmpl.subject);
-    setFormClassification(
-      (tmpl.classification as "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi") ||
-        "Permohonan"
-    );
-    setFormLocation(tmpl.senderLocation || "Purwodadi");
 
     const parsed = parseTemplateContent(tmpl.content);
     setFormContent(parsed.html);
-    const b64 = tmpl.fileBase64 || parsed.fileBase64 || "";
+    const b64 = parsed.fileBase64 || "";
     setFormFileBase64(b64);
     const fUrl = tmpl.fileUrl || parsed.fileUrl || "";
     setFormFileUrl(fUrl);
     setPreviousFileUrl(fUrl || null);
-    const fSize = tmpl.fileSize || parsed.fileSize || "";
-    setUploadedFileSize(fSize);
+    setUploadedFileSize("");
     const ph = tmpl.placeholders || parsed.placeholders || [];
     setFormPlaceholders(ph);
-    setUploadedFileName(tmpl.fileName || parsed.fileName || (tmpl.name ? `${tmpl.name}.docx` : ""));
+    setUploadedFileName(tmpl.name ? `${tmpl.name}.docx` : "");
 
     const initialTestVals: Record<string, string> = {};
     ph.forEach((k) => {
@@ -280,6 +316,7 @@ export function TemplateManagerDialog({
       uploadFileToStorage(file, "surat-templates", file.name).then((res) => {
         if (res?.url) {
           setFormFileUrl(res.url);
+          uncommittedFileUrlRef.current = res.url;
         }
       });
 
@@ -321,7 +358,6 @@ export function TemplateManagerDialog({
       const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
       const formattedName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
       if (!formName.trim()) setFormName(formattedName);
-      if (!formSubject.trim()) setFormSubject(formattedName);
 
       toast.success(`File Word "${file.name}" berhasil dimuat! Ditemukan ${keys.length} placeholder.`);
     } catch (err: any) {
@@ -352,7 +388,6 @@ export function TemplateManagerDialog({
       });
       await processDocxFile(sampleFile);
       if (!formName.trim()) setFormName("Format Surat Resmi PMII");
-      if (!formSubject.trim()) setFormSubject("Surat Resmi PMII");
       toast.success("Template Master PMII resmi berhasil dimuat ke editor!");
     } catch (e: any) {
       console.error("Gagal memuat template master resmi:", e);
@@ -422,38 +457,40 @@ export function TemplateManagerDialog({
   // Save Template to Database
   const handleSaveForm = async () => {
     if (!formName.trim()) {
-      alert("Harap masukkan nama template.");
+      toast.error("Harap masukkan nama template.");
+      return;
+    }
+
+    if (!formFileBase64 && !formFileUrl && !formContent.trim()) {
+      toast.error("Harap unggah file Word (.docx) atau masukkan konten template.");
       return;
     }
 
     const htmlToSave = editorCanvasRef.current?.innerHTML || formContent;
     const serializedContent = serializeTemplateContent(
       htmlToSave,
-      formFileBase64,
       formPlaceholders,
-      formFileUrl,
-      uploadedFileName,
-      uploadedFileSize
+      formFileUrl
     );
 
     try {
-      const templateItem: SuratTemplate = {
+      const isCabang = isCabangOrAdmin(currentUser) && (!activeTenant || activeTenant === "ALL" || activeTenant.toLowerCase().includes("cabang"));
+      const resolvedComm = isCabang 
+        ? "Pengurus Cabang Grobogan" 
+        : (currentUser?.commissariat || (activeTenant !== "ALL" ? activeTenant : "Pengurus Cabang Grobogan"));
+
+      const rawTemplateItem: SuratTemplate = {
         id: editingTemplateId || generateUUID(),
         name: formName.trim(),
-        subject: formSubject.trim() || formName.trim(),
-        classification: formClassification,
         content: serializedContent,
-        fileBase64: formFileBase64 || undefined,
         fileUrl: formFileUrl || undefined,
-        fileName: uploadedFileName || undefined,
-        fileSize: uploadedFileSize || undefined,
         placeholders: formPlaceholders,
         isDocx: !!(formFileBase64 || formFileUrl),
-        senderLocation: formLocation || "Purwodadi",
-        senderTitle: "Ketua Komisariat",
-        commissariat: "Ki Ageng Getas Pendawa",
+        commissariat: resolvedComm,
         created_at: new Date().toISOString()
       };
+
+      const templateItem = enforceTenantWrite(currentUser, rawTemplateItem, activeTenant);
 
       let updated: SuratTemplate[] = [];
       if (editingTemplateId) {
@@ -465,6 +502,7 @@ export function TemplateManagerDialog({
       }
 
       await db.saveSuratTemplates(updated);
+      uncommittedFileUrlRef.current = null;
 
       // Bersihkan file lama di Supabase Storage jika file diganti saat edit
       if (editingTemplateId && previousFileUrl && formFileUrl && previousFileUrl !== formFileUrl) {
@@ -491,32 +529,12 @@ export function TemplateManagerDialog({
                   <Input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Cari nama template / perihal..."
+                    placeholder="Cari nama template..."
                     className="pl-9 h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
                   />
                 </div>
 
-                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 font-medium shrink-0">Klasifikasi:</span>
-                    <Select
-                      value={selectedClassification}
-                      onValueChange={(val: any) => setSelectedClassification(val)}
-                    >
-                      <SelectTrigger className="h-9 text-xs w-full sm:w-44 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
-                        <SelectValue placeholder="Pilih Klasifikasi" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-200 dark:border-zinc-800">
-                        <SelectItem value="ALL">Semua Klasifikasi</SelectItem>
-                        <SelectItem value="Permohonan">Permohonan</SelectItem>
-                        <SelectItem value="Undangan">Undangan</SelectItem>
-                        <SelectItem value="Instruksi">Instruksi</SelectItem>
-                        <SelectItem value="Keputusan">Keputusan</SelectItem>
-                        <SelectItem value="Rekomendasi">Rekomendasi</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
+                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
                   <Button
                     type="button"
                     onClick={handleAddNew}
@@ -557,8 +575,9 @@ export function TemplateManagerDialog({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredTemplates.map((tmpl) => {
                     const parsed = parseTemplateContent(tmpl.content);
-                    const isDocx = tmpl.isDocx || !!tmpl.fileBase64 || parsed.isDocxTemplate;
+                    const isDocx = tmpl.isDocx || parsed.isDocxTemplate;
                     const phCount = tmpl.placeholders?.length || parsed.placeholders?.length || 0;
+                    const fileUrl = tmpl.fileUrl || parsed.fileUrl;
 
                     return (
                       <div
@@ -576,23 +595,13 @@ export function TemplateManagerDialog({
                                   DOCX {phCount > 0 ? `(${phCount} tag)` : ""}
                                 </Badge>
                               )}
-                              {(tmpl.fileUrl || parsed.fileUrl) && (
+                              {fileUrl && (
                                 <Badge className="text-[9px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-200">
                                   Cloud
                                 </Badge>
                               )}
-                              <Badge variant="secondary" className="text-[10px]">
-                                {tmpl.classification || "Umum"}
-                              </Badge>
                             </div>
                           </div>
-
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                            <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                              Perihal:
-                            </span>
-                            <span className="line-clamp-1">{tmpl.subject || "-"}</span>
-                          </p>
 
                           {/* Thumbnail / Tag List */}
                           {phCount > 0 ? (
@@ -625,22 +634,16 @@ export function TemplateManagerDialog({
                         </div>
 
                         {/* Card Footer Actions */}
-                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-800">
-                          <span className="text-[10px] text-zinc-400">
-                            {tmpl.senderLocation || "Purwodadi"}
-                          </span>
+                        <div className="flex items-center justify-end pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-800">
                           <div className="flex items-center gap-1.5">
-                            {isDocx && (tmpl.fileBase64 || parsed.fileBase64 || tmpl.fileUrl || parsed.fileUrl) && (
+                            {isDocx && fileUrl && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
                                 onClick={async () => {
                                   try {
-                                    const buf = await getDocxArrayBuffer({
-                                      fileUrl: tmpl.fileUrl || parsed.fileUrl,
-                                      fileBase64: tmpl.fileBase64 || parsed.fileBase64
-                                    });
+                                    const buf = await getDocxArrayBuffer({ fileUrl });
                                     downloadDocxBlob(new Blob([buf]), tmpl.name || "master-template");
                                   } catch (err: any) {
                                     toast.error("Gagal mengunduh dokumen: " + err.message);
@@ -764,7 +767,7 @@ export function TemplateManagerDialog({
       )}
 
       {/* MODAL EDITOR: TAMBAH / EDIT TEMPLATE DENGAN KONSEP PENGISI TEMPLATE DOCX */}
-      <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+      <Dialog open={isEditorOpen} onOpenChange={(open) => { if (!open) handleCloseEditor(); else setIsEditorOpen(true); }}>
         <DialogContent
           showCloseButton={false}
           className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none bg-zinc-50 dark:bg-zinc-950 border-none rounded-none ring-0 shadow-none p-0 gap-0 flex flex-col overflow-hidden z-[60]"
@@ -791,8 +794,8 @@ export function TemplateManagerDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsEditorOpen(false)}
-                  className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg"
+                  onClick={handleCloseEditor}
+                  className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
                 >
                   Batal
                 </Button>
@@ -813,6 +816,30 @@ export function TemplateManagerDialog({
             {/* Sidebar Konfigurasi & Placeholder Inspector */}
             <div className="lg:col-span-5 xl:col-span-4 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 space-y-4 overflow-y-auto h-full">
               
+              {/* Penyelenggara / Tingkat Organisasi Scope */}
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                  Penyelenggara Surat:
+                </span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
+                  (isCabangOrAdmin(currentUser) && (!activeTenant || activeTenant === "ALL" || activeTenant.toLowerCase().includes("cabang")))
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                    : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                }`}>
+                  {(isCabangOrAdmin(currentUser) && (!activeTenant || activeTenant === "ALL" || activeTenant.toLowerCase().includes("cabang"))) ? (
+                    <>
+                      <Building className="w-3 h-3" />
+                      <span>Tingkat Cabang (PC PMII)</span>
+                    </>
+                  ) : (
+                    <>
+                      <GraduationCap className="w-3 h-3" />
+                      <span>{currentUser?.commissariat || (activeTenant !== "ALL" ? activeTenant : "Tingkat Komisariat")}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+
               {/* SECTION 1: UNGGAH TEMPLATE DOCX (Dropzone seperti Pengisi Template DOCX (1).html) */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center justify-between">
@@ -874,47 +901,12 @@ export function TemplateManagerDialog({
                   )}
                 </div>
 
-                <p className="text-[11px] text-zinc-400 leading-tight">
-                  💡 <strong>Tips:</strong> Tulis placeholder utuh seperti <code className="text-blue-600 dark:text-blue-400">{"{{nama}}"}</code> atau <code className="text-blue-600 dark:text-blue-400">{"{{nomor}}"}</code> tanpa mengganti format font di tengah kata agar tidak terpecah oleh Word.
+                <p className="text-[11px] text-zinc-400 leading-tight flex items-start gap-1.5">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Tips:</strong> Tulis placeholder utuh seperti <code className="text-blue-600 dark:text-blue-400">{"{{nama}}"}</code> atau <code className="text-blue-600 dark:text-blue-400">{"{{nomor}}"}</code> tanpa mengganti format font di tengah kata agar tidak terpecah oleh Word.
+                  </span>
                 </p>
-
-                {/* Banner Template Master PMII Resmi */}
-                <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <span className="text-xs font-bold text-blue-900 dark:text-blue-200">
-                      Contoh Format Resmi PMII
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
-                    Format Word baku dengan kop surat resmi, garis ganda, nomor surat, dan kolom tanda tangan siap pakai.
-                  </p>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isLoadingSample || isUploadingDocx}
-                      onClick={handleLoadOfficialSample}
-                      className="h-7 text-[11px] font-medium bg-white dark:bg-zinc-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 hover:bg-blue-100/60 dark:hover:bg-blue-900/50 rounded-lg flex items-center gap-1 cursor-pointer"
-                    >
-                      {isLoadingSample ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3 h-3 text-blue-600" />
-                      )}
-                      <span>Muat Contoh Resmi</span>
-                    </Button>
-                    <a
-                      href={OFFICIAL_PMII_TEMPLATE_URL}
-                      download="Template-Surat-Resmi-PMII.docx"
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline px-1 py-1"
-                    >
-                      <Download className="w-3 h-3" />
-                      <span>Unduh .docx</span>
-                    </a>
-                  </div>
-                </div>
               </div>
 
               {/* SECTION 2: IDENTITAS TEMPLATE */}
@@ -928,53 +920,6 @@ export function TemplateManagerDialog({
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
                     placeholder="Contoh: Permohonan Pemateri MAPABA"
-                    className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                      Perihal / Hal Surat
-                    </label>
-                    <Input
-                      value={formSubject}
-                      onChange={(e) => setFormSubject(e.target.value)}
-                      placeholder="Contoh: Permohonan Pemateri"
-                      className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                      Klasifikasi
-                    </label>
-                    <Select
-                      value={formClassification}
-                      onValueChange={(val: any) => setFormClassification(val)}
-                    >
-                      <SelectTrigger className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
-                        <SelectValue placeholder="Pilih Klasifikasi" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-200 dark:border-zinc-800">
-                        <SelectItem value="Permohonan">Permohonan</SelectItem>
-                        <SelectItem value="Undangan">Undangan</SelectItem>
-                        <SelectItem value="Instruksi">Instruksi</SelectItem>
-                        <SelectItem value="Keputusan">Keputusan</SelectItem>
-                        <SelectItem value="Rekomendasi">Rekomendasi</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                    Kota Pengirim (Tanda Tangan)
-                  </label>
-                  <Input
-                    value={formLocation}
-                    onChange={(e) => setFormLocation(e.target.value)}
-                    placeholder="Contoh: Purwodadi"
                     className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
                   />
                 </div>
@@ -1068,50 +1013,27 @@ export function TemplateManagerDialog({
             {/* Kanvas Dokumen Template (Render Asli docx-preview) */}
             <div className="lg:col-span-7 xl:col-span-8 p-4 md:p-6 bg-zinc-100 dark:bg-zinc-950 overflow-y-auto h-full flex flex-col items-center">
               <div className="w-full max-w-3xl flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs text-zinc-500 font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>Pratinjau Dokumen Asli Word (100% Persis)</span>
-                    {formFileBase64 && (
-                      <Badge className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                        Format Asli Utuh
-                      </Badge>
-                    )}
+                {!formFileBase64 && !formFileUrl && (
+                  <div className="w-full min-h-[500px] border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-zinc-900 shadow-xs">
+                    <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                      Pratinjau Dokumen Word
+                    </h4>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 max-w-sm mt-1 leading-relaxed">
+                      Silakan pilih atau seret file template Word (.docx) pada panel kiri untuk melihat pratinjau dokumen di sini.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {formFileBase64 && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDownloadDocx(false)}
-                        className="h-7 text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 p-0 cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Unduh Master .docx</span>
-                      </Button>
-                    )}
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Siap Disimpan
-                    </span>
-                  </div>
-                </div>
+                )}
 
                 <div
                   ref={editorCanvasRef}
-                  contentEditable={!formFileBase64}
-                  suppressContentEditableWarning
-                  onInput={() => {
-                    if (editorCanvasRef.current) {
-                      setFormContent(editorCanvasRef.current.innerHTML);
-                    }
-                  }}
-                  dangerouslySetInnerHTML={{ __html: formContent }}
                   className={
-                    formFileBase64
+                    formFileBase64 || formFileUrl
                       ? "w-full min-h-[750px] flex flex-col items-center justify-start p-2 sm:p-4 overflow-auto outline-none"
-                      : "w-full min-h-[750px] bg-white text-zinc-900 p-8 sm:p-12 rounded-xl border border-zinc-300 shadow-xl flex flex-col outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-text overflow-auto"
+                      : "hidden"
                   }
-                  style={formFileBase64 ? undefined : { fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.35" }}
                 />
               </div>
             </div>
@@ -1129,20 +1051,26 @@ export function TemplateManagerDialog({
                   {previewTemplate?.name}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-zinc-500">
-                  Perihal: {previewTemplate?.subject} | Klasifikasi: {previewTemplate?.classification}
+                  {previewTemplate?.placeholders?.length
+                    ? `${previewTemplate.placeholders.length} placeholder terdeteksi`
+                    : "Format dokumen Word asli"}
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-2">
-                {previewTemplate && (previewTemplate.fileBase64 || parseTemplateContent(previewTemplate.content).fileBase64) && (
+                {previewTemplate && (previewTemplate.fileUrl || parseTemplateContent(previewTemplate.content).fileUrl) && (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      const b64 = previewTemplate.fileBase64 || parseTemplateContent(previewTemplate.content).fileBase64;
-                      if (b64) {
-                        const buf = base64ToArrayBuffer(b64);
-                        downloadDocxBlob(new Blob([buf]), previewTemplate.name);
+                    onClick={async () => {
+                      const fUrl = previewTemplate.fileUrl || parseTemplateContent(previewTemplate.content).fileUrl;
+                      if (fUrl) {
+                        try {
+                          const buf = await getDocxArrayBuffer({ fileUrl: fUrl });
+                          downloadDocxBlob(new Blob([buf]), previewTemplate.name || "master-template");
+                        } catch (err: any) {
+                          toast.error("Gagal mengunduh dokumen: " + err.message);
+                        }
                       }
                     }}
                     className="h-8 text-xs border-zinc-200 dark:border-zinc-800 flex items-center gap-1"

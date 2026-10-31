@@ -540,17 +540,10 @@ export interface Article {
 export interface SuratTemplate {
   id: string;
   name: string;
-  subject: string;
-  classification?: string;
   content: string;
-  fileBase64?: string;
   fileUrl?: string;
-  fileName?: string;
-  fileSize?: string;
   placeholders?: string[];
   isDocx?: boolean;
-  senderTitle?: string;
-  senderLocation?: string;
   commissariat?: string;
   komisariat_id?: string | null;
   tenant_id?: string | null;

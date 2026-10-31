@@ -249,25 +249,18 @@ export async function getDocxArrayBuffer(template: {
 }
 
 /**
- * Serialisasi konten template: membungkus HTML preview, master fileBase64, dan fileUrl
- * secara aman agar tersimpan di Supabase maupun LocalStorage tanpa kehilangan data
+ * Serialisasi konten template: membungkus HTML preview, placeholders, dan fileUrl
  */
 export function serializeTemplateContent(
   html: string,
-  fileBase64?: string,
   placeholders?: string[],
-  fileUrl?: string,
-  fileName?: string,
-  fileSize?: string
+  fileUrl?: string
 ): string {
-  if (fileBase64 || fileUrl) {
+  if (fileUrl) {
     return JSON.stringify({
       isDocxTemplate: true,
       html,
-      fileBase64,
       fileUrl,
-      fileName,
-      fileSize,
       placeholders: placeholders || []
     });
   }

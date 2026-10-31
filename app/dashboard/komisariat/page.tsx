@@ -38,7 +38,7 @@ import {
 } from "@/lib/tenancy";
 import { isUserSuperAdmin } from "@/lib/auth-helpers";
 
-import { CommissariatList, KomisariatFormData } from "./_components/types";
+import { CommissariatList, KomisariatFormData, getKomisariatBph } from "./_components/types";
 import { KomisariatCard } from "./_components/KomisariatCard";
 import { KomisariatTable } from "./_components/KomisariatTable";
 import { KomisariatModal } from "./_components/KomisariatModal";
@@ -71,6 +71,22 @@ export default function KomisariatPage() {
 
   const isSuperAdmin = isUserSuperAdmin(currentUser?.role, currentUser?.email);
   const isTenantView = isSuperAdmin || (pathname ? pathname.includes("/tenant") : false);
+
+  const userRole = (currentUser?.role || "").toLowerCase().trim();
+  const isKetuaCabang = userRole === "ketua_cabang" || userRole === "ketua cabang";
+  const canDeleteKomisariat = isSuperAdmin || isKetuaCabang || userRole === "admin" || userRole === "superadmin";
+
+  const isBranchLevelRecord = (k: { name?: string; level?: string; type?: string }) => {
+    const nameLower = (k.name || "").toLowerCase().trim();
+    const levelUpper = (k.level || "").toUpperCase().trim();
+    const typeUpper = (k.type || "").toUpperCase().trim();
+    return (
+      levelUpper === "CABANG" ||
+      typeUpper === "CABANG" ||
+      nameLower.includes("cabang") ||
+      nameLower.startsWith("pc ")
+    );
+  };
 
   const loadData = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -146,9 +162,24 @@ export default function KomisariatPage() {
     ).length;
   };
 
+  const getBoardCount = (commName: string, commId?: string) => {
+    if (!boardMembers || boardMembers.length === 0) return 0;
+    const targetNorm = normalizeTenantName(commName);
+    return boardMembers.filter(
+      (b) =>
+        (commId && (b.komisariat_id === commId || b.tenant_id === commId)) ||
+        normalizeTenantName(b.commissariat || b.komisariat) === targetNorm
+    ).length;
+  };
+
   // Filtered List - Master list tenant/komisariat
   const filteredKomisariats = useMemo(() => {
     return komisariats.filter((k) => {
+      // Jika di halaman komisariat (bukan tenant view superadmin), sembunyikan record tingkat Cabang
+      if (!isTenantView && isBranchLevelRecord(k)) {
+        return false;
+      }
+
       // Filter dropdown tenant: jika user secara spesifik memilih tenant tertentu
       if (activeTenant && activeTenant !== "ALL") {
         const targetNorm = normalizeTenantName(activeTenant);
@@ -158,18 +189,20 @@ export default function KomisariatPage() {
         if (!matchId && !matchName) return false;
       }
 
+      const bph = getKomisariatBph(k, boardMembers);
       const matchesSearch =
         searchQuery === "" ||
         k.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (k.university && k.university.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (k.campusName && k.campusName.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (k.contactEmail && k.contactEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (k.structure?.chairman &&
-          k.structure.chairman.toLowerCase().includes(searchQuery.toLowerCase()));
+        (bph.chairman && bph.chairman !== "-" && bph.chairman.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (bph.secretary && bph.secretary !== "-" && bph.secretary.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (bph.treasurer && bph.treasurer !== "-" && bph.treasurer.toLowerCase().includes(searchQuery.toLowerCase()));
 
       return matchesSearch;
     });
-  }, [komisariats, searchQuery, activeTenant]);
+  }, [komisariats, searchQuery, activeTenant, isTenantView, boardMembers]);
 
   // Handlers
   const handleOpenCreate = () => {
@@ -183,6 +216,25 @@ export default function KomisariatPage() {
   };
 
   const handleOpenDelete = (k: CommissariatList) => {
+    if (!canDeleteKomisariat) {
+      showError(
+        "Akses Ditolak",
+        "Hanya Ketua Cabang atau Superadmin yang memiliki wewenang untuk menghapus data komisariat."
+      );
+      return;
+    }
+
+    const memberCount = getMemberCount(k.name);
+    const boardCount = getBoardCount(k.name, k.id);
+
+    if (memberCount > 0 || boardCount > 0) {
+      showError(
+        "Komisariat Tidak Dapat Dihapus",
+        `Komisariat "${k.name}" masih memiliki ${memberCount} kader dan ${boardCount} pengurus aktif terdaftar. Demi menjaga keutuhan data, silakan mutasikan atau hapus data kader dan pengurus terlebih dahulu sebelum menghapus komisariat ini.`
+      );
+      return;
+    }
+
     setItemToDelete(k);
     setIsDeleteOpen(true);
   };
@@ -228,6 +280,24 @@ export default function KomisariatPage() {
   };
 
   const handleDeleteConfirm = async (k: CommissariatList) => {
+    if (!canDeleteKomisariat) {
+      showError(
+        "Akses Ditolak",
+        "Hanya Ketua Cabang atau Superadmin yang memiliki wewenang untuk menghapus data komisariat."
+      );
+      return;
+    }
+
+    const memberCount = getMemberCount(k.name);
+    const boardCount = getBoardCount(k.name, k.id);
+    if (memberCount > 0 || boardCount > 0) {
+      showError(
+        "Gagal Menghapus",
+        `Komisariat "${k.name}" masih memiliki ${memberCount} kader dan ${boardCount} pengurus aktif terdaftar.`
+      );
+      return;
+    }
+
     try {
       // 1. Hapus permanen record dari database Supabase dan localStorage
       const deleteSuccess = await db.deleteCommissariat(k.id);
@@ -264,18 +334,21 @@ export default function KomisariatPage() {
       return;
     }
 
-    const exportRows = filteredKomisariats.map((k, idx) => ({
-      No: idx + 1,
-      [isTenantView ? "Nama Tenant" : "Nama Komisariat"]: k.name,
-      "Perguruan Tinggi": k.university || k.campusName || "-",
-      "Tahun Berdiri": k.establishedYear || "-",
-      "Email Kontak": k.contactEmail || "-",
-      "Ketua": k.structure?.chairman || "-",
-      Sekretaris: k.structure?.secretary || "-",
-      Bendahara: k.structure?.treasurer || "-",
-      Periode: k.structure?.period || "-",
-      "Kader Terdaftar": getMemberCount(k.name),
-    }));
+    const exportRows = filteredKomisariats.map((k, idx) => {
+      const bph = getKomisariatBph(k, boardMembers);
+      return {
+        No: idx + 1,
+        [isTenantView ? "Nama Tenant" : "Nama Komisariat"]: k.name,
+        "Perguruan Tinggi": k.university || k.campusName || "-",
+        "Tahun Berdiri": k.establishedYear || "-",
+        "Email Kontak": k.contactEmail || "-",
+        "Ketua": bph.chairman,
+        Sekretaris: bph.secretary,
+        Bendahara: bph.treasurer,
+        Periode: bph.period,
+        "Kader Terdaftar": getMemberCount(k.name),
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
@@ -300,7 +373,7 @@ export default function KomisariatPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
           <Link
-            href="/dashboard"
+            href={isCabangOrAdmin(currentUser) ? "/admin" : "/dashboard"}
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
             Dashboard
@@ -313,7 +386,7 @@ export default function KomisariatPage() {
             variant="outline"
             className="ml-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] py-0 px-1.5 font-normal"
           >
-            {komisariats.length} {isTenantView ? "Tenant" : "Komisariat"}
+            {isTenantView ? komisariats.length : komisariats.filter((c) => !isBranchLevelRecord(c)).length} {isTenantView ? "Tenant" : "Komisariat"}
           </Badge>
         </nav>
 
@@ -381,11 +454,13 @@ export default function KomisariatPage() {
                 <SelectItem value="ALL" className="text-xs">
                   Semua {isTenantView ? "Tenant" : "Komisariat"}
                 </SelectItem>
-                {komisariats.map((c) => (
-                  <SelectItem key={c.id} value={c.name} className="text-xs">
-                    {c.name}
-                  </SelectItem>
-                ))}
+                {komisariats
+                  .filter((c) => isTenantView || !isBranchLevelRecord(c))
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.name} className="text-xs">
+                      {c.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           )}
@@ -394,7 +469,8 @@ export default function KomisariatPage() {
         {/* View Toggle */}
         <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800">
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            Menampilkan <strong>{filteredKomisariats.length}</strong> dari {komisariats.length}
+            Menampilkan <strong>{filteredKomisariats.length}</strong> dari{" "}
+            {isTenantView ? komisariats.length : komisariats.filter((c) => !isBranchLevelRecord(c)).length}
           </span>
           <div className="flex items-center p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
             <button
@@ -460,6 +536,8 @@ export default function KomisariatPage() {
                 komisariat={k}
                 onEdit={handleOpenEdit}
                 onDelete={handleOpenDelete}
+                canDelete={canDeleteKomisariat}
+                bph={getKomisariatBph(k, boardMembers)}
               />
             ))}
           </div>
@@ -468,8 +546,10 @@ export default function KomisariatPage() {
         <KomisariatTable
           komisariats={filteredKomisariats}
           getMemberCount={getMemberCount}
+          getBph={(k) => getKomisariatBph(k, boardMembers)}
           onEdit={handleOpenEdit}
           onDelete={handleOpenDelete}
+          canDelete={canDeleteKomisariat}
           isTenantView={isTenantView}
         />
       )}

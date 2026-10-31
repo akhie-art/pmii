@@ -11,13 +11,15 @@ interface PengurusGridProps {
   getMemberAvatar: (member?: BoardMember | null) => string;
   onEdit: (member: BoardMember) => void;
   onDelete: (member: BoardMember) => void;
+  canDelete?: boolean;
 }
 
 export const PengurusGrid: React.FC<PengurusGridProps> = ({
   filteredMembers,
   getMemberAvatar,
   onEdit,
-  onDelete
+  onDelete,
+  canDelete = true
 }) => {
   if (filteredMembers.length === 0) {
     return (
@@ -138,15 +140,17 @@ export const PengurusGrid: React.FC<PengurusGridProps> = ({
                   <Edit2 className="w-3 h-3" />
                   <span>Edit</span>
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDelete(member)}
-                  className="h-7 px-2.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-md cursor-pointer flex items-center gap-1"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Hapus</span>
-                </Button>
+                {canDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDelete(member)}
+                    className="h-7 px-2.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-md cursor-pointer flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Hapus</span>
+                  </Button>
+                )}
               </div>
             </Card>
           </motion.div>

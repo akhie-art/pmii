@@ -11,18 +11,22 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CommissariatList } from "./types";
+import { CommissariatList, KomisariatBphData } from "./types";
 
 interface KomisariatCardProps {
   komisariat: CommissariatList;
   onEdit: (k: CommissariatList) => void;
   onDelete: (k: CommissariatList) => void;
+  canDelete?: boolean;
+  bph?: KomisariatBphData;
 }
 
 export function KomisariatCard({
   komisariat,
   onEdit,
   onDelete,
+  canDelete = true,
+  bph,
 }: KomisariatCardProps) {
   const initial =
     komisariat.logoInitial ||
@@ -96,26 +100,35 @@ export function KomisariatCard({
               <ShieldCheck className="w-3.5 h-3.5 text-amber-500" /> BPH Komisariat
             </span>
             <span className="text-[11px] font-normal text-zinc-400">
-              Periode {komisariat.structure?.period || "2026 - 2027"}
+              Periode {bph?.period || komisariat.structure?.period || "2026 - 2027"}
             </span>
           </div>
           <div className="space-y-1 bg-white/60 dark:bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800/80">
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-400">Ketua:</span>
-              <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[170px]">
-                {komisariat.structure?.chairman || "-"}
+              <span
+                className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[170px]"
+                title={bph?.chairman || komisariat.structure?.chairman || "-"}
+              >
+                {bph?.chairman || komisariat.structure?.chairman || "-"}
               </span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-400">Sekretaris:</span>
-              <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[170px]">
-                {komisariat.structure?.secretary || "-"}
+              <span
+                className="font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[170px]"
+                title={bph?.secretary || komisariat.structure?.secretary || "-"}
+              >
+                {bph?.secretary || komisariat.structure?.secretary || "-"}
               </span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-400">Bendahara:</span>
-              <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[170px]">
-                {komisariat.structure?.treasurer || "-"}
+              <span
+                className="font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[170px]"
+                title={bph?.treasurer || komisariat.structure?.treasurer || "-"}
+              >
+                {bph?.treasurer || komisariat.structure?.treasurer || "-"}
               </span>
             </div>
           </div>
@@ -135,16 +148,18 @@ export function KomisariatCard({
           <span>Edit</span>
         </Button>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => onDelete(komisariat)}
-          className="h-8 px-2.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1"
-          title="Hapus Komisariat"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>Hapus</span>
-        </Button>
+        {canDelete && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onDelete(komisariat)}
+            className="h-8 px-2.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 cursor-pointer"
+            title="Hapus Komisariat"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Hapus</span>
+          </Button>
+        )}
       </div>
     </div>
   );

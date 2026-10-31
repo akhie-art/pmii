@@ -23,6 +23,7 @@ interface PengurusStructureTreeProps {
   onOpenEditDeptModal: (dept: string) => void;
   onDeleteDept: (dept: string) => void;
   isCabangLevel?: boolean;
+  canDelete?: boolean;
 }
 
 export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
@@ -35,7 +36,8 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
   onOpenAddDeptModal,
   onOpenEditDeptModal,
   onDeleteDept,
-  isCabangLevel = false
+  isCabangLevel = false,
+  canDelete = true
 }) => {
   const ketuaTitle = isCabangLevel ? "Ketua Cabang" : "Ketua Komisariat";
   const ketua = boardMembers.find(
@@ -140,14 +142,16 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                   >
                     <Edit2 className="w-3 h-3" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onDeleteMember(ketua)}
-                    className="h-7 px-2 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                  {canDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onDeleteMember(ketua)}
+                      className="h-7 px-2 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <Button
@@ -196,14 +200,16 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     >
                       <Edit2 className="w-3 h-3" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onDeleteMember(sekretaris)}
-                      className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                    {canDelete && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDeleteMember(sekretaris)}
+                        className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Button
@@ -250,14 +256,16 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     >
                       <Edit2 className="w-3 h-3" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onDeleteMember(bendahara)}
-                      className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                    {canDelete && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDeleteMember(bendahara)}
+                        className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Button
@@ -315,13 +323,15 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     >
                       <Edit2 className="w-2.5 h-2.5" />
                     </button>
-                    <button
-                      onClick={() => onDeleteDept(dept)}
-                      className="text-zinc-400 hover:text-rose-600 cursor-pointer p-0.5"
-                      title="Hapus bidang"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => onDeleteDept(dept)}
+                        className="text-zinc-400 hover:text-rose-600 cursor-pointer p-0.5"
+                        title="Hapus bidang"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Badge variant="outline" className="text-[10px] font-medium">
@@ -424,13 +434,15 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                             >
                               <Edit2 className="w-2.5 h-2.5" />
                             </button>
-                            <button
-                              onClick={() => onDeleteMember(staff)}
-                              className="text-zinc-400 hover:text-rose-600 cursor-pointer"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => onDeleteMember(staff)}
+                                className="text-zinc-400 hover:text-rose-600 cursor-pointer"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            )}
                           </span>
                         );
                       })}
@@ -484,15 +496,19 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     >
                       <Edit2 className="w-3 h-3" /> Edit
                     </button>
-                    <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
-                      •
-                    </span>
-                    <button
-                      onClick={() => onDeleteMember(ketua)}
-                      className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3 h-3" /> Hapus
-                    </button>
+                    {canDelete && (
+                      <>
+                        <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
+                          •
+                        </span>
+                        <button
+                          onClick={() => onDeleteMember(ketua)}
+                          className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" /> Hapus
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -560,15 +576,19 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                       >
                         <Edit2 className="w-3 h-3" /> Edit
                       </button>
-                      <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
-                        •
-                      </span>
-                      <button
-                        onClick={() => onDeleteMember(sekretaris)}
-                        className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3 h-3" /> Hapus
-                      </button>
+                      {canDelete && (
+                        <>
+                          <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
+                            •
+                          </span>
+                          <button
+                            onClick={() => onDeleteMember(sekretaris)}
+                            className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Hapus
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -626,15 +646,19 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                       >
                         <Edit2 className="w-3 h-3" /> Edit
                       </button>
-                      <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
-                        •
-                      </span>
-                      <button
-                        onClick={() => onDeleteMember(bendahara)}
-                        className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3 h-3" /> Hapus
-                      </button>
+                      {canDelete && (
+                        <>
+                          <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
+                            •
+                          </span>
+                          <button
+                            onClick={() => onDeleteMember(bendahara)}
+                            className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Hapus
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -702,13 +726,15 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                             >
                               <Edit2 className="w-2.5 h-2.5" />
                             </button>
-                            <button
-                              onClick={() => onDeleteDept(dept)}
-                              className="w-5 h-5 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
-                              title="Hapus bidang"
-                            >
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => onDeleteDept(dept)}
+                                className="w-5 h-5 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
+                                title="Hapus bidang"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <button
@@ -751,15 +777,19 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                               >
                                 <Edit2 className="w-2.5 h-2.5" /> Edit
                               </button>
-                              <span className="text-zinc-300 dark:text-zinc-700 text-[8px]">
-                                •
-                              </span>
-                              <button
-                                onClick={() => onDeleteMember(headOfDiv)}
-                                className="text-[9px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 hover:underline cursor-pointer flex items-center gap-0.5"
-                              >
-                                <Trash2 className="w-2.5 h-2.5" /> Hapus
-                              </button>
+                              {canDelete && (
+                                <>
+                                  <span className="text-zinc-300 dark:text-zinc-700 text-[8px]">
+                                    •
+                                  </span>
+                                  <button
+                                    onClick={() => onDeleteMember(headOfDiv)}
+                                    className="text-[9px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" /> Hapus
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -830,13 +860,15 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                                     >
                                       <Edit2 className="w-2.5 h-2.5" />
                                     </button>
-                                    <button
-                                      onClick={() => onDeleteMember(staff)}
-                                      className="w-5 h-5 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
-                                      title="Hapus fungsionaris"
-                                    >
-                                      <Trash2 className="w-2.5 h-2.5" />
-                                    </button>
+                                    {canDelete && (
+                                      <button
+                                        onClick={() => onDeleteMember(staff)}
+                                        className="w-5 h-5 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
+                                        title="Hapus fungsionaris"
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               );

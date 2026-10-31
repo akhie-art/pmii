@@ -18,21 +18,25 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { CommissariatList } from "./types";
+import { CommissariatList, KomisariatBphData } from "./types";
 
 interface KomisariatTableProps {
   komisariats: CommissariatList[];
   getMemberCount: (name: string) => number;
+  getBph?: (k: CommissariatList) => KomisariatBphData;
   onEdit: (k: CommissariatList) => void;
   onDelete: (k: CommissariatList) => void;
+  canDelete?: boolean;
   isTenantView?: boolean;
 }
 
 export function KomisariatTable({
   komisariats,
   getMemberCount,
+  getBph,
   onEdit,
   onDelete,
+  canDelete = true,
   isTenantView = false,
 }: KomisariatTableProps) {
   if (komisariats.length === 0) {
@@ -118,15 +122,27 @@ export function KomisariatTable({
 
 
                   <TableCell className="py-3.5">
-                    <div className="text-xs">
-                      <span className="text-zinc-500 dark:text-zinc-400">Ketua: </span>
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        {k.structure?.chairman || "-"}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-zinc-400 mt-0.5">
-                      Periode {k.structure?.period || "2026 - 2027"}
-                    </div>
+                    {(() => {
+                      const bph = getBph ? getBph(k) : {
+                        chairman: k.structure?.chairman || "-",
+                        secretary: k.structure?.secretary || "-",
+                        treasurer: k.structure?.treasurer || "-",
+                        period: k.structure?.period || "2026 - 2027",
+                      };
+                      return (
+                        <div className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500 dark:text-zinc-400">Ketua: </span>
+                            <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                              {bph.chairman}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-zinc-400 mt-0.5">
+                            Periode {bph.period}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </TableCell>
 
                   <TableCell className="py-3.5 text-center">
@@ -147,15 +163,17 @@ export function KomisariatTable({
                         <Edit2 className="w-3.5 h-3.5" />
                       </Button>
 
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onDelete(k)}
-                        className="h-7 w-7 p-0 text-zinc-500 hover:text-rose-600"
-                        title="Hapus"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {canDelete && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onDelete(k)}
+                          className="h-7 w-7 p-0 text-zinc-500 hover:text-rose-600 cursor-pointer"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

@@ -21,6 +21,7 @@ interface DepartmentModalProps {
   deptToDelete: string | null;
   onCloseDeleteDept: () => void;
   onConfirmDeleteDept: () => void;
+  memberCountInDept?: number;
 }
 
 export const DepartmentModal: React.FC<DepartmentModalProps> = ({
@@ -32,7 +33,8 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
   onSaveDept,
   deptToDelete,
   onCloseDeleteDept,
-  onConfirmDeleteDept
+  onConfirmDeleteDept,
+  memberCountInDept = 0
 }) => {
   return (
     <>
@@ -115,7 +117,16 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
               <span className="font-semibold text-zinc-800 dark:text-zinc-200">
                 &quot;Bidang {deptToDelete}&quot;
               </span>{" "}
-              dari struktur organisasi? Seluruh fungsionaris pada bidang ini juga akan dihapus.
+              dari struktur organisasi?
+              {memberCountInDept > 0 ? (
+                <span className="block mt-2 p-2 rounded bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 font-medium">
+                  Perhatian: Ada {memberCountInDept} pengurus terdaftar di bidang ini yang juga akan ikut terhapus.
+                </span>
+              ) : (
+                <span className="block mt-1">
+                  Seluruh fungsionaris pada bidang ini juga akan dihapus jika ada.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 

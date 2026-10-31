@@ -9,7 +9,8 @@ import {
   FileText,
   Trash2,
   Paperclip,
-  UploadCloud
+  UploadCloud,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -234,8 +235,9 @@ export function LetterRecordDialog({
                   }`}
                 />
                 {isNewNomorDuplicate && (
-                  <p className="text-[10px] text-rose-500 font-medium">
-                    ⚠️ Nomor ini sudah terdaftar di Surat Keluar!
+                  <p className="text-[10px] text-rose-500 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>Nomor ini sudah terdaftar di Surat Keluar!</span>
                   </p>
                 )}
               </div>
