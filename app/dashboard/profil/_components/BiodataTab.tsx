@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { Trash, Upload } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import NikInput from "@/app/dashboard/anggota/_components/NikInput";
+import { DocumentAttachment } from "@/components/ui/document-attachment";
 import { BiodataTabProps } from "./types";
 
 export function BiodataTab({
@@ -35,6 +35,9 @@ export function BiodataTab({
   setRiwayatPenyakit,
   ktpName,
   setKtpName,
+  ktpFileUrl,
+  onKtpUpload,
+  onRemoveKtp,
 }: BiodataTabProps) {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -166,45 +169,29 @@ export function BiodataTab({
         </div>
       </div>
 
-      {/* Lampiran KTP */}
-      <div className="space-y-1 pt-1">
-        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-          Lampiran Berkas KTP
-        </label>
-        {ktpName ? (
-          <div className="flex items-center justify-between p-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs">
-            <span className="truncate max-w-[240px] text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-              {ktpName}
-            </span>
-            {isEditing && (
-              <button
-                type="button"
-                onClick={() => setKtpName("")}
-                className="text-zinc-400 hover:text-rose-500 p-0.5 cursor-pointer"
-              >
-                <Trash className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        ) : isEditing ? (
-          <label className="flex items-center justify-center gap-2 p-2 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50 rounded-lg cursor-pointer bg-zinc-50/50 dark:bg-zinc-950/50 text-xs text-zinc-500">
-            <Upload className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="text-[11px]">Pilih File KTP (Gambar/PDF)</span>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) setKtpName(e.target.files[0].name);
-              }}
-            />
-          </label>
-        ) : (
-          <div className="p-2 text-xs text-zinc-400 dark:text-zinc-500 italic bg-zinc-50/60 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-lg">
-            Belum ada lampiran berkas KTP
-          </div>
-        )}
-      </div>
+      {/* Lampiran Berkas KTP */}
+      <DocumentAttachment
+        label="Lampiran Berkas KTP (Asli / Scan)"
+        badgeLabel="Identitas Kependudukan Resmi"
+        fileName={ktpName}
+        fileUrl={ktpFileUrl}
+        isEditing={isEditing}
+        onUpload={(file) => {
+          if (onKtpUpload) {
+            onKtpUpload(file);
+          } else {
+            setKtpName(file.name);
+          }
+        }}
+        onRemove={() => {
+          if (onRemoveKtp) {
+            onRemoveKtp();
+          } else {
+            setKtpName("");
+          }
+        }}
+        accentColor="blue"
+      />
     </div>
   );
 }

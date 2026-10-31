@@ -236,12 +236,22 @@ export default function EventFormModal({
                       </p>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
                     organizerIsCabang
                       ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800"
                       : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
                   }`}>
-                    {organizerIsCabang ? "🏛️ Tingkat Cabang" : "🎓 Tingkat Komisariat"}
+                    {organizerIsCabang ? (
+                      <>
+                        <Building className="w-3 h-3" />
+                        <span>Tingkat Cabang</span>
+                      </>
+                    ) : (
+                      <>
+                        <GraduationCap className="w-3 h-3" />
+                        <span>Tingkat Komisariat</span>
+                      </>
+                    )}
                   </span>
                 </div>
 

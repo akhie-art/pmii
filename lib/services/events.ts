@@ -29,7 +29,7 @@ export function getDefaultEventTimeline(event?: Partial<EventActivity>): EventSt
 
   const formatDate = (d: Date) => d.toISOString().split("T")[0];
 
-  return {
+  const defaultTimeline: EventStageTimeline = {
     registration: { isOpen: isEventOpen },
     forum: { isOpen: true },
     rtl: { isOpen: true },
@@ -43,6 +43,52 @@ export function getDefaultEventTimeline(event?: Partial<EventActivity>): EventSt
     graduationDate: formatDate(gradDate),
     activeStage: "REGISTRATION"
   };
+
+  if (event?.timeline) {
+    let parsedTimeline = event.timeline;
+    if (typeof parsedTimeline === "string") {
+      try {
+        parsedTimeline = JSON.parse(parsedTimeline);
+      } catch {
+        parsedTimeline = defaultTimeline;
+      }
+    }
+
+    return {
+      ...defaultTimeline,
+      ...parsedTimeline,
+      registration: {
+        ...defaultTimeline.registration,
+        ...(parsedTimeline.registration || {}),
+        isOpen: parsedTimeline.registration?.isOpen !== undefined 
+          ? Boolean(parsedTimeline.registration.isOpen) 
+          : isEventOpen
+      },
+      forum: {
+        ...defaultTimeline.forum,
+        ...(parsedTimeline.forum || {}),
+        isOpen: parsedTimeline.forum?.isOpen !== undefined 
+          ? Boolean(parsedTimeline.forum.isOpen) 
+          : true
+      },
+      rtl: {
+        ...defaultTimeline.rtl,
+        ...(parsedTimeline.rtl || {}),
+        isOpen: parsedTimeline.rtl?.isOpen !== undefined 
+          ? Boolean(parsedTimeline.rtl.isOpen) 
+          : true
+      },
+      certification: {
+        ...defaultTimeline.certification,
+        ...(parsedTimeline.certification || {}),
+        isOpen: parsedTimeline.certification?.isOpen !== undefined 
+          ? Boolean(parsedTimeline.certification.isOpen) 
+          : true
+      }
+    };
+  }
+
+  return defaultTimeline;
 }
 
 export async function getEvents(defaultData: EventActivity[] = []): Promise<EventActivity[]> {

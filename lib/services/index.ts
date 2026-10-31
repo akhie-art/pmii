@@ -2,7 +2,7 @@ import { getCadres, saveCadres, getAnggota, saveAnggota, deleteCadre, deleteAngg
 import { getEvents, saveEvents, deleteEvent, getDefaultEventTimeline } from "./events";
 import { getRegistrations, saveRegistrations, deleteRegistration } from "./registrations";
 import { getRequirements, saveRequirements } from "./requirements";
-import { getBoards, saveBoards } from "./boards";
+import { getBoards, saveBoards, deleteBoard, deletePengurus } from "./boards";
 import { getCommissariats, saveCommissariats, upsertCommissariat, deleteCommissariat } from "./commissariats";
 import { getUsers, saveUsers } from "./users";
 import { getKaderisasi, saveKaderisasi } from "./kaderisasi";
@@ -62,6 +62,8 @@ export const db = {
   // Boards / Pengurus
   getBoards,
   saveBoards,
+  deleteBoard,
+  deletePengurus,
 
   // Commissariats / Komisariat
   getCommissariats,
@@ -148,6 +150,8 @@ export {
   upsertTableRow,
   deleteCadre,
   deleteAnggota,
+  deleteBoard,
+  deletePengurus,
   deleteEvent,
   deleteRegistration,
   getUserCredentials,

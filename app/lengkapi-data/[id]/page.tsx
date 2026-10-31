@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import {
+  UNIVERSITY_NAMES,
+  findUniversity,
+  getFacultiesForUniversity,
+  getMajorsForFaculty,
+} from "@/lib/academic-data";
 import {
   UserCheck,
   CheckCircle2,
@@ -74,6 +80,34 @@ export default function LengkapiDataPage() {
   const [angkatan, setAngkatan] = useState("2024");
   const [level, setLevel] = useState("MAPABA");
   const [komisariat, setKomisariat] = useState("Ki Ageng Getas Pendawa");
+
+  const matchedUniv = useMemo(() => findUniversity(perguruanTinggi), [perguruanTinggi]);
+  const availableFaculties = useMemo(
+    () => getFacultiesForUniversity(matchedUniv?.name || perguruanTinggi),
+    [matchedUniv, perguruanTinggi]
+  );
+  const availableMajors = useMemo(
+    () => getMajorsForFaculty(matchedUniv?.name || perguruanTinggi, fakultas),
+    [matchedUniv, perguruanTinggi, fakultas]
+  );
+
+  const handleUniversityChange = (val: string | null) => {
+    if (!val) return;
+    setPerguruanTinggi(val);
+    const u = findUniversity(val);
+    if (u && u.faculties.length === 1 && u.faculties[0].name === "-") {
+      setFakultas("-");
+    } else {
+      setFakultas("");
+    }
+    setJurusan("");
+  };
+
+  const handleFacultyChange = (val: string | null) => {
+    if (!val) return;
+    setFakultas(val);
+    setJurusan("");
+  };
 
   const [avatar, setAvatar] = useState("");
   const [pasFotoName, setPasFotoName] = useState("");
@@ -710,42 +744,134 @@ export default function LengkapiDataPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label className="text-xs">Perguruan Tinggi / Universitas</Label>
-                <Input
-                  value={perguruanTinggi}
-                  onChange={(e) => setPerguruanTinggi(e.target.value)}
-                  placeholder="Contoh: Universitas Islam Sultan Agung / UNNES / UNDIP"
-                  className="text-xs bg-zinc-50 dark:bg-zinc-950"
-                />
+                <Select
+                  value={matchedUniv?.name || perguruanTinggi || ""}
+                  onValueChange={handleUniversityChange}
+                >
+                  <SelectTrigger className="w-full min-w-0 text-xs bg-zinc-50 dark:bg-zinc-950">
+                    <SelectValue placeholder="Pilih Perguruan Tinggi" className="truncate text-left" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                    {UNIVERSITY_NAMES.map((u) => (
+                      <SelectItem key={u} value={u} className="text-xs">
+                        {u}
+                      </SelectItem>
+                    ))}
+                    {perguruanTinggi &&
+                      !UNIVERSITY_NAMES.includes(perguruanTinggi) &&
+                      !matchedUniv && (
+                        <SelectItem value={perguruanTinggi} className="text-xs">
+                          {perguruanTinggi}
+                        </SelectItem>
+                      )}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5 min-w-0 overflow-hidden">
                   <Label className="text-xs">Fakultas</Label>
-                  <Input
-                    value={fakultas}
-                    onChange={(e) => setFakultas(e.target.value)}
-                    placeholder="Contoh: Fakultas Tarbiyah"
-                    className="text-xs bg-zinc-50 dark:bg-zinc-950"
-                  />
+                  {availableFaculties.length > 0 ? (
+                    <Select
+                      value={fakultas || ""}
+                      onValueChange={handleFacultyChange}
+                    >
+                      <SelectTrigger
+                        title={fakultas || undefined}
+                        className="w-full min-w-0 max-w-full text-xs bg-zinc-50 dark:bg-zinc-950"
+                      >
+                        <SelectValue placeholder="Pilih Fakultas" className="truncate text-left" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                        {availableFaculties.map((f) => (
+                          <SelectItem key={f} value={f} className="text-xs">
+                            {f}
+                          </SelectItem>
+                        ))}
+                        {fakultas && !availableFaculties.includes(fakultas) && fakultas !== "-" && (
+                          <SelectItem value={fakultas} className="text-xs">
+                            {fakultas}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      disabled
+                      value={
+                        matchedUniv?.name.includes("Sekolah Tinggi") || perguruanTinggi.toLowerCase().includes("stai")
+                          ? "- (Tanpa Fakultas)"
+                          : perguruanTinggi
+                          ? "-"
+                          : "Pilih Kampus dahulu"
+                      }
+                      title={
+                        matchedUniv?.name.includes("Sekolah Tinggi") || perguruanTinggi.toLowerCase().includes("stai")
+                          ? "- (Tanpa Fakultas)"
+                          : undefined
+                      }
+                      className="w-full min-w-0 max-w-full text-xs bg-zinc-50/70 dark:bg-zinc-950/70 text-zinc-500 cursor-not-allowed truncate"
+                    />
+                  )}
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0 overflow-hidden">
                   <Label className="text-xs">Program Studi / Jurusan</Label>
-                  <Input
-                    value={jurusan}
-                    onChange={(e) => setJurusan(e.target.value)}
-                    placeholder="Contoh: Pendidikan Agama Islam"
-                    className="text-xs bg-zinc-50 dark:bg-zinc-950"
-                  />
+                  {availableMajors.length > 0 ? (
+                    <Select
+                      disabled={availableFaculties.length > 0 && !fakultas}
+                      value={jurusan || ""}
+                      onValueChange={(val) => {
+                        if (val) setJurusan(val);
+                      }}
+                    >
+                      <SelectTrigger
+                        title={jurusan || undefined}
+                        className="w-full min-w-0 max-w-full text-xs bg-zinc-50 dark:bg-zinc-950"
+                      >
+                        <SelectValue
+                          placeholder={
+                            availableFaculties.length > 0 && !fakultas
+                              ? "Pilih Fakultas dahulu"
+                              : "Pilih Program Studi / Jurusan"
+                          }
+                          className="truncate text-left"
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                        {availableMajors.map((m) => (
+                          <SelectItem key={m} value={m} className="text-xs">
+                            {m}
+                          </SelectItem>
+                        ))}
+                        {jurusan && !availableMajors.includes(jurusan) && (
+                          <SelectItem value={jurusan} className="text-xs">
+                            {jurusan}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder={
+                        !perguruanTinggi
+                          ? "Pilih Kampus dahulu"
+                          : "Masukkan Program Studi / Jurusan"
+                      }
+                      value={jurusan}
+                      onChange={(e) => setJurusan(e.target.value)}
+                      className="w-full min-w-0 text-xs bg-zinc-50 dark:bg-zinc-950"
+                    />
+                  )}
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label className="text-xs">Tahun Angkatan Kuliah</Label>
                   <Input
                     value={angkatan}
                     onChange={(e) => setAngkatan(e.target.value)}
                     placeholder="Contoh: 2024"
-                    className="text-xs bg-zinc-50 dark:bg-zinc-950 font-mono"
+                    className="w-full min-w-0 text-xs bg-zinc-50 dark:bg-zinc-950 font-mono"
                   />
                 </div>
               </div>

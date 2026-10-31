@@ -24,11 +24,14 @@ interface PengurusFormModalProps {
   formPosition: string;
   setFormPosition: (pos: string) => void;
   formPeriod: string;
+  formStatus: "AKTIF" | "DEMISIONER";
+  setFormStatus: (status: "AKTIF" | "DEMISIONER") => void;
   cadres: any[];
   selectedCadreData: any;
   setSelectedCadreData: (data: any) => void;
   allDepartments: string[];
   activeCampus: string;
+  isCabangLevel?: boolean;
   boardMembers?: BoardMember[];
   onSubmit: (e: React.FormEvent) => void;
 }
@@ -44,11 +47,14 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
   formPosition,
   setFormPosition,
   formPeriod,
+  formStatus,
+  setFormStatus,
   cadres,
   selectedCadreData,
   setSelectedCadreData,
   allDepartments,
   activeCampus,
+  isCabangLevel = false,
   boardMembers = [],
   onSubmit
 }) => {
@@ -76,7 +82,7 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
               <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 {editingMember
                   ? "Perbarui informasi fungsionaris kepengurusan terpilih."
-                  : "Formulir pendaftaran fungsionaris baru komisariat."}
+                  : `Formulir penetapan fungsionaris baru ${isCabangLevel ? "Pengurus Cabang" : "Pengurus Komisariat"}.`}
               </DialogDescription>
             </div>
           </div>
@@ -189,7 +195,7 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                     const newDept = e.target.value;
                     setFormDept(newDept);
                     if (newDept === "BPH") {
-                      setFormPosition("Ketua Komisariat");
+                      setFormPosition(isCabangLevel ? "Ketua Cabang" : "Ketua Komisariat");
                     } else {
                       setFormPosition("Kepala Bidang");
                     }
@@ -214,15 +220,27 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                   className="w-full h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 >
                   {formDept === "BPH" ? (
-                    <>
-                      <option value="Ketua Komisariat">Ketua Komisariat</option>
-                      <option value="Wakil Ketua">Wakil Ketua</option>
-                      <option value="Sekretaris">Sekretaris</option>
-                      <option value="Wakil Sekretaris">Wakil Sekretaris</option>
-                      <option value="Bendahara">Bendahara</option>
-                      <option value="Wakil Bendahara">Wakil Bendahara</option>
-                      <option value="Pengurus BPH">Pengurus BPH</option>
-                    </>
+                    isCabangLevel ? (
+                      <>
+                        <option value="Ketua Cabang">Ketua Cabang</option>
+                        <option value="Wakil Ketua Cabang">Wakil Ketua Cabang</option>
+                        <option value="Sekretaris Cabang">Sekretaris Cabang</option>
+                        <option value="Wakil Sekretaris Cabang">Wakil Sekretaris Cabang</option>
+                        <option value="Bendahara Cabang">Bendahara Cabang</option>
+                        <option value="Wakil Bendahara Cabang">Wakil Bendahara Cabang</option>
+                        <option value="Pengurus BPH Cabang">Pengurus BPH Cabang</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Ketua Komisariat">Ketua Komisariat</option>
+                        <option value="Wakil Ketua">Wakil Ketua</option>
+                        <option value="Sekretaris">Sekretaris</option>
+                        <option value="Wakil Sekretaris">Wakil Sekretaris</option>
+                        <option value="Bendahara">Bendahara</option>
+                        <option value="Wakil Bendahara">Wakil Bendahara</option>
+                        <option value="Pengurus BPH">Pengurus BPH</option>
+                      </>
+                    )
                   ) : (
                     <>
                       <option value="Kepala Bidang">Kepala Bidang (Kabid)</option>
@@ -233,6 +251,13 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                   )}
                   {formPosition &&
                     ![
+                      "Ketua Cabang",
+                      "Wakil Ketua Cabang",
+                      "Sekretaris Cabang",
+                      "Wakil Sekretaris Cabang",
+                      "Bendahara Cabang",
+                      "Wakil Bendahara Cabang",
+                      "Pengurus BPH Cabang",
                       "Ketua Komisariat",
                       "Wakil Ketua",
                       "Sekretaris",
@@ -251,17 +276,42 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
               </div>
             </div>
 
-            {/* Periode Kepengurusan */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
-                <span>Periode Kepengurusan</span>
-              </label>
-              <Input
-                type="text"
-                disabled
-                value={formPeriod}
-                className="h-9 text-xs bg-zinc-100 dark:bg-zinc-800/70 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400 cursor-not-allowed font-medium select-none"
-              />
+            {/* Periode & Status Kepengurusan */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+                  <span>Periode Kepengurusan</span>
+                </label>
+                <Input
+                  type="text"
+                  disabled
+                  value={formPeriod}
+                  className="h-9 text-xs bg-zinc-100 dark:bg-zinc-800/70 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400 cursor-not-allowed font-medium select-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+                  <span>Status Kepengurusan</span>
+                  <Badge
+                    className={`text-[9px] px-1.5 py-0 font-semibold border ${
+                      formStatus === "AKTIF"
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                        : "bg-zinc-500/10 border-zinc-500/20 text-zinc-500 dark:text-zinc-400"
+                    }`}
+                  >
+                    {formStatus}
+                  </Badge>
+                </label>
+                <select
+                  value={formStatus}
+                  onChange={(e) => setFormStatus(e.target.value as "AKTIF" | "DEMISIONER")}
+                  className="w-full h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="AKTIF">Aktif Bertugas</option>
+                  <option value="DEMISIONER">Demisioner / Selesai Masa Bakti</option>
+                </select>
+              </div>
             </div>
           </div>
 

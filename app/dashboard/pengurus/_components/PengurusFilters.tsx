@@ -50,29 +50,46 @@ export const PengurusFilters: React.FC<PengurusFiltersProps> = ({
       </div>
 
       <div className="flex items-center gap-2.5 flex-wrap">
-        {/* Department Filter */}
-        <select
+        {/* Department / Division Filter */}
+        <Select
           value={selectedDept}
-          onChange={(e) => setSelectedDept(e.target.value)}
-          className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-700 dark:text-zinc-300 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          onValueChange={(val) => {
+            if (val) setSelectedDept(val);
+          }}
         >
-          <option value="ALL">Semua Divisi</option>
-          {allDepartments.map((d) => (
-            <option key={d} value={d}>
-              {d === "BPH" ? "BPH" : `Bidang ${d}`}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[135px]">
+            <SelectValue placeholder="Semua Divisi" />
+          </SelectTrigger>
+          <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+            <SelectItem value="ALL" className="text-xs">
+              Semua Divisi
+            </SelectItem>
+            {allDepartments.map((d) => (
+              <SelectItem key={d} value={d} className="text-xs">
+                {d === "BPH" ? "BPH" : `Bidang ${d}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        {/* Tenant/Komisariat Filter */}
+        {/* Tenant/Komisariat Filter (Cabang / Admin only) */}
         {isCabang && setTenantFilter && (
-          <Select value={tenantFilter} onValueChange={(val) => { if (val) setTenantFilter(val); }}>
-            <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[140px]">
+          <Select
+            value={tenantFilter}
+            onValueChange={(val) => {
+              if (val) setTenantFilter(val);
+            }}
+          >
+            <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[150px]">
               <SelectValue placeholder="Semua Komisariat" />
             </SelectTrigger>
             <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
-              <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
-              <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+              <SelectItem value="ALL" className="text-xs">
+                Semua Komisariat / Cabang
+              </SelectItem>
+              <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">
+                Pengurus Cabang Grobogan
+              </SelectItem>
               {availableKomisariats.map((c) => (
                 <SelectItem key={c} value={c} className="text-xs">
                   {c}
@@ -83,15 +100,27 @@ export const PengurusFilters: React.FC<PengurusFiltersProps> = ({
         )}
 
         {/* Status Filter */}
-        <select
+        <Select
           value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-700 dark:text-zinc-300 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          onValueChange={(val) => {
+            if (val) setSelectedStatus(val);
+          }}
         >
-          <option value="ALL">Semua Status</option>
-          <option value="AKTIF">Aktif</option>
-          <option value="DEMISIONER">Demisioner</option>
-        </select>
+          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg min-w-[125px]">
+            <SelectValue placeholder="Semua Status" />
+          </SelectTrigger>
+          <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+            <SelectItem value="ALL" className="text-xs">
+              Semua Status
+            </SelectItem>
+            <SelectItem value="AKTIF" className="text-xs">
+              Aktif
+            </SelectItem>
+            <SelectItem value="DEMISIONER" className="text-xs">
+              Demisioner
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

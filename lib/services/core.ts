@@ -389,10 +389,21 @@ export async function deleteTableRow(
         }
       }
 
-      const { error } = await supabase.from(effectiveTable).delete().eq("id", id);
-      if (error) {
-        console.error(`Supabase error deleting ${id} from ${effectiveTable}:`, error);
-        return false;
+      if (isValidUUID(id)) {
+        const { error } = await supabase.from(effectiveTable).delete().eq("id", id);
+        if (error) {
+          console.error(`Supabase error deleting ${id} from ${effectiveTable}:`, error);
+          return false;
+        }
+      } else {
+        try {
+          const { error } = await supabase.from(effectiveTable).delete().eq("id", id);
+          if (error) {
+            console.warn(`Non-UUID delete notice on ${effectiveTable} for id ${id}:`, error.message);
+          }
+        } catch (e) {
+          console.warn(`Non-UUID delete exception on ${effectiveTable}:`, e);
+        }
       }
       return true;
     } catch (err) {

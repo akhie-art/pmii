@@ -22,6 +22,7 @@ interface PengurusStructureTreeProps {
   onOpenAddDeptModal: () => void;
   onOpenEditDeptModal: (dept: string) => void;
   onDeleteDept: (dept: string) => void;
+  isCabangLevel?: boolean;
 }
 
 export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
@@ -33,10 +34,15 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
   onDeleteMember,
   onOpenAddDeptModal,
   onOpenEditDeptModal,
-  onDeleteDept
+  onDeleteDept,
+  isCabangLevel = false
 }) => {
+  const ketuaTitle = isCabangLevel ? "Ketua Cabang" : "Ketua Komisariat";
   const ketua = boardMembers.find(
-    (m) => m.position.toLowerCase().includes("ketua") && m.department === "BPH"
+    (m) =>
+      m.department === "BPH" &&
+      (m.position.toLowerCase().includes("ketua") || m.position.toLowerCase().includes("ketum")) &&
+      !m.position.toLowerCase().includes("wakil")
   );
   const sekretaris = boardMembers.find(
     (m) => m.position.toLowerCase().includes("sekretaris") && m.department === "BPH"
@@ -114,10 +120,10 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                 )}
                 <div className="min-w-0">
                   <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-none text-[10px] font-semibold px-2 py-0.5">
-                    {ketua?.position || "Ketua Komisariat"}
+                    {ketua?.position || ketuaTitle}
                   </Badge>
                   <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-1 truncate">
-                    {ketua?.name || "Ketua Belum Ditetapkan"}
+                    {ketua?.name || `${ketuaTitle} Belum Ditetapkan`}
                   </h4>
                   <p className="text-[10px] text-zinc-400">
                     {ketua?.period || "2026 - 2027"}
@@ -146,7 +152,7 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
               ) : (
                 <Button
                   size="sm"
-                  onClick={() => onOpenAddModal("BPH", "Ketua Komisariat")}
+                  onClick={() => onOpenAddModal("BPH", ketuaTitle)}
                   className="h-7 px-2.5 text-[11px] bg-amber-600 hover:bg-amber-700 text-white shrink-0 cursor-pointer"
                 >
                   <Plus className="w-3 h-3 mr-1" /> Tetapkan
@@ -492,7 +498,7 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
               </div>
             ) : (
               <button
-                onClick={() => onOpenAddModal("BPH", "Ketua Komisariat")}
+                onClick={() => onOpenAddModal("BPH", ketuaTitle)}
                 className="group bg-zinc-50 hover:bg-amber-50/50 dark:bg-zinc-950 dark:hover:bg-amber-950/20 border border-dashed border-zinc-300 hover:border-amber-400 dark:border-zinc-800 dark:hover:border-amber-700 rounded-xl px-6 py-5 text-center w-64 transition-all cursor-pointer flex flex-col items-center gap-2"
               >
                 <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -500,7 +506,7 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 group-hover:text-amber-600 dark:group-hover:text-amber-400 block">
-                    + Tetapkan Ketua
+                    + Tetapkan {ketuaTitle}
                   </span>
                   <span className="text-[10px] text-zinc-400">
                     Pilih dari database anggota

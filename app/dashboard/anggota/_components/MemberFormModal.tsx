@@ -25,6 +25,13 @@ import {
 } from "@/components/ui/select";
 import NikInput from "./NikInput";
 import type { Member, CadreHistory } from "./types";
+import { DocumentAttachment } from "@/components/ui/document-attachment";
+import {
+  UNIVERSITY_NAMES,
+  findUniversity,
+  getFacultiesForUniversity,
+  getMajorsForFaculty,
+} from "@/lib/academic-data";
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -51,6 +58,7 @@ export default function MemberFormModal({
   const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
   const [nik, setNik] = useState("");
   const [ktpName, setKtpName] = useState("");
+  const [ktpFileUrl, setKtpFileUrl] = useState("");
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [alamatRumah, setAlamatRumah] = useState("");
@@ -65,6 +73,7 @@ export default function MemberFormModal({
   const [fakultas, setFakultas] = useState("");
   const [jurusan, setJurusan] = useState("");
   const [ktmName, setKtmName] = useState("");
+  const [ktmFileUrl, setKtmFileUrl] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -98,6 +107,7 @@ export default function MemberFormModal({
       setGender(member.gender || "Laki-laki");
       setNik(member.nik || "");
       setKtpName(member.ktpName || "");
+      setKtpFileUrl(member.ktpFileUrl || "");
       setTempatLahir(member.tempatLahir || "");
       setTanggalLahir(member.tanggalLahir || "");
       setAlamatRumah(member.alamatRumah || "");
@@ -111,6 +121,7 @@ export default function MemberFormModal({
       setFakultas(member.fakultas || "");
       setJurusan(member.jurusan || "");
       setKtmName(member.ktmName || "");
+      setKtmFileUrl(member.ktmFileUrl || "");
       setEmail(member.email || "");
       setPhone(member.phone || "");
       setInstagram(member.instagram || "");
@@ -139,6 +150,7 @@ export default function MemberFormModal({
       setGender("Laki-laki");
       setNik("");
       setKtpName("");
+      setKtpFileUrl("");
       setTempatLahir("");
       setTanggalLahir("");
       setAlamatRumah("");
@@ -152,6 +164,7 @@ export default function MemberFormModal({
       setFakultas("");
       setJurusan("");
       setKtmName("");
+      setKtmFileUrl("");
       setEmail("");
       setPhone("");
       setInstagram("");
@@ -178,6 +191,34 @@ export default function MemberFormModal({
     setActiveTab("diri");
   }, [isOpen, member, defaultKomisariat]);
 
+  const handleKtpUpload = (file: File) => {
+    setKtpName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setKtpFileUrl(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveKtp = () => {
+    setKtpName("");
+    setKtpFileUrl("");
+  };
+
+  const handleKtmUpload = (file: File) => {
+    setKtmName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setKtmFileUrl(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveKtm = () => {
+    setKtmName("");
+    setKtmFileUrl("");
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -192,6 +233,7 @@ export default function MemberFormModal({
       gender,
       nik: nik.trim(),
       ktpName,
+      ktpFileUrl,
       tempatLahir: tempatLahir.trim(),
       tanggalLahir,
       alamatRumah: alamatRumah.trim(),
@@ -204,6 +246,7 @@ export default function MemberFormModal({
       fakultas: fakultas.trim(),
       jurusan: jurusan.trim(),
       ktmName,
+      ktmFileUrl,
       email: email.trim(),
       phone: phone.trim(),
       instagram: instagram.trim(),
@@ -405,35 +448,14 @@ export default function MemberFormModal({
 
                 {/* Upload KTP & Foto Minimal Box */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Berkas KTP
-                    </label>
-                    {ktpName ? (
-                      <div className="flex items-center justify-between p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs">
-                        <span className="truncate max-w-[180px] text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">{ktpName}</span>
-                        <button
-                          type="button"
-                          onClick={() => setKtpName("")}
-                          className="text-zinc-400 hover:text-rose-500 p-0.5 cursor-pointer"
-                        >
-                          <Trash className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center justify-center gap-2 p-2 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50 rounded-lg cursor-pointer bg-white dark:bg-zinc-900 text-xs text-zinc-500">
-                        <Upload className="w-3.5 h-3.5 text-zinc-400" />
-                        <span className="text-[11px]">Pilih File KTP</span>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) setKtpName(e.target.files[0].name);
-                          }}
-                        />
-                      </label>
-                    )}
+                  <div>
+                    <DocumentAttachment
+                      label="Lampiran Berkas KTP (Asli / Scan)"
+                      fileName={ktpName}
+                      fileUrl={ktpFileUrl}
+                      onUpload={handleKtpUpload}
+                      onRemove={handleRemoveKtp}
+                    />
                   </div>
 
                   <div className="space-y-1">
@@ -495,43 +517,164 @@ export default function MemberFormModal({
             )}
 
             {/* TAB 2: AKADEMIK & KONTAK */}
-            {activeTab === "akademik" && (
+            {activeTab === "akademik" && (() => {
+              const matchedUniv = findUniversity(perguruanTinggi);
+              const availableFaculties = getFacultiesForUniversity(matchedUniv?.name || perguruanTinggi);
+              const availableMajors = getMajorsForFaculty(matchedUniv?.name || perguruanTinggi, fakultas);
+
+              const handleUniversityChange = (val: string | null) => {
+                if (!val) return;
+                setPerguruanTinggi(val);
+                const u = findUniversity(val);
+                if (u && u.faculties.length === 1 && u.faculties[0].name === "-") {
+                  setFakultas("-");
+                } else {
+                  setFakultas("");
+                }
+                setJurusan("");
+              };
+
+              const handleFacultyChange = (val: string | null) => {
+                if (!val) return;
+                setFakultas(val);
+                setJurusan("");
+              };
+
+              return (
               <div className="space-y-3.5">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                  {/* Perguruan Tinggi */}
+                  <div className="space-y-1 min-w-0 overflow-hidden">
                     <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
                       Perguruan Tinggi
                     </label>
-                    <Input
-                      placeholder="Misal: UIN Walisongo"
-                      value={perguruanTinggi}
-                      onChange={(e) => setPerguruanTinggi(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                    />
+                    <Select
+                      value={matchedUniv?.name || perguruanTinggi || ""}
+                      onValueChange={handleUniversityChange}
+                    >
+                      <SelectTrigger
+                        title={matchedUniv?.name || perguruanTinggi || undefined}
+                        className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                      >
+                        <SelectValue placeholder="Pilih Perguruan Tinggi" className="truncate text-left" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                        {UNIVERSITY_NAMES.map((u) => (
+                          <SelectItem key={u} value={u} className="text-xs">
+                            {u}
+                          </SelectItem>
+                        ))}
+                        {perguruanTinggi &&
+                          !UNIVERSITY_NAMES.includes(perguruanTinggi) &&
+                          !matchedUniv && (
+                            <SelectItem value={perguruanTinggi} className="text-xs">
+                              {perguruanTinggi}
+                            </SelectItem>
+                          )}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div className="space-y-1">
+                  {/* Fakultas */}
+                  <div className="space-y-1 min-w-0 overflow-hidden">
                     <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
                       Fakultas
                     </label>
-                    <Input
-                      placeholder="Misal: FST"
-                      value={fakultas}
-                      onChange={(e) => setFakultas(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                    />
+                    {availableFaculties.length > 0 ? (
+                      <Select
+                        value={fakultas || ""}
+                        onValueChange={handleFacultyChange}
+                      >
+                        <SelectTrigger
+                          title={fakultas || undefined}
+                          className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        >
+                          <SelectValue placeholder="Pilih Fakultas" className="truncate text-left" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                          {availableFaculties.map((f) => (
+                            <SelectItem key={f} value={f} className="text-xs">
+                              {f}
+                            </SelectItem>
+                          ))}
+                          {fakultas && !availableFaculties.includes(fakultas) && fakultas !== "-" && (
+                            <SelectItem value={fakultas} className="text-xs">
+                              {fakultas}
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        disabled
+                        value={
+                          matchedUniv?.name.includes("Sekolah Tinggi") || perguruanTinggi.toLowerCase().includes("stai")
+                            ? "- (Tanpa Fakultas)"
+                            : perguruanTinggi
+                            ? "-"
+                            : "Pilih Kampus dahulu"
+                        }
+                        title={
+                          matchedUniv?.name.includes("Sekolah Tinggi") || perguruanTinggi.toLowerCase().includes("stai")
+                            ? "- (Tanpa Fakultas)"
+                            : undefined
+                        }
+                        className="w-full min-w-0 max-w-full h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-500 rounded-lg cursor-not-allowed truncate"
+                      />
+                    )}
                   </div>
 
-                  <div className="space-y-1">
+                  {/* Jurusan / Prodi */}
+                  <div className="space-y-1 min-w-0 overflow-hidden">
                     <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Jurusan
+                      Jurusan / Prodi
                     </label>
-                    <Input
-                      placeholder="Misal: Teknologi Informasi"
-                      value={jurusan}
-                      onChange={(e) => setJurusan(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                    />
+                    {availableMajors.length > 0 ? (
+                      <Select
+                        disabled={availableFaculties.length > 0 && !fakultas}
+                        value={jurusan || ""}
+                        onValueChange={(val) => {
+                          if (val) setJurusan(val);
+                        }}
+                      >
+                        <SelectTrigger
+                          title={jurusan || undefined}
+                          className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        >
+                          <SelectValue
+                            placeholder={
+                              availableFaculties.length > 0 && !fakultas
+                                ? "Pilih Fakultas dahulu"
+                                : "Pilih Jurusan / Prodi"
+                            }
+                            className="truncate text-left"
+                          />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                          {availableMajors.map((m) => (
+                            <SelectItem key={m} value={m} className="text-xs">
+                              {m}
+                            </SelectItem>
+                          ))}
+                          {jurusan && !availableMajors.includes(jurusan) && (
+                            <SelectItem value={jurusan} className="text-xs">
+                              {jurusan}
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        placeholder={
+                          !perguruanTinggi
+                            ? "Pilih Kampus dahulu"
+                            : "Masukkan Jurusan / Prodi"
+                        }
+                        value={jurusan}
+                        onChange={(e) => setJurusan(e.target.value)}
+                        className="w-full min-w-0 h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -601,38 +744,17 @@ export default function MemberFormModal({
                   </div>
                 </div>
 
-                <div className="space-y-1 pt-1">
-                  <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                    Unggah Kartu Tanda Mahasiswa (KTM)
-                  </label>
-                  {ktmName ? (
-                    <div className="flex items-center justify-between p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs">
-                      <span className="truncate text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">{ktmName}</span>
-                      <button
-                        type="button"
-                        onClick={() => setKtmName("")}
-                        className="text-zinc-400 hover:text-rose-500 p-0.5 cursor-pointer"
-                      >
-                        <Trash className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center gap-2 p-2 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50 rounded-lg cursor-pointer bg-white dark:bg-zinc-900 text-xs text-zinc-500">
-                      <Upload className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="text-[11px]">Pilih File KTM</span>
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) setKtmName(e.target.files[0].name);
-                        }}
-                      />
-                    </label>
-                  )}
+                <div className="pt-1">
+                  <DocumentAttachment
+                    label="Unggah Kartu Tanda Mahasiswa (KTM Asli / Scan)"
+                    fileName={ktmName}
+                    fileUrl={ktmFileUrl}
+                    onUpload={handleKtmUpload}
+                    onRemove={handleRemoveKtm}
+                  />
                 </div>
               </div>
-            )}
+            ); })()}
 
             {/* TAB 3: RIWAYAT PENDIDIKAN & ORGANISASI */}
             {activeTab === "riwayat" && (

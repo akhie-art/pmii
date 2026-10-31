@@ -30,6 +30,7 @@ export interface Member {
   // Extended fields
   nik?: string;
   ktpName?: string;
+  ktpFileUrl?: string;
   tempatLahir?: string;
   tanggalLahir?: string;
   alamatRumah?: string;
@@ -41,6 +42,7 @@ export interface Member {
   fakultas?: string;
   jurusan?: string;
   ktmName?: string;
+  ktmFileUrl?: string;
   instagram?: string;
   twitter?: string;
   facebook?: string;
@@ -86,6 +88,7 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     kecamatan: c.kecamatan || "",
     nik: c.nik || "",
     ktpName: c.ktpName || "",
+    ktpFileUrl: c.ktpFileUrl || "",
     tempatLahir: c.tempatLahir || "",
     tanggalLahir: c.tanggalLahir || "",
     alamatRumah: c.alamatRumah || c.address || "",
@@ -97,6 +100,7 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     fakultas: c.fakultas || "",
     jurusan: c.jurusan || "",
     ktmName: c.ktmName || "",
+    ktmFileUrl: c.ktmFileUrl || "",
     instagram: c.instagram || "",
     twitter: c.twitter || "",
     facebook: c.facebook || "",
@@ -149,6 +153,7 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     kecamatan: m.kecamatan,
     nik: m.nik,
     ktpName: m.ktpName,
+    ktpFileUrl: m.ktpFileUrl,
     tempatLahir: m.tempatLahir,
     tanggalLahir: m.tanggalLahir,
     alamatRumah: m.alamatRumah,
@@ -160,6 +165,7 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     fakultas: m.fakultas,
     jurusan: m.jurusan,
     ktmName: m.ktmName,
+    ktmFileUrl: m.ktmFileUrl,
     twitter: m.twitter,
     facebook: m.facebook,
     pasFotoName: m.pasFotoName,

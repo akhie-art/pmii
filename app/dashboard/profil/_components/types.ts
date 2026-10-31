@@ -43,6 +43,9 @@ export interface BiodataTabProps {
   setRiwayatPenyakit: (val: string) => void;
   ktpName: string;
   setKtpName: (val: string) => void;
+  ktpFileUrl?: string;
+  onKtpUpload?: (file: File) => void;
+  onRemoveKtp?: () => void;
 }
 
 export interface AcademicTabProps {
@@ -65,6 +68,9 @@ export interface AcademicTabProps {
   setFacebook: (val: string) => void;
   ktmName: string;
   setKtmName: (val: string) => void;
+  ktmFileUrl?: string;
+  onKtmUpload?: (file: File) => void;
+  onRemoveKtm?: () => void;
 }
 
 export interface HistoryTabProps {

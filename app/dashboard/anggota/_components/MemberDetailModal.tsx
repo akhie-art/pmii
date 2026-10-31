@@ -16,7 +16,8 @@ import {
   Building,
   Award,
   CheckCircle2,
-  Calendar
+  Calendar,
+  ExternalLink
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -228,7 +229,20 @@ export default function MemberDetailModal({
                     </div>
                     <div>
                       <span className="text-zinc-500 block text-[11px]">Berkas KTP</span>
-                      <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300">{member.ktpName || "Belum diunggah"}</span>
+                      {member.ktpFileUrl ? (
+                        <a
+                          href={member.ktpFileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 mt-0.5 text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[140px]">{member.ktpName || "Lihat KTP"}</span>
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="font-mono text-[11px] text-zinc-500">{member.ktpName || "Belum diunggah"}</span>
+                      )}
                     </div>
                     <div>
                       <span className="text-zinc-500 block text-[11px]">Pas Foto</span>
@@ -293,7 +307,20 @@ export default function MemberDetailModal({
                   </div>
                   <div className="sm:col-span-3 pt-1 border-t border-zinc-100 dark:border-zinc-800">
                     <span className="text-zinc-500 block text-[11px]">Lampiran KTM</span>
-                    <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300">{member.ktmName || "Belum diunggah"}</span>
+                    {member.ktmFileUrl ? (
+                      <a
+                        href={member.ktmFileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-0.5 text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span className="truncate max-w-[200px]">{member.ktmName || "Lihat KTM"}</span>
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    ) : (
+                      <span className="font-mono text-[11px] text-zinc-500">{member.ktmName || "Belum diunggah"}</span>
+                    )}
                   </div>
                 </div>
               </div>

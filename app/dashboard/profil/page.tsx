@@ -56,6 +56,7 @@ export default function DashboardProfilPage() {
   const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
   const [nik, setNik] = useState("");
   const [ktpName, setKtpName] = useState("");
+  const [ktpFileUrl, setKtpFileUrl] = useState<string | undefined>(undefined);
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [alamatRumah, setAlamatRumah] = useState("");
@@ -68,6 +69,7 @@ export default function DashboardProfilPage() {
   const [fakultas, setFakultas] = useState("");
   const [jurusan, setJurusan] = useState("");
   const [ktmName, setKtmName] = useState("");
+  const [ktmFileUrl, setKtmFileUrl] = useState<string | undefined>(undefined);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -171,6 +173,7 @@ export default function DashboardProfilPage() {
         setGender((mine.gender as any) || "Laki-laki");
         setNik(mine.nik || "");
         setKtpName(mine.ktpName || "");
+        setKtpFileUrl(mine.ktpFileUrl || undefined);
         setTempatLahir(mine.tempatLahir || "");
         setTanggalLahir(mine.tanggalLahir || "");
         setAlamatRumah(mine.alamatRumah || "");
@@ -182,6 +185,7 @@ export default function DashboardProfilPage() {
         setFakultas(mine.fakultas || "");
         setJurusan(mine.jurusan || "");
         setKtmName(mine.ktmName || "");
+        setKtmFileUrl(mine.ktmFileUrl || undefined);
         setPhone(mine.phone || loggedInUser?.phone || "");
         setEmail(mine.email || loggedInUser?.email || "");
         setInstagram(mine.instagram || "");
@@ -402,6 +406,128 @@ export default function DashboardProfilPage() {
     }
   };
 
+  const handleKtpUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran berkas KTP maksimal 5 MB.");
+      return;
+    }
+    const toastId = toast.loading(`Mengunggah berkas KTP (${file.name})...`);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const fileExt = file.name.split(".").pop() || "pdf";
+        const cadreId = currentCadre?.id || currentUser?.id || "cadre";
+        const filePath = `ktp/${cadreId}-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("materials")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (uploadError) {
+          console.error("Supabase KTP upload error:", uploadError);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const base64Url = e.target?.result as string;
+            setKtpName(file.name);
+            setKtpFileUrl(base64Url);
+            toast.success(`Berkas KTP (${file.name}) siap disimpan.`, { id: toastId });
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+        if (ktpFileUrl && ktpFileUrl !== data.publicUrl) {
+          deleteStorageFile(ktpFileUrl).catch(() => {});
+        }
+        setKtpName(file.name);
+        setKtpFileUrl(data.publicUrl);
+        toast.success(`Berkas KTP (${file.name}) berhasil diunggah.`, { id: toastId });
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64Url = e.target?.result as string;
+          setKtpName(file.name);
+          setKtpFileUrl(base64Url);
+          toast.success(`Berkas KTP (${file.name}) siap disimpan.`, { id: toastId });
+        };
+        reader.onerror = () => toast.error("Gagal membaca berkas KTP.", { id: toastId });
+        reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      console.error("Error in handleKtpUpload:", err);
+      toast.error("Gagal mengunggah berkas KTP.", { id: toastId });
+    }
+  };
+
+  const handleRemoveKtp = async () => {
+    if (ktpFileUrl) {
+      deleteStorageFile(ktpFileUrl).catch(() => {});
+    }
+    setKtpName("");
+    setKtpFileUrl(undefined);
+    toast.info("Lampiran KTP dihapus.");
+  };
+
+  const handleKtmUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran berkas KTM maksimal 5 MB.");
+      return;
+    }
+    const toastId = toast.loading(`Mengunggah berkas KTM (${file.name})...`);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const fileExt = file.name.split(".").pop() || "pdf";
+        const cadreId = currentCadre?.id || currentUser?.id || "cadre";
+        const filePath = `ktm/${cadreId}-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("materials")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (uploadError) {
+          console.error("Supabase KTM upload error:", uploadError);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const base64Url = e.target?.result as string;
+            setKtmName(file.name);
+            setKtmFileUrl(base64Url);
+            toast.success(`Berkas KTM (${file.name}) siap disimpan.`, { id: toastId });
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+        if (ktmFileUrl && ktmFileUrl !== data.publicUrl) {
+          deleteStorageFile(ktmFileUrl).catch(() => {});
+        }
+        setKtmName(file.name);
+        setKtmFileUrl(data.publicUrl);
+        toast.success(`Berkas KTM (${file.name}) berhasil diunggah.`, { id: toastId });
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64Url = e.target?.result as string;
+          setKtmName(file.name);
+          setKtmFileUrl(base64Url);
+          toast.success(`Berkas KTM (${file.name}) siap disimpan.`, { id: toastId });
+        };
+        reader.onerror = () => toast.error("Gagal membaca berkas KTM.", { id: toastId });
+        reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      console.error("Error in handleKtmUpload:", err);
+      toast.error("Gagal mengunggah berkas KTM.", { id: toastId });
+    }
+  };
+
+  const handleRemoveKtm = async () => {
+    if (ktmFileUrl) {
+      deleteStorageFile(ktmFileUrl).catch(() => {});
+    }
+    setKtmName("");
+    setKtmFileUrl(undefined);
+    toast.info("Lampiran KTM dihapus.");
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentCadre) return;
@@ -421,6 +547,7 @@ export default function DashboardProfilPage() {
         gender,
         nik: nik.trim(),
         ktpName: ktpName.trim(),
+        ktpFileUrl: ktpFileUrl,
         tempatLahir: tempatLahir.trim(),
         tanggalLahir: tanggalLahir.trim(),
         alamatRumah: alamatRumah.trim(),
@@ -432,6 +559,7 @@ export default function DashboardProfilPage() {
         fakultas: fakultas.trim(),
         jurusan: jurusan.trim(),
         ktmName: ktmName.trim(),
+        ktmFileUrl: ktmFileUrl,
         phone: phone.trim(),
         email: email.trim(),
         instagram: instagram.trim(),
@@ -628,6 +756,7 @@ export default function DashboardProfilPage() {
     setGender((currentCadre.gender as any) || "Laki-laki");
     setNik(currentCadre.nik || "");
     setKtpName(currentCadre.ktpName || "");
+    setKtpFileUrl(currentCadre.ktpFileUrl || undefined);
     setTempatLahir(currentCadre.tempatLahir || "");
     setTanggalLahir(currentCadre.tanggalLahir || "");
     setAlamatRumah(currentCadre.alamatRumah || "");
@@ -639,6 +768,7 @@ export default function DashboardProfilPage() {
     setFakultas(currentCadre.fakultas || "");
     setJurusan(currentCadre.jurusan || "");
     setKtmName(currentCadre.ktmName || "");
+    setKtmFileUrl(currentCadre.ktmFileUrl || undefined);
     setPhone(currentCadre.phone || "");
     setEmail(currentCadre.email || "");
     setInstagram(currentCadre.instagram || "");
@@ -822,6 +952,9 @@ export default function DashboardProfilPage() {
                     setRiwayatPenyakit={setRiwayatPenyakit}
                     ktpName={ktpName}
                     setKtpName={setKtpName}
+                    ktpFileUrl={ktpFileUrl}
+                    onKtpUpload={handleKtpUpload}
+                    onRemoveKtp={handleRemoveKtp}
                   />
                 )}
 
@@ -846,6 +979,9 @@ export default function DashboardProfilPage() {
                     setFacebook={setFacebook}
                     ktmName={ktmName}
                     setKtmName={setKtmName}
+                    ktmFileUrl={ktmFileUrl}
+                    onKtmUpload={handleKtmUpload}
+                    onRemoveKtm={handleRemoveKtm}
                   />
                 )}
 

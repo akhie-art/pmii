@@ -11,7 +11,9 @@ import {
   Copy,
   Search,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Building,
+  GraduationCap
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +86,7 @@ export default function KomisariatKegiatanPage() {
   const [selectedTab, setSelectedTab] = useState<"timeline" | "screening" | "absensi">("timeline");
 
   const handleUpdateTimelineEvent = async (updatedEvent: EventActivity) => {
-    const updatedEvents = events.map((e) => (e.id === updatedEvent.id ? updatedEvent : e));
+    const updatedEvents = events.map((e) => (String(e.id) === String(updatedEvent.id) ? updatedEvent : e));
     setEvents(updatedEvents);
     await db.saveEvents(updatedEvents);
   };
@@ -1018,12 +1020,14 @@ export default function KomisariatKegiatanPage() {
 
                     <div className="flex items-center gap-1 mt-1">
                       {evt.komisariat_id === null || (evt.commissariat && evt.commissariat.toLowerCase().includes("cabang")) ? (
-                        <span className="text-[8.5px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40">
-                          🏛️ Tingkat Cabang
+                        <span className="inline-flex items-center gap-1 text-[8.5px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40">
+                          <Building className="w-2.5 h-2.5" />
+                          <span>Tingkat Cabang</span>
                         </span>
                       ) : (
-                        <span className="text-[8.5px] text-zinc-500 dark:text-zinc-400 truncate max-w-[170px]">
-                          🎓 {evt.commissariat}
+                        <span className="inline-flex items-center gap-1 text-[8.5px] text-zinc-500 dark:text-zinc-400 truncate max-w-[170px]">
+                          <GraduationCap className="w-2.5 h-2.5 shrink-0" />
+                          <span className="truncate">{evt.commissariat}</span>
                         </span>
                       )}
                     </div>
@@ -1067,12 +1071,14 @@ export default function KomisariatKegiatanPage() {
                       {selectedEvent.level}
                     </Badge>
                     {selectedEvent.komisariat_id === null || (selectedEvent.commissariat && selectedEvent.commissariat.toLowerCase().includes("cabang")) ? (
-                      <Badge className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 text-[9px] font-semibold px-2 py-0.5 rounded-md">
-                        🏛️ Tingkat Cabang (PC Grobogan)
+                      <Badge className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 text-[9px] font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                        <Building className="w-2.5 h-2.5" />
+                        <span>Tingkat Cabang (PC Grobogan)</span>
                       </Badge>
                     ) : (
-                      <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 text-[9px] font-semibold px-2 py-0.5 rounded-md">
-                        🎓 {selectedEvent.commissariat || "Komisariat"}
+                      <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 text-[9px] font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                        <GraduationCap className="w-2.5 h-2.5" />
+                        <span>{selectedEvent.commissariat || "Komisariat"}</span>
                       </Badge>
                     )}
                     <Badge
@@ -1095,15 +1101,23 @@ export default function KomisariatKegiatanPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto flex-wrap">
-                  <div className="flex items-center gap-2 bg-white dark:bg-zinc-800 px-2.5 h-8 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs">
-                    <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 select-none">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleEventStatus(selectedEvent.status !== "OPEN")}
+                    className={`flex items-center gap-2 px-2.5 h-8 rounded-lg border shadow-2xs cursor-pointer transition-colors ${
+                      selectedEvent.status === "OPEN"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                        : "bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                    }`}
+                  >
+                    <span className="text-[11px] font-semibold select-none">
                       {selectedEvent.status === "OPEN" ? "Buka Kegiatan" : "Tutup Kegiatan"}
                     </span>
                     <ToggleSwitch
                       checked={selectedEvent.status === "OPEN"}
                       onChange={handleToggleEventStatus}
                     />
-                  </div>
+                  </button>
 
                   <Button
                     onClick={() => handleCopyLink(selectedEvent.id)}

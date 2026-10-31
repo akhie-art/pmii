@@ -17,13 +17,22 @@ export function ToggleSwitch({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
+    <span
       role="switch"
+      tabIndex={0}
       aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onChange(!checked);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!disabled) onChange(!checked);
+        }
+      }}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
         checked ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"
       } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
@@ -33,7 +42,7 @@ export function ToggleSwitch({
           checked ? "translate-x-4" : "translate-x-0"
         }`}
       />
-    </button>
+    </span>
   );
 }
 
@@ -137,15 +146,23 @@ export default function TimelineTab({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            <button
+              type="button"
+              onClick={() => handleToggleStage("registration", !timeline.registration.isOpen)}
+              className={`flex items-center gap-2 self-end sm:self-center shrink-0 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                timeline.registration.isOpen
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+              }`}
+            >
+              <span className="select-none">
                 {timeline.registration.isOpen ? "Buka Akses" : "Tutup Akses"}
               </span>
               <ToggleSwitch
                 checked={timeline.registration.isOpen}
                 onChange={(val: boolean) => handleToggleStage("registration", val)}
               />
-            </div>
+            </button>
           </div>
         </Card>
 
@@ -183,15 +200,23 @@ export default function TimelineTab({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            <button
+              type="button"
+              onClick={() => handleToggleStage("forum", !timeline.forum.isOpen)}
+              className={`flex items-center gap-2 self-end sm:self-center shrink-0 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                timeline.forum.isOpen
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+              }`}
+            >
+              <span className="select-none">
                 {timeline.forum.isOpen ? "Buka Akses" : "Tutup Akses"}
               </span>
               <ToggleSwitch
                 checked={timeline.forum.isOpen}
                 onChange={(val: boolean) => handleToggleStage("forum", val)}
               />
-            </div>
+            </button>
           </div>
         </Card>
 
@@ -229,15 +254,23 @@ export default function TimelineTab({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            <button
+              type="button"
+              onClick={() => handleToggleStage("rtl", !timeline.rtl.isOpen)}
+              className={`flex items-center gap-2 self-end sm:self-center shrink-0 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                timeline.rtl.isOpen
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+              }`}
+            >
+              <span className="select-none">
                 {timeline.rtl.isOpen ? "Buka Akses" : "Tutup Akses"}
               </span>
               <ToggleSwitch
                 checked={timeline.rtl.isOpen}
                 onChange={(val: boolean) => handleToggleStage("rtl", val)}
               />
-            </div>
+            </button>
           </div>
         </Card>
 
@@ -275,15 +308,23 @@ export default function TimelineTab({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            <button
+              type="button"
+              onClick={() => handleToggleStage("certification", !timeline.certification.isOpen)}
+              className={`flex items-center gap-2 self-end sm:self-center shrink-0 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                timeline.certification.isOpen
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+              }`}
+            >
+              <span className="select-none">
                 {timeline.certification.isOpen ? "Buka Klaim" : "Kunci Klaim"}
               </span>
               <ToggleSwitch
                 checked={timeline.certification.isOpen}
                 onChange={(val: boolean) => handleToggleStage("certification", val)}
               />
-            </div>
+            </button>
           </div>
         </Card>
       </div>

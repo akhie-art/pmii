@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Eye, CheckCircle2, Check } from "lucide-react";
+import { Search, Eye, CheckCircle2, Check, XCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -110,7 +110,7 @@ export default function ScreeningTab({
                       </span>
 
                       <Badge
-                        className={`text-[8.5px] font-medium px-1.5 py-0.2 rounded border-none ${
+                        className={`text-[8.5px] font-medium px-1.5 py-0.2 rounded border-none inline-flex items-center gap-1 ${
                           reg.status === "APPROVED"
                             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                             : reg.status === "REJECTED"
@@ -118,11 +118,22 @@ export default function ScreeningTab({
                             : "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200/50"
                         }`}
                       >
-                        {reg.status === "APPROVED"
-                          ? "✓ Lolos (Disetujui)"
-                          : reg.status === "REJECTED"
-                          ? "✕ Ditolak"
-                          : "⏳ Menunggu"}
+                        {reg.status === "APPROVED" ? (
+                          <>
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            <span>Lolos (Disetujui)</span>
+                          </>
+                        ) : reg.status === "REJECTED" ? (
+                          <>
+                            <XCircle className="w-2.5 h-2.5" />
+                            <span>Ditolak</span>
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>Menunggu</span>
+                          </>
+                        )}
                       </Badge>
                     </div>
 
