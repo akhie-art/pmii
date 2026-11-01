@@ -35,13 +35,13 @@ import {
   Settings2,
   Sliders,
   HelpCircle,
-  Info,
-  CheckCircle2
+  Info
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFeedbackModal } from "@/components/ui/feedback-modal";
 import {
   Kaderisasi,
   FormField,
@@ -77,6 +77,7 @@ export function AgendaFormModal({
   onSubmit
 }: AgendaFormModalProps) {
   const isEdit = Boolean(agenda);
+  const { showToast, showError, FeedbackModalComponent } = useFeedbackModal();
 
   const [activeTab, setActiveTab] = useState<"info" | "materi" | "form" | "sertifikat">("info");
   const [nama, setNama] = useState("");
@@ -218,8 +219,16 @@ export function AgendaFormModal({
       const dxPercent = (dxPx / canvasRect.width) * 100;
       const dyPercent = (dyPx / canvasRect.height) * 100;
 
-      const newX = Math.round(Math.max(0, Math.min(100, initX + dxPercent)) * 10) / 10;
-      const newY = Math.round(Math.max(0, Math.min(100, initY + dyPercent)) * 10) / 10;
+      let newX = Math.round(Math.max(0, Math.min(100, initX + dxPercent)) * 10) / 10;
+      let newY = Math.round(Math.max(0, Math.min(100, initY + dyPercent)) * 10) / 10;
+
+      // Magnetic Center Snapping (snap ke 50.0% jika dalam toleransi 0.8%)
+      if (Math.abs(newX - 50.0) <= 0.8) {
+        newX = 50.0;
+      }
+      if (Math.abs(newY - 50.0) <= 0.8) {
+        newY = 50.0;
+      }
 
       setCertConfig((prev) => {
         const cur = (prev as any)[activeCertField] || {
@@ -571,9 +580,64 @@ export function AgendaFormModal({
     });
   };
 
+  // Client-side image compression helper to avoid giant Base64 strings and memory pressure
+  const compressImageFile = async (file: File, maxDimension = 2480, quality = 0.92): Promise<File | Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.onload = () => {
+          let { width, height } = img;
+          if (width <= maxDimension && height <= maxDimension && file.size < 1.5 * 1024 * 1024) {
+            resolve(file);
+            return;
+          }
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+                  type: "image/jpeg"
+                });
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processTemplateFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Format berkas harus berupa gambar (PNG, JPG, atau JPEG).");
+      showError("Format Berkas Tidak Sesuai", "Format berkas harus berupa gambar (PNG, JPG, atau JPEG).");
       return;
     }
 
@@ -581,12 +645,14 @@ export function AgendaFormModal({
     let finalUrl = "";
 
     try {
+      const processedFile = (await compressImageFile(file)) as File;
+
       if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop();
+        const fileExt = processedFile.name.split(".").pop() || "jpg";
         const filePath = `cert-templates/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from("materials").upload(filePath, file, {
+        const { error: uploadError } = await supabase.storage.from("materials").upload(filePath, processedFile, {
           upsert: true,
-          contentType: file.type
+          contentType: processedFile.type || "image/jpeg"
         });
 
         if (uploadError) {
@@ -605,14 +671,15 @@ export function AgendaFormModal({
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
           reader.onerror = reject;
-          reader.readAsDataURL(file);
+          reader.readAsDataURL(processedFile);
         });
       }
 
       setCertificateTemplate(finalUrl);
+      showToast("Template piagam berhasil diunggah.");
     } catch (err: any) {
       console.error("Upload template error:", err);
-      alert(err?.message || "Gagal mengunggah template piagam.");
+      showError("Gagal Mengunggah", err?.message || "Gagal mengunggah template piagam.");
     } finally {
       setIsUploadingTemplate(false);
     }
@@ -645,19 +712,17 @@ export function AgendaFormModal({
     }
   };
 
-  const handleSetDefaultTemplate = () => {
-    setCertificateTemplate("/templates/template-piagam-mapaba.jpg");
-  };
-
   const handleRemoveTemplate = () => {
     if (certificateTemplate && certificateTemplate.includes("cert-templates")) {
       deleteStorageFile(certificateTemplate).catch(() => {});
     }
     setCertificateTemplate(undefined);
+    showToast("Template piagam telah dihapus.");
   };
 
   const handleResetCertConfig = () => {
     setCertConfig(DEFAULT_CERT_CONFIG);
+    showToast("Posisi teks telah direset ke tata letak standar.");
   };
 
   const updateNumberSegment = (index: number, val: string) => {
@@ -701,7 +766,7 @@ export function AgendaFormModal({
       }
     } catch (err) {
       console.error("Gagal membuat pratinjau PDF:", err);
-      alert("Gagal memproses pratinjau file PDF. Pastikan gambar template dapat diakses.");
+      showError("Gagal Pratinjau PDF", "Gagal memproses pratinjau file PDF. Pastikan gambar template dapat diakses.");
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -1366,30 +1431,9 @@ export function AgendaFormModal({
                         </Button>
                       </>
                     ) : (
-                      <div className="flex items-center gap-1.5">
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/jpg"
-                            onChange={handleUploadCertificateTemplate}
-                            disabled={isUploadingTemplate}
-                            className="hidden"
-                          />
-                          <span className="h-8 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-sm shadow-blue-500/20">
-                            <UploadCloud className="w-3.5 h-3.5" />
-                            <span>{isUploadingTemplate ? "Mengunggah ke Cloud..." : "Unggah Template (A4)"}</span>
-                          </span>
-                        </label>
-
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleSetDefaultTemplate}
-                          className="h-8 px-3 text-xs font-medium rounded-xl border-zinc-200 dark:border-zinc-800 cursor-pointer"
-                        >
-                          Terapkan Bawaan PMII
-                        </Button>
+                      <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 px-3 py-1 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Unggah gambar template piagam untuk mulai mendesain</span>
                       </div>
                     )}
                   </div>
@@ -1536,7 +1580,7 @@ export function AgendaFormModal({
                         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 hidden md:flex">
                           <span>Shift + Panah = Geser Cepat</span>
                           <span>•</span>
-                          <span className="text-blue-600 dark:text-blue-400 font-sans font-semibold">🤏 Cubit Touchpad = Zoom</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-sans font-semibold">Cubit Touchpad = Zoom</span>
                         </div>
                       </div>
                     </div>
@@ -1874,66 +1918,63 @@ export function AgendaFormModal({
                     </div>
                   </div>
                 ) : (
-                  /* EMPTY STATE: MODERN DRAG & DROP UPLOAD ZONE */
-                  <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={`py-16 px-6 sm:px-12 rounded-3xl border-2 border-dashed text-center space-y-4 transition-all duration-200 flex-1 flex flex-col items-center justify-center ${
-                      isDragOver
-                        ? "border-blue-500 bg-blue-50/30 dark:bg-blue-950/30 scale-[0.99]"
-                        : "border-zinc-300/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 hover:border-zinc-400"
-                    }`}
-                  >
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/60 dark:to-indigo-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto border border-blue-200/50 dark:border-blue-900/40 shadow-sm">
-                      <UploadCloud className="w-8 h-8" />
-                    </div>
+                  /* EMPTY STATE: UNIFIED UPLOAD DROPZONE */
+                  <div className="flex-1 flex flex-col justify-center items-center py-6 px-3 sm:px-6 max-w-xl mx-auto w-full min-h-0 overflow-y-auto">
+                    {/* Interactive Dropzone Box */}
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`w-full p-6 sm:p-8 rounded-2xl border-2 border-dashed transition-all duration-200 flex flex-col items-center text-center ${
+                        isDragOver
+                          ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/40 scale-[0.99]"
+                          : "border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:border-zinc-400 dark:hover:border-zinc-700 shadow-sm"
+                      }`}
+                    >
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/60 dark:to-indigo-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/50 dark:border-blue-900/40 shadow-xs mb-4">
+                        <UploadCloud className="w-8 h-8" />
+                      </div>
 
-                    <div className="space-y-1.5 max-w-md mx-auto">
-                      <h4 className="text-base font-extrabold text-zinc-900 dark:text-zinc-100">
+                      <h4 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
                         Unggah Template Desain Piagam Resmi
                       </h4>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                        Tarik & lepas berkas gambar piagam kosong ke sini, atau klik tombol di bawah untuk memilih gambar dari perangkat Anda.
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mt-1.5 leading-relaxed">
+                        Tarik & lepas berkas gambar piagam kosong ke area ini, atau klik tombol di bawah untuk memilih gambar dari perangkat Anda.
                       </p>
-                    </div>
 
-                    {/* Format Specifications Badge */}
-                    <div className="flex items-center gap-2 flex-wrap justify-center text-[10.5px] font-medium text-zinc-500 dark:text-zinc-400 pt-1">
-                      <span className="px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
-                        📐 Ukuran Kertas: <strong>A4 Landscape (297 × 210 mm)</strong>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
-                        🖼️ Format: <strong>PNG / JPG (Rekomendasi 300 DPI)</strong>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
-                        ☁️ Storage: <strong>Bucket Supabase Cloud</strong>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2.5 pt-3 flex-wrap">
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/jpg"
-                          onChange={handleUploadCertificateTemplate}
-                          disabled={isUploadingTemplate}
-                          className="hidden"
-                        />
-                        <span className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/25 transition-all">
-                          <UploadCloud className="w-4 h-4" />
-                          <span>{isUploadingTemplate ? "Mengunggah ke Supabase..." : "Pilih Berkas Gambar"}</span>
+                      {/* Format Specs */}
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        <span className="inline-flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/80 px-2.5 py-1 rounded-lg border border-zinc-200/70 dark:border-zinc-700">
+                          <span>Ukuran Kertas:</span>
+                          <strong>A4 Landscape (297 × 210 mm)</strong>
                         </span>
-                      </label>
+                        <span className="inline-flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/80 px-2.5 py-1 rounded-lg border border-zinc-200/70 dark:border-zinc-700">
+                          <span>Format:</span>
+                          <strong>PNG / JPG (Rekomendasi 300 DPI)</strong>
+                        </span>
+                      </div>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleSetDefaultTemplate}
-                        className="h-10 px-5 text-xs font-semibold rounded-xl border-zinc-300 dark:border-zinc-800 cursor-pointer shadow-2xs"
-                      >
-                        Terapkan Template Standar PMII
-                      </Button>
+                      <div className="mt-6 w-full sm:w-auto">
+                        <label className="cursor-pointer block">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/jpg"
+                            onChange={handleUploadCertificateTemplate}
+                            disabled={isUploadingTemplate}
+                            className="hidden"
+                          />
+                          <span className="h-10 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-blue-500/20 transition-all">
+                            <UploadCloud className="w-4 h-4" />
+                            <span>{isUploadingTemplate ? "Mengunggah Berkas..." : "Pilih Berkas Gambar"}</span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Bottom Guidance Tip */}
+                    <div className="mt-4 text-[11px] text-zinc-400 dark:text-zinc-500 flex items-center justify-center gap-1.5 text-center max-w-md">
+                      <Info className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <span>Setelah template diunggah, Anda dapat langsung mengatur dan menggeser posisi nama, nomor piagam, dan data lainnya di kanvas interaktif.</span>
                     </div>
                   </div>
                 )}
@@ -1960,6 +2001,7 @@ export function AgendaFormModal({
           </div>
         </form>
       </Card>
+      {FeedbackModalComponent}
     </div>
   );
 }

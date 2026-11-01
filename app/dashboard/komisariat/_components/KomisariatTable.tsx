@@ -128,14 +128,27 @@ export function KomisariatTable({
                         secretary: k.structure?.secretary || "-",
                         treasurer: k.structure?.treasurer || "-",
                         period: k.structure?.period || "2026 - 2027",
+                        hasData: false,
+                        isSynced: false,
                       };
                       return (
                         <div className="text-xs">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <span className="text-zinc-500 dark:text-zinc-400">Ketua: </span>
-                            <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                              {bph.chairman}
+                            <span
+                              className={`font-semibold ${
+                                bph.chairman && bph.chairman !== "-"
+                                  ? "text-zinc-800 dark:text-zinc-200"
+                                  : "text-zinc-400 italic font-normal"
+                              }`}
+                            >
+                              {bph.chairman && bph.chairman !== "-" ? bph.chairman : "Belum ditentukan"}
                             </span>
+                            {bph.isSynced && (
+                              <span className="inline-flex items-center px-1 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                Pengurus
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-zinc-400 mt-0.5">
                             Periode {bph.period}

@@ -29,7 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { db } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { isUserSuperAdmin } from "@/lib/auth-helpers";
+import { isUserSuperAdmin, isUserKomisariat } from "@/lib/auth-helpers";
 import {
   isRecordInTenant,
   getActiveTenant,
@@ -152,11 +152,16 @@ export default function DashboardHome() {
     fetchDashboardStats();
   }, []);
 
-  const userRole = (currentUser?.role || "").toLowerCase();
+  const userRole = (currentUser?.role || "").toLowerCase().trim();
   const isAdmin = userRole === "admin" || userRole === "cabang" || userRole === "pc" || userRole === "superadmin" || userRole === "super_admin";
   const isSuperAdmin = isUserSuperAdmin(userRole, currentUser?.email);
   const isInstruktur = userRole === "instruktur";
   const isCabang = isCabangOrAdmin(currentUser);
+
+  // Role Komisariat Check: pengurus_komisariat, ketua_komisariat, atau pengurus non-cabang
+  const isKetuaKomisariat = userRole === "ketua_komisariat" || userRole === "ketua komisariat";
+  const isPengurusKomisariat = userRole === "pengurus_komisariat" || userRole === "pengurus komisariat" || userRole === "pengurus";
+  const isKomisariatRole = (isKetuaKomisariat || isPengurusKomisariat || isUserKomisariat(userRole, currentUser?.commissariat)) && !isCabang && !isAdmin && !isSuperAdmin;
 
   const matchRole = pathname ? pathname.match(/^\/(admin|pengurus|instruktur|dashboard)/) : null;
   const staffPrefix = matchRole && matchRole[1] !== "dashboard"
@@ -183,6 +188,12 @@ export default function DashboardHome() {
   const mapabaCount = scopedCadres.filter((c) => (c.level || "").toUpperCase() === "MAPABA").length;
   const pkdCount = scopedCadres.filter((c) => (c.level || "").toUpperCase() === "PKD").length;
   const pklCount = scopedCadres.filter((c) => (c.level || "").toUpperCase() === "PKL").length;
+
+  const kaderisasiBreakdown = [
+    { name: "Kader Mapaba", desc: "Masa Penerimaan Anggota Baru", count: mapabaCount, percentage: totalCadres > 0 ? Math.round((mapabaCount / totalCadres) * 100) : 0, color: "from-blue-600 to-indigo-600" },
+    { name: "Kader PKD", desc: "Pelatihan Kader Dasar", count: pkdCount, percentage: totalCadres > 0 ? Math.round((pkdCount / totalCadres) * 100) : 0, color: "from-amber-500 to-amber-600" },
+    { name: "Kader PKL", desc: "Pelatihan Kader Lanjut", count: pklCount, percentage: totalCadres > 0 ? Math.round((pklCount / totalCadres) * 100) : 0, color: "from-emerald-500 to-emerald-600" }
+  ];
 
   const totalCommissariats = isCabang ? (commissariats.length || 4) : 1;
   const totalEvents = scopedEvents.length;
@@ -315,8 +326,8 @@ export default function DashboardHome() {
         </div>
       </motion.div>
 
-      {/* 2. 4 KEY METRIC CARDS (REAL-TIME STATS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+      {/* 2. KEY METRIC CARDS (REAL-TIME STATS) */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isKomisariatRole ? "lg:grid-cols-3" : "lg:grid-cols-4"} gap-4 md:gap-5`}>
         
         {/* Card 1: Total Anggota / Kader */}
         <motion.div variants={itemVariants}>
@@ -364,42 +375,44 @@ export default function DashboardHome() {
           </Card>
         </motion.div>
 
-        {/* Card 2: Komisariat Naungan */}
-        <motion.div variants={itemVariants}>
-          <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none p-5 h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <Building2 className="w-5 h-5" />
+        {/* Card 2: Komisariat Naungan (Hanya untuk Tingkat Cabang / Admin) */}
+        {!isKomisariatRole && (
+          <motion.div variants={itemVariants}>
+            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none p-5 h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <Badge variant="outline" className="text-[10px] text-zinc-500 font-normal">
+                    PC Grobogan
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="text-[10px] text-zinc-500 font-normal">
-                  PC Grobogan
-                </Badge>
+
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Komisariat Naungan</p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+                      {loading ? "..." : totalCommissariats}
+                    </span>
+                    <span className="text-xs text-zinc-400">Komisariat Resmi</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Ki Ageng Tarub, Ajisaka, Joko Suro, Getas Pendawa.
+                </p>
               </div>
 
-              <div>
-                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Komisariat Naungan</p>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                    {loading ? "..." : totalCommissariats}
-                  </span>
-                  <span className="text-xs text-zinc-400">Komisariat Resmi</span>
-                </div>
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 mt-4">
+                <Link href={tenantOrKomisariatUrl} className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
+                  <span>Lihat {tenantOrKomisariatLabel}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
               </div>
-
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                Ki Ageng Tarub, Ajisaka, Joko Suro, Getas Pendawa.
-              </p>
-            </div>
-
-            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 mt-4">
-              <Link href={tenantOrKomisariatUrl} className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
-                <span>Lihat {tenantOrKomisariatLabel}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </Card>
-        </motion.div>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Card 3: Agenda & Kegiatan */}
         <motion.div variants={itemVariants}>
@@ -480,21 +493,29 @@ export default function DashboardHome() {
       {/* 3. TWO-COLUMN DASHBOARD SECTION: SEBARAN KOMISARIAT & ANGGOTA TERBARU */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Column: Sebaran Kader per Komisariat (2 Cols) */}
+        {/* Left Column: Sebaran Kader per Komisariat / Jenjang Kaderisasi (2 Cols) */}
         <motion.div variants={itemVariants} className="lg:col-span-2">
           <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-none">
             <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-bold tracking-wide flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
-                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span>Distribusi Kader per Komisariat</span>
+                  {isKomisariatRole ? (
+                    <Award className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  ) : (
+                    <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  )}
+                  <span>
+                    {isKomisariatRole ? "Komposisi Jenjang Kaderisasi" : "Distribusi Kader per Komisariat"}
+                  </span>
                 </CardTitle>
                 <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Rekapitulasi persebaran anggota di 4 komisariat naungan PMII Grobogan
+                  {isKomisariatRole
+                    ? `Persebaran jenjang kaderisasi anggota terdaftar di ${currentUser?.commissariat || "Komisariat"}`
+                    : "Rekapitulasi persebaran anggota di 4 komisariat naungan PMII Grobogan"}
                 </CardDescription>
               </div>
 
-              <Link href={tenantOrKomisariatUrl}>
+              <Link href={isKomisariatRole ? `${staffPrefix}/anggota` : tenantOrKomisariatUrl}>
                 <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-blue-600 dark:text-blue-400 cursor-pointer">
                   Detail <ExternalLink className="w-3 h-3 ml-1" />
                 </Button>
@@ -502,26 +523,49 @@ export default function DashboardHome() {
             </CardHeader>
 
             <CardContent className="p-5 sm:p-6 space-y-4">
-              {commissariatDistribution.map((item, index) => (
-                <div key={item.name} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">{item.name}</span>
-                      <span className="text-[11px] text-zinc-400 ml-2">({item.campus})</span>
+              {isKomisariatRole ? (
+                kaderisasiBreakdown.map((item) => (
+                  <div key={item.name} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">{item.name}</span>
+                        <span className="text-[11px] text-zinc-400 ml-2">({item.desc})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-zinc-900 dark:text-zinc-100">{item.count} Kader</span>
+                        <span className="text-[10px] text-zinc-400 font-mono">({item.percentage}%)</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-zinc-900 dark:text-zinc-100">{item.count} Kader</span>
-                      <span className="text-[10px] text-zinc-400 font-mono">({item.percentage}%)</span>
+                    <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`bg-gradient-to-r ${item.color} h-2 rounded-full transition-all duration-500`}
+                        style={{ width: `${Math.min(100, Math.max(item.percentage, item.count > 0 ? 15 : 0))}%` }}
+                      />
                     </div>
                   </div>
-                  <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, Math.max(item.percentage, item.count > 0 ? 35 : 0))}%` }}
-                    />
+                ))
+              ) : (
+                commissariatDistribution.map((item) => (
+                  <div key={item.name} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">{item.name}</span>
+                        <span className="text-[11px] text-zinc-400 ml-2">({item.campus})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-zinc-900 dark:text-zinc-100">{item.count} Kader</span>
+                        <span className="text-[10px] text-zinc-400 font-mono">({item.percentage}%)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(item.percentage, item.count > 0 ? 35 : 0))}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -596,7 +640,9 @@ export default function DashboardHome() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
             { label: "Data Anggota", href: `${staffPrefix}/anggota`, icon: Users },
-            { label: tenantOrKomisariatLabel, href: tenantOrKomisariatUrl, icon: Building2 },
+            ...(isKomisariatRole
+              ? [{ label: "Data Pengurus", href: `${staffPrefix}/pengurus`, icon: GraduationCap }]
+              : [{ label: tenantOrKomisariatLabel, href: tenantOrKomisariatUrl, icon: Building2 }]),
             { label: "Agenda Kegiatan", href: `${staffPrefix}/kegiatan`, icon: Calendar },
             { label: "Tata Persuratan", href: `${staffPrefix}/surat`, icon: Mail },
             { label: "Materi & Silabus", href: `${staffPrefix}/materi`, icon: BookOpen },
