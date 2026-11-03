@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { Edit2, UserPlus, AlertTriangle } from "lucide-react";
+import React, { useMemo, useState, useEffect } from "react";
+import { Edit2, UserPlus, AlertTriangle, AlertCircle, Network, ClipboardList, Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,15 +21,20 @@ interface PengurusFormModalProps {
   setFormName: (name: string) => void;
   formDept: string;
   setFormDept: (dept: string) => void;
+  formBiro?: string;
+  setFormBiro?: (biro: string) => void;
   formPosition: string;
   setFormPosition: (pos: string) => void;
   formPeriod: string;
   formStatus: "AKTIF" | "DEMISIONER";
   setFormStatus: (status: "AKTIF" | "DEMISIONER") => void;
+  formProgramKerja: string[];
+  setFormProgramKerja: (val: string[]) => void;
   cadres: any[];
   selectedCadreData: any;
   setSelectedCadreData: (data: any) => void;
   allDepartments: string[];
+  biros?: Record<string, string[]>;
   activeCampus: string;
   isCabangLevel?: boolean;
   boardMembers?: BoardMember[];
@@ -44,21 +49,43 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
   setFormName,
   formDept,
   setFormDept,
+  formBiro = "",
+  setFormBiro,
   formPosition,
   setFormPosition,
   formPeriod,
   formStatus,
   setFormStatus,
+  formProgramKerja,
+  setFormProgramKerja,
   cadres,
   selectedCadreData,
   setSelectedCadreData,
   allDepartments,
+  biros = {},
   activeCampus,
   isCabangLevel = false,
   boardMembers = [],
   onSubmit
 }) => {
-  // Cek apakah kader sudah terdaftar di posisi lain pada kepengurusan
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setHasAttemptedSubmit(false);
+    }
+  }, [isOpen]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setHasAttemptedSubmit(true);
+    if (!formName.trim()) {
+      return;
+    }
+    onSubmit(e);
+  };
+
+  const isNameEmpty = hasAttemptedSubmit && !formName.trim();
   const existingPosition = useMemo(() => {
     if (!formName || !boardMembers.length) return null;
     return boardMembers.find(
@@ -67,6 +94,146 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
         m.id !== editingMember?.id
     );
   }, [formName, boardMembers, editingMember]);
+
+  // Filter anggota yang belum memiliki jabatan aktif di kepengurusan
+  // Anggota yang sedang aktif menjabat TIDAK akan muncul di opsi pilihan nama
+  // sebelum jabatannya dicopot / berstatus demisioner.
+  const selectableCadres = useMemo(() => {
+    if (!cadres || cadres.length === 0) return [];
+
+    const activeOccupiedNames = new Set(
+      boardMembers
+        .filter((m) => m.status === "AKTIF" && m.id !== editingMember?.id)
+        .map((m) => m.name.toLowerCase().trim())
+    );
+
+    return cadres.filter(
+      (c) => !activeOccupiedNames.has(c.name.toLowerCase().trim())
+    );
+  }, [cadres, boardMembers, editingMember]);
+
+  // Cek apakah posisi Ketua sudah terisi di tenant / organisasi ini
+  const hasActiveKetua = useMemo(() => {
+    if (!boardMembers.length) return false;
+    const tenantPool = boardMembers.filter((m) => {
+      if (!activeCampus || activeCampus === "ALL") return true;
+      return (
+        m.commissariat?.toLowerCase() === activeCampus.toLowerCase() ||
+        (m as any).campus?.toLowerCase() === activeCampus.toLowerCase()
+      );
+    });
+
+    return tenantPool.some(
+      (m) =>
+        m.department === "BPH" &&
+        (m.position.toLowerCase().includes("ketua") || m.position.toLowerCase().includes("ketum")) &&
+        !m.position.toLowerCase().includes("wakil") &&
+        m.status === "AKTIF" &&
+        m.id !== editingMember?.id
+    );
+  }, [boardMembers, activeCampus, editingMember]);
+
+  // Jika jabatan Ketua sudah ada, alihkan otomatis pilihan ke posisi lain (misal: Sekretaris)
+  React.useEffect(() => {
+    if (
+      !editingMember &&
+      formDept === "BPH" &&
+      hasActiveKetua &&
+      (formPosition === "Ketua Komisariat" || formPosition === "Ketua Cabang")
+    ) {
+      setFormPosition(isCabangLevel ? "Sekretaris Cabang" : "Sekretaris");
+    }
+  }, [editingMember, formDept, hasActiveKetua, formPosition, isCabangLevel, setFormPosition]);
+
+  // Logika Otomatisasi Wakil Sekretaris & Wakil Bendahara:
+  // Jika di tenant ini sudah ada Sekretaris/Bendahara Utama,
+  // maka penambahan berikutnya otomatis dialokasikan menjadi Wakil Sekretaris / Wakil Bendahara N.
+  const autoResolvedInfo = useMemo(() => {
+    if (editingMember || formDept !== "BPH" || !boardMembers.length) return null;
+    const posLower = (formPosition || "").toLowerCase();
+
+    const isSekretaris = posLower.includes("sekretaris");
+    const isBendahara = posLower.includes("bendahara");
+
+    if (!isSekretaris && !isBendahara) return null;
+
+    // Filter fungsionaris di tenant/kampus aktif
+    const tenantPool = boardMembers.filter((m) => {
+      if (!activeCampus || activeCampus === "ALL") return true;
+      return (
+        m.commissariat?.toLowerCase() === activeCampus.toLowerCase() ||
+        (m as any).campus?.toLowerCase() === activeCampus.toLowerCase()
+      );
+    });
+
+    if (isSekretaris) {
+      const existingSekretaris = tenantPool.filter(
+        (m) =>
+          m.department === "BPH" &&
+          m.position.toLowerCase().includes("sekretaris") &&
+          !m.position.toLowerCase().includes("bidang")
+      );
+      const hasUtama = existingSekretaris.some(
+        (m) => !m.position.toLowerCase().includes("wakil")
+      );
+      if (hasUtama) {
+        const wakilCount = existingSekretaris.filter((m) =>
+          m.position.toLowerCase().includes("wakil")
+        ).length;
+        const mainSekretaris = existingSekretaris.find(
+          (m) => !m.position.toLowerCase().includes("wakil")
+        );
+        return {
+          role: "Sekretaris",
+          resolved: `Wakil Sekretaris ${wakilCount + 1}`,
+          existingName: mainSekretaris?.name || "Utama"
+        };
+      }
+    }
+
+    if (isBendahara) {
+      const existingBendahara = tenantPool.filter(
+        (m) =>
+          m.department === "BPH" &&
+          m.position.toLowerCase().includes("bendahara") &&
+          !m.position.toLowerCase().includes("bidang")
+      );
+      const hasUtama = existingBendahara.some(
+        (m) => !m.position.toLowerCase().includes("wakil")
+      );
+      if (hasUtama) {
+        const wakilCount = existingBendahara.filter((m) =>
+          m.position.toLowerCase().includes("wakil")
+        ).length;
+        const mainBendahara = existingBendahara.find(
+          (m) => !m.position.toLowerCase().includes("wakil")
+        );
+        return {
+          role: "Bendahara",
+          resolved: `Wakil Bendahara ${wakilCount + 1}`,
+          existingName: mainBendahara?.name || "Utama"
+        };
+      }
+    }
+
+    return null;
+  }, [editingMember, formDept, formPosition, boardMembers, activeCampus]);
+
+  const handleAddProker = () => {
+    setFormProgramKerja([...formProgramKerja, ""]);
+  };
+
+  const handleUpdateProker = (index: number, value: string) => {
+    const updated = [...formProgramKerja];
+    updated[index] = value;
+    setFormProgramKerja(updated);
+  };
+
+  const handleRemoveProker = (index: number) => {
+    const updated = formProgramKerja.filter((_, i) => i !== index);
+    setFormProgramKerja(updated);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-w-lg w-full p-0 overflow-hidden">
@@ -88,52 +255,101 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
           </div>
         </DialogHeader>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="p-5 sm:p-6 space-y-4 max-h-[65vh] overflow-y-auto">
             {/* Nama Pengurus (Select option dari Database Anggota) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
                 <span>
                   Nama Lengkap Pengurus <span className="text-rose-500">*</span>
                 </span>
                 {cadres.length > 0 && (
                   <span className="text-[10px] text-zinc-400 font-normal">
-                    {cadres.length} anggota terdaftar
+                    {selectableCadres.length} kader tersedia
+                    {cadres.length > selectableCadres.length && (
+                      <span className="text-zinc-400">
+                        {" "}• {cadres.length - selectableCadres.length} sudah menjabat
+                      </span>
+                    )}
                   </span>
                 )}
               </label>
 
               {cadres.length > 0 ? (
-                <select
-                  required
-                  value={formName}
-                  onChange={(e) => {
-                    const selectedName = e.target.value;
-                    setFormName(selectedName);
-                    const found = cadres.find((c) => c.name === selectedName);
-                    setSelectedCadreData(found || null);
-                  }}
-                  className="w-full h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="">-- Pilih Anggota dari Database --</option>
-                  {formName && !cadres.some((c) => c.name === formName) && (
-                    <option value={formName}>{formName} (Pengurus Saat Ini)</option>
+                <div className="space-y-1.5">
+                  <select
+                    value={formName}
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      setFormName(selectedName);
+                      if (hasAttemptedSubmit && selectedName.trim()) {
+                        setHasAttemptedSubmit(false);
+                      }
+                      const found =
+                        cadres.find((c) => c.name === selectedName) ||
+                        selectableCadres.find((c) => c.name === selectedName);
+                      setSelectedCadreData(found || null);
+                    }}
+                    className={`w-full h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:outline-none transition-colors ${
+                      isNameEmpty
+                        ? "border-rose-400 dark:border-rose-600 focus:ring-rose-500"
+                        : "border-zinc-200 dark:border-zinc-800 focus:ring-blue-500"
+                    }`}
+                  >
+                    <option value="">-- Pilih Anggota dari Database --</option>
+                    {formName &&
+                      !selectableCadres.some(
+                        (c) => c.name.toLowerCase().trim() === formName.toLowerCase().trim()
+                      ) && (
+                        <option value={formName}>
+                          {formName} {editingMember ? "(Fungsionaris Saat Ini)" : "(Sudah Menjabat)"}
+                        </option>
+                      )}
+                    {selectableCadres.map((cadre) => (
+                      <option key={cadre.id} value={cadre.name}>
+                        {cadre.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {isNameEmpty && (
+                    <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 pt-0.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Silakan pilih kader dari database</span>
+                    </p>
                   )}
-                  {cadres.map((cadre) => (
-                    <option key={cadre.id} value={cadre.name}>
-                      {cadre.name} {cadre.commissariat ? `— ${cadre.commissariat}` : ""}
-                    </option>
-                  ))}
-                </select>
+
+                  {selectableCadres.length === 0 && !editingMember && (
+                    <p className="text-[10.5px] text-amber-600 dark:text-amber-400 leading-snug">
+                      Seluruh anggota terdaftar saat ini sudah memegang jabatan kepengurusan aktif. Untuk menugaskan anggota yang sudah menjabat ke posisi lain, silakan copot atau demisionerkan jabatannya terlebih dahulu.
+                    </p>
+                  )}
+                </div>
               ) : (
-                <Input
-                  type="text"
-                  required
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Contoh: Muhammad Ali Ridho"
-                  className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                />
+                <div className="space-y-1">
+                  <Input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => {
+                      setFormName(e.target.value);
+                      if (hasAttemptedSubmit && e.target.value.trim()) {
+                        setHasAttemptedSubmit(false);
+                      }
+                    }}
+                    placeholder="Contoh: Muhammad Ali Ridho"
+                    className={`h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border rounded-lg text-zinc-900 dark:text-zinc-100 ${
+                      isNameEmpty
+                        ? "border-rose-400 dark:border-rose-600 focus-visible:ring-rose-500"
+                        : "border-zinc-200 dark:border-zinc-800 focus-visible:ring-blue-500"
+                    }`}
+                  />
+                  {isNameEmpty && (
+                    <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 pt-0.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Nama lengkap pengurus wajib diisi</span>
+                    </p>
+                  )}
+                </div>
               )}
 
               {selectedCadreData && (
@@ -160,9 +376,11 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                         </Badge>
                       )}
                     </div>
-                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block truncate">
-                      Komisariat: {selectedCadreData.commissariat || activeCampus}
-                    </span>
+                    {(selectedCadreData.email || selectedCadreData.phone) && (
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block truncate">
+                        {selectedCadreData.email || selectedCadreData.phone}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -183,8 +401,12 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
               )}
             </div>
 
-            {/* Departemen & Jabatan */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Departemen, Biro & Jabatan */}
+            <div
+              className={`grid grid-cols-1 ${
+                formDept !== "BPH" ? "sm:grid-cols-3" : "sm:grid-cols-2"
+              } gap-3.5`}
+            >
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                   Departemen / Divisi <span className="text-rose-500">*</span>
@@ -194,8 +416,13 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                   onChange={(e) => {
                     const newDept = e.target.value;
                     setFormDept(newDept);
+                    if (setFormBiro) setFormBiro("");
                     if (newDept === "BPH") {
-                      setFormPosition(isCabangLevel ? "Ketua Cabang" : "Ketua Komisariat");
+                      if (hasActiveKetua) {
+                        setFormPosition(isCabangLevel ? "Sekretaris Cabang" : "Sekretaris");
+                      } else {
+                        setFormPosition(isCabangLevel ? "Ketua Cabang" : "Ketua Komisariat");
+                      }
                     } else {
                       setFormPosition("Kepala Bidang");
                     }
@@ -204,11 +431,51 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                 >
                   {allDepartments.map((d) => (
                     <option key={d} value={d}>
-                      {d}
+                      {d === "BPH" ? "BPH" : `Bidang ${d}`}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Biro di bawah Bidang */}
+              {formDept !== "BPH" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Network className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Biro Pelaksana (Opsional)</span>
+                    </span>
+                    <span className="text-[10.5px] text-zinc-400 font-normal">
+                      Sub-divisi Bidang {formDept}
+                    </span>
+                  </label>
+                  <select
+                    value={formBiro || ""}
+                    onChange={(e) => {
+                      const newBiro = e.target.value;
+                      if (setFormBiro) setFormBiro(newBiro);
+                      if (newBiro) {
+                        setFormPosition("Anggota Biro");
+                      } else {
+                        setFormPosition("Anggota Bidang");
+                      }
+                    }}
+                    className="w-full h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 text-zinc-800 dark:text-zinc-200 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">-- Inti Bidang (Tanpa Biro) --</option>
+                    {(biros?.[formDept] || []).map((b) => (
+                      <option key={b} value={b}>
+                        Biro {b}
+                      </option>
+                    ))}
+                  </select>
+                  {!(biros?.[formDept] && biros[formDept].length > 0) && (
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-snug">
+                      Belum ada biro di Bidang {formDept}. Anda dapat membuat biro baru dari diagram struktur organisasi.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -222,25 +489,27 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                   {formDept === "BPH" ? (
                     isCabangLevel ? (
                       <>
-                        <option value="Ketua Cabang">Ketua Cabang</option>
-                        <option value="Wakil Ketua Cabang">Wakil Ketua Cabang</option>
+                        {!hasActiveKetua && (
+                          <option value="Ketua Cabang">Ketua Cabang</option>
+                        )}
                         <option value="Sekretaris Cabang">Sekretaris Cabang</option>
-                        <option value="Wakil Sekretaris Cabang">Wakil Sekretaris Cabang</option>
                         <option value="Bendahara Cabang">Bendahara Cabang</option>
-                        <option value="Wakil Bendahara Cabang">Wakil Bendahara Cabang</option>
-                        <option value="Pengurus BPH Cabang">Pengurus BPH Cabang</option>
                       </>
                     ) : (
                       <>
-                        <option value="Ketua Komisariat">Ketua Komisariat</option>
-                        <option value="Wakil Ketua">Wakil Ketua</option>
+                        {!hasActiveKetua && (
+                          <option value="Ketua Komisariat">Ketua Komisariat</option>
+                        )}
                         <option value="Sekretaris">Sekretaris</option>
-                        <option value="Wakil Sekretaris">Wakil Sekretaris</option>
                         <option value="Bendahara">Bendahara</option>
-                        <option value="Wakil Bendahara">Wakil Bendahara</option>
-                        <option value="Pengurus BPH">Pengurus BPH</option>
                       </>
                     )
+                  ) : formBiro ? (
+                    <>
+                      <option value="Kepala Biro">Kepala Biro (Kabiro)</option>
+                      <option value="Sekretaris Biro">Sekretaris Biro</option>
+                      <option value="Anggota Biro">Anggota Biro</option>
+                    </>
                   ) : (
                     <>
                       <option value="Kepala Bidang">Kepala Bidang (Kabid)</option>
@@ -250,21 +519,22 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                     </>
                   )}
                   {formPosition &&
+                    !(
+                      hasActiveKetua &&
+                      !editingMember &&
+                      (formPosition.toLowerCase().includes("ketua") &&
+                        !formPosition.toLowerCase().includes("wakil"))
+                    ) &&
                     ![
                       "Ketua Cabang",
-                      "Wakil Ketua Cabang",
                       "Sekretaris Cabang",
-                      "Wakil Sekretaris Cabang",
                       "Bendahara Cabang",
-                      "Wakil Bendahara Cabang",
-                      "Pengurus BPH Cabang",
                       "Ketua Komisariat",
-                      "Wakil Ketua",
                       "Sekretaris",
-                      "Wakil Sekretaris",
                       "Bendahara",
-                      "Wakil Bendahara",
-                      "Pengurus BPH",
+                      "Kepala Biro",
+                      "Sekretaris Biro",
+                      "Anggota Biro",
                       "Kepala Bidang",
                       "Sekretaris Bidang",
                       "Bendahara Bidang",
@@ -273,7 +543,93 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
                       <option value={formPosition}>{formPosition}</option>
                     )}
                 </select>
+
+                {/* Notifikasi Otomatisasi Wakil Sekretaris / Bendahara */}
+                {autoResolvedInfo && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1" />
+                    <div className="space-y-0.5 leading-snug">
+                      <span>
+                        Karena {autoResolvedInfo.role} utama sudah terdaftar (<strong>{autoResolvedInfo.existingName}</strong>), posisi ini otomatis akan ditetapkan sebagai:
+                      </span>
+                      <div className="font-bold text-blue-600 dark:text-blue-400">
+                        {autoResolvedInfo.resolved}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
+
+            {/* Program Kerja Fungsionaris (Repeater List) */}
+            <div className="space-y-2.5 p-3 rounded-xl bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200/70 dark:border-zinc-800/70">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <ClipboardList className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Program Kerja & Agenda Kegiatan</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddProker}
+                  className="h-7 px-2.5 text-[11px] font-medium border-blue-200 dark:border-blue-900/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Tambah Program</span>
+                </Button>
+              </div>
+
+              {formProgramKerja.length === 0 ? (
+                <div className="py-3.5 px-3 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg bg-white/60 dark:bg-zinc-900/50">
+                  <p className="text-[11px] text-zinc-400 mb-2">
+                    Belum ada program kerja yang ditambahkan.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddProker}
+                    className="h-7 text-xs text-zinc-600 dark:text-zinc-300 rounded-lg cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Tambah Program Kerja</span>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {formProgramKerja.map((proker, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 group/item"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[10px] font-bold flex items-center justify-center shrink-0 border border-blue-200/60 dark:border-blue-900/40">
+                        {index + 1}
+                      </div>
+                      <Input
+                        type="text"
+                        value={proker}
+                        onChange={(e) => handleUpdateProker(index, e.target.value)}
+                        placeholder={`Program Kerja ${index + 1} (misal: Pelatihan Kader Dasar)`}
+                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg flex-1 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-1 focus-visible:ring-blue-500"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveProker(index)}
+                        className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer shrink-0 transition-colors"
+                        title="Hapus Program Ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Tambahkan satu atau beberapa program kerja yang menjadi tanggung jawab fungsionaris ini.
+              </p>
             </div>
 
             {/* Periode & Status Kepengurusan */}

@@ -120,19 +120,20 @@ export default function DashboardProfilPage() {
         db.getBoards([])
       ]);
 
-      // Check matching board record
-      const matchedBoard = allBoards.find(
-        (b) =>
-          (loggedInUser && b.user_id && b.user_id === loggedInUser.id) ||
-          (loggedInUser && b.email && b.email.toLowerCase() === loggedInUser.email?.toLowerCase()) ||
-          (loggedInUser && b.name && b.name.toLowerCase() === loggedInUser.name?.toLowerCase())
-      );
-
       // Check matching cadre record
       let mine: CadreFollowUp | null = 
         (activeId ? allCadres.find(c => c.id === activeId) : null) || 
         (loggedInUser ? allCadres.find(c => c.id === loggedInUser.id || (c.email && c.email.toLowerCase() === loggedInUser.email?.toLowerCase())) : null) || 
         allCadres[0] || null;
+
+      // Check matching board record
+      const matchedBoard = allBoards.find(
+        (b) =>
+          (mine && b.anggota_id && b.anggota_id === mine.id) ||
+          (loggedInUser && (b as any).user_id && (b as any).user_id === loggedInUser.id) ||
+          (loggedInUser && b.email && b.email.toLowerCase() === loggedInUser.email?.toLowerCase()) ||
+          (loggedInUser && b.name && b.name.toLowerCase() === loggedInUser.name?.toLowerCase())
+      );
 
       // Auto-fallback from loggedInUser to guarantee full operational record
       if (!mine && loggedInUser) {
@@ -552,7 +553,8 @@ export default function DashboardProfilPage() {
         let boardChanged = false;
         const updatedBoards = boards.map(b => {
           if (
-            (currentCadre.id && b.user_id === currentCadre.id) ||
+            (currentCadre.id && b.anggota_id === currentCadre.id) ||
+            (currentCadre.id && (b as any).user_id === currentCadre.id) ||
             (currentCadre.email && b.email?.toLowerCase().trim() === currentCadre.email.toLowerCase().trim()) ||
             (currentCadre.name && b.name?.toLowerCase().trim() === currentCadre.name.toLowerCase().trim())
           ) {

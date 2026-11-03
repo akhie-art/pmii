@@ -87,7 +87,7 @@ export function extractMissingColumn(errorMessage: string): string | null {
 
 // Global cache for remote schema columns that do not exist on PostgreSQL
 const missingColumnsCache: Record<string, Set<string>> = {
-  pengurus: new Set(["avatar", "rayon", "order", "phoneNumber"]),
+  pengurus: new Set(["rayon", "order", "phoneNumber", "phone", "email", "gender", "user_id", "role"]),
   anggota: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"]),
   kader: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"])
 };
@@ -616,15 +616,15 @@ export async function saveTableData<T extends { id: string | number }>(
               copy.establishedDate = null;
             }
           } else if (effectiveTable === "pengurus") {
-            // Skema PostgreSQL remote 'pengurus' tidak memiliki kolom 'avatar', 'rayon', 'order', atau 'phoneNumber'
-            // Data ini tetap tersimpan utuh di LocalStorage
-            delete copy.avatar;
+            // Skema PostgreSQL 'pengurus' tidak menyimpan phone/email/gender/user_id/role (terpusat di tabel anggota)
             delete copy.rayon;
             delete copy.order;
-            if (copy.phoneNumber && !copy.phone) {
-              copy.phone = copy.phoneNumber;
-            }
             delete copy.phoneNumber;
+            delete copy.phone;
+            delete copy.email;
+            delete copy.gender;
+            delete copy.user_id;
+            delete copy.role;
           }
 
           // 2. General date sanitization: convert empty date strings to null

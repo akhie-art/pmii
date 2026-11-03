@@ -110,6 +110,15 @@ export function isCabangOrAdmin(user: UserAccount | null | undefined): boolean {
   const comm = (user.commissariat || (user as any).komisariat || "").toUpperCase();
   const jabatan = ((user as any).jabatan || "").toUpperCase();
 
+  // Jika peran eksplisit pengurus/ketua komisariat (bukan Cabang)
+  if (
+    (role.includes("KOMISARIAT") || role === "PENGURUS_KOMISARIAT" || role === "KETUA_KOMISARIAT") &&
+    !role.includes("CABANG") &&
+    !role.includes("SUPERADMIN")
+  ) {
+    return false;
+  }
+
   // Jika akun secara eksplisit terikat ke komisariat kampus (bukan Cabang)
   const userTenantId = (user as any).tenant_id || (user as any).komisariat_id;
   const isCabangId =
@@ -194,7 +203,14 @@ export function getActiveTenant(currentUser?: UserAccount | null): string | null
 
   // Jika bukan Cabang/Admin, paksa ke komisariat milik akunnya sendiri
   if (user && !isCabangOrAdmin(user)) {
-    return user.commissariat || null;
+    return (
+      user.commissariat ||
+      (user as any).komisariat ||
+      (user as any).campus ||
+      (user as any).perguruanTinggi ||
+      ((user as any).tenant_id ? getTenantNameById((user as any).tenant_id) : null) ||
+      null
+    );
   }
 
   // Untuk Admin / Cabang, baca dari pilihan aktif (bisa "ALL" atau spesifik)

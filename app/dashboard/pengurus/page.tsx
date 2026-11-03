@@ -24,13 +24,15 @@ import {
   DEFAULT_KOMISARIAT_LIST,
   TENANT_CHANGED_EVENT,
   CABANG_TENANT_ID,
-  getTenantIdByName
+  getTenantIdByName,
+  getTenantNameById
 } from "@/lib/tenancy";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 import {
   type BoardMember,
   DEFAULT_DIVISIONS,
+  DEFAULT_BIROS,
   getSystemPeriod
 } from "./_components/types";
 import { isUserSuperAdmin, isUserAdmin } from "@/lib/auth-helpers";
@@ -40,6 +42,7 @@ import { PengurusStructureTree } from "./_components/PengurusStructureTree";
 import { PengurusFormModal } from "./_components/PengurusFormModal";
 import { PengurusDeleteModal } from "./_components/PengurusDeleteModal";
 import { DepartmentModal } from "./_components/DepartmentModal";
+import { BiroModal } from "./_components/BiroModal";
 
 export default function KomisariatPengurusPage() {
   const [mounted, setMounted] = useState(false);
@@ -92,14 +95,32 @@ export default function KomisariatPengurusPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+  const [structureTenant, setStructureTenant] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        const uObj = stored ? JSON.parse(stored) : null;
+        if (uObj && !isCabangOrAdmin(uObj)) {
+          const t = getActiveTenant(uObj);
+          if (t && t !== "ALL") return t;
+          if (uObj.commissariat) return uObj.commissariat;
+          if (uObj.komisariat) return uObj.komisariat;
+          if (uObj.campus) return uObj.campus;
+        }
+      } catch {}
+    }
+    return "Pengurus Cabang Grobogan";
+  });
 
   // RBAC permissions check
   const isSuperAdmin = isUserSuperAdmin(currentUser?.role, currentUser?.email);
   const userRole = (currentUser?.role || "").toLowerCase().trim();
   const isKetuaCabang = userRole === "ketua_cabang" || userRole === "ketua cabang";
   const isKetuaKomisariat = userRole === "ketua_komisariat" || userRole === "ketua komisariat";
+  const isPengurusCabang = userRole === "pengurus_cabang" || userRole === "pengurus cabang" || userRole.includes("cabang");
+  const isPengurusKomisariat = userRole === "pengurus_komisariat" || userRole === "pengurus komisariat" || userRole === "pengurus" || userRole.includes("komisariat");
   const isAdmin = userRole === "admin" || isUserAdmin(currentUser?.role) || isSuperAdmin;
-  const canDelete = isAdmin || isKetuaCabang || isKetuaKomisariat;
+  const canDelete = isAdmin || isKetuaCabang || isKetuaKomisariat || isPengurusCabang || isPengurusKomisariat;
 
   // Form Modal state (Combined Add & Edit)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -111,6 +132,15 @@ export default function KomisariatPengurusPage() {
   const [deptInputName, setDeptInputName] = useState("");
   const [deptToDelete, setDeptToDelete] = useState<string | null>(null);
 
+  // Biro states (Sub-divisi di bawah Bidang)
+  const [biros, setBiros] = useState<Record<string, string[]>>(DEFAULT_BIROS);
+  const [formBiro, setFormBiro] = useState("");
+  const [isBiroModalOpen, setIsBiroModalOpen] = useState(false);
+  const [biroModalDept, setBiroModalDept] = useState("");
+  const [editingBiro, setEditingBiro] = useState<string | null>(null);
+  const [biroInputName, setBiroInputName] = useState("");
+  const [biroToDelete, setBiroToDelete] = useState<{ dept: string; biroName: string } | null>(null);
+
   // Cadres from database
   const [cadres, setCadres] = useState<any[]>([]);
   const [selectedCadreData, setSelectedCadreData] = useState<any>(null);
@@ -121,6 +151,7 @@ export default function KomisariatPengurusPage() {
   const [formPosition, setFormPosition] = useState("Anggota Bidang");
   const [formPeriod, setFormPeriod] = useState("2026 - 2027");
   const [formStatus, setFormStatus] = useState<"AKTIF" | "DEMISIONER">("AKTIF");
+  const [formProgramKerja, setFormProgramKerja] = useState<string[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
   // Level status (Cabang vs Komisariat)
@@ -159,6 +190,40 @@ export default function KomisariatPengurusPage() {
     });
   }, [cadres, currentUser, activeTenant]);
 
+  const targetStructureTenant = useMemo(() => {
+    if (isCabangOrAdmin(currentUser)) {
+      return structureTenant || "Pengurus Cabang Grobogan";
+    }
+    return (
+      currentUser?.commissariat ||
+      (currentUser as any)?.komisariat ||
+      currentUser?.campus ||
+      (currentUser as any)?.perguruanTinggi ||
+      (activeTenant !== "ALL" ? activeTenant : "") ||
+      activeCampus ||
+      "Komisariat"
+    );
+  }, [currentUser, structureTenant, activeTenant, activeCampus]);
+
+  const isStructureCabangLevel = useMemo(() => {
+    if (!isCabangOrAdmin(currentUser)) return false;
+    return targetStructureTenant.toLowerCase().includes("cabang");
+  }, [currentUser, targetStructureTenant]);
+
+  const structureMembers = useMemo(() => {
+    return boardMembers.filter((m) => {
+      const comm = (
+        m.commissariat ||
+        (m.tenant_id ? getTenantNameById(m.tenant_id) : "") ||
+        "Pengurus Cabang Grobogan"
+      ).toLowerCase();
+      return (
+        comm.includes(targetStructureTenant.toLowerCase()) ||
+        targetStructureTenant.toLowerCase().includes(comm)
+      );
+    });
+  }, [boardMembers, targetStructureTenant]);
+
   // Delete Confirmation Dialog state
   const [memberToDelete, setMemberToDelete] = useState<BoardMember | null>(null);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
@@ -185,6 +250,17 @@ export default function KomisariatPengurusPage() {
       setActiveCampus(uObj.campus);
     }
 
+    if (uObj && !isCabangOrAdmin(uObj)) {
+      const userComm =
+        uObj.commissariat ||
+        uObj.komisariat ||
+        uObj.campus ||
+        (currentTenant !== "ALL" ? currentTenant : "");
+      if (userComm) {
+        setStructureTenant(userComm);
+      }
+    }
+
     const handleTenant = (e: any) => {
       const nextTenant = e.detail?.activeTenant || "ALL";
       setActiveTenant(nextTenant);
@@ -194,7 +270,7 @@ export default function KomisariatPengurusPage() {
     };
     window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
-    // Muat divisi organisasi dari cloud Supabase dengan fallback LocalStorage
+    // Muat divisi organisasi dan biro dari cloud Supabase dengan fallback LocalStorage
     if (isSupabaseConfigured && supabase) {
       supabase
         .from("pengaturan")
@@ -214,6 +290,25 @@ export default function KomisariatPengurusPage() {
             console.warn("Failed to load divisions from cloud:", err);
           }
         );
+
+      supabase
+        .from("pengaturan")
+        .select("value")
+        .eq("key", "organization_biros")
+        .maybeSingle()
+        .then(
+          ({ data }) => {
+            if (data?.value && typeof data.value === "object") {
+              setBiros(data.value);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("PMII_ORGANIZATION_BIROS", JSON.stringify(data.value));
+              }
+            }
+          },
+          (err: any) => {
+            console.warn("Failed to load biros from cloud:", err);
+          }
+        );
     }
 
     const savedDivs = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_DIVISIONS") : null;
@@ -225,6 +320,18 @@ export default function KomisariatPengurusPage() {
         }
       } catch (e) {
         console.error("Failed to parse saved divisions", e);
+      }
+    }
+
+    const savedBiros = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_BIROS") : null;
+    if (savedBiros) {
+      try {
+        const parsed = JSON.parse(savedBiros);
+        if (parsed && typeof parsed === "object") {
+          setBiros(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to parse saved biros", e);
       }
     }
 
@@ -271,6 +378,26 @@ export default function KomisariatPengurusPage() {
     }
   };
 
+  const saveBiros = async (newBiros: Record<string, string[]>) => {
+    setBiros(newBiros);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("PMII_ORGANIZATION_BIROS", JSON.stringify(newBiros));
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from("pengaturan")
+          .upsert({
+            key: "organization_biros",
+            value: newBiros,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "key" });
+      } catch (e) {
+        console.warn("Failed to save biros to cloud:", e);
+      }
+    }
+  };
+
   const saveBoardMembers = async (members: BoardMember[]) => {
     setBoardMembers(members);
     await db.saveBoards(members as any);
@@ -281,34 +408,95 @@ export default function KomisariatPengurusPage() {
     if (!member) return "";
     if (member.avatar) return member.avatar;
     const matched = cadres.find(
-      (c) => c.name?.toLowerCase().trim() === member.name?.toLowerCase().trim()
+      (c) => (member.anggota_id && c.id === member.anggota_id) || c.name?.toLowerCase().trim() === member.name?.toLowerCase().trim()
     );
     return matched?.avatar || "";
+  };
+
+  // Helper to get phone directly from member or resolved from cadres database
+  const getMemberPhone = (member?: BoardMember | null): string => {
+    if (!member) return "-";
+    const matched = cadres.find(
+      (c) => (member.anggota_id && c.id === member.anggota_id) || c.name?.toLowerCase().trim() === member.name?.toLowerCase().trim()
+    );
+    return matched?.phone || member.phone || "-";
+  };
+
+  // Helper to get email directly from member or resolved from cadres database
+  const getMemberEmail = (member?: BoardMember | null): string => {
+    if (!member) return "-";
+    const matched = cadres.find(
+      (c) => (member.anggota_id && c.id === member.anggota_id) || c.name?.toLowerCase().trim() === member.name?.toLowerCase().trim()
+    );
+    return matched?.email || member.email || "-";
+  };
+
+  // Helper to get gender/salutation directly from member or resolved from cadres database
+  const getMemberGender = (member?: BoardMember | null): "Sahabat" | "Sahabati" => {
+    if (!member) return "Sahabat";
+    const matched = cadres.find(
+      (c) => (member.anggota_id && c.id === member.anggota_id) || c.name?.toLowerCase().trim() === member.name?.toLowerCase().trim()
+    );
+    const raw = matched?.gender || member.gender || "Sahabat";
+    return raw === "Perempuan" || raw === "Sahabati" ? "Sahabati" : "Sahabat";
   };
 
   // Reset form inputs
   const resetForm = () => {
     setFormName("");
     setFormDept("Kaderisasi");
+    setFormBiro("");
     setFormPosition("Anggota Bidang");
     setFormPeriod(getSystemPeriod());
     setFormStatus("AKTIF");
+    setFormProgramKerja([]);
     setSelectedCadreData(null);
     setEditingMember(null);
   };
 
-  const handleOpenAddModal = (defaultDept?: string, defaultPosition?: string) => {
+  const handleOpenAddModal = (
+    defaultDept?: string,
+    defaultPosition?: string,
+    defaultTenant?: string,
+    defaultBiro?: string
+  ) => {
     resetForm();
+    if (defaultTenant) {
+      setActiveCampus(defaultTenant);
+    }
+    if (defaultBiro) {
+      setFormBiro(defaultBiro);
+    }
+    const isCabangTarget = defaultTenant
+      ? isCabangOrAdmin(currentUser) && defaultTenant.toLowerCase().includes("cabang")
+      : isCabangLevel;
+
     if (defaultDept) {
       setFormDept(defaultDept);
-      setFormPosition(
-        defaultPosition ||
-          (defaultDept === "BPH"
-            ? isCabangLevel
-              ? "Ketua Cabang"
-              : "Ketua Komisariat"
-            : "Anggota Bidang")
-      );
+      if (defaultPosition) {
+        setFormPosition(defaultPosition);
+      } else if (defaultDept === "BPH") {
+        const targetTenant = defaultTenant || activeCampus;
+        const tenantPool = boardMembers.filter((m) => {
+          if (!targetTenant || targetTenant === "ALL") return true;
+          return m.commissariat?.toLowerCase() === targetTenant.toLowerCase();
+        });
+        const hasExistingKetua = tenantPool.some(
+          (m) =>
+            m.department === "BPH" &&
+            (m.position.toLowerCase().includes("ketua") ||
+              m.position.toLowerCase().includes("ketum")) &&
+            !m.position.toLowerCase().includes("wakil") &&
+            m.status === "AKTIF"
+        );
+        if (hasExistingKetua) {
+          setFormPosition(isCabangTarget ? "Sekretaris Cabang" : "Sekretaris");
+        } else {
+          setFormPosition(isCabangTarget ? "Ketua Cabang" : "Ketua Komisariat");
+        }
+      } else {
+        setFormPosition("Anggota Bidang");
+      }
     } else if (defaultPosition) {
       setFormPosition(defaultPosition);
     }
@@ -347,6 +535,14 @@ export default function KomisariatPengurusPage() {
       }
       const updatedDivs = divisions.map((d) => (d === editingDept ? trimmed : d));
       saveDivisions(updatedDivs);
+
+      // Pindahkan biros dari nama lama ke nama baru
+      const newBiros = { ...biros };
+      if (newBiros[editingDept]) {
+        newBiros[trimmed] = newBiros[editingDept];
+        delete newBiros[editingDept];
+        saveBiros(newBiros);
+      }
 
       // Update members belonging to this department
       const updatedMembers = boardMembers.map((m) =>
@@ -391,6 +587,11 @@ export default function KomisariatPengurusPage() {
     const updatedDivs = divisions.filter((d) => d !== targetDept);
     saveDivisions(updatedDivs);
 
+    // Hapus biros di bidang ini
+    const newBiros = { ...biros };
+    delete newBiros[targetDept];
+    saveBiros(newBiros);
+
     // Remove members from this department
     const membersToDelete = boardMembers.filter((m) => m.department === targetDept);
     const updatedMembers = boardMembers.filter((m) => m.department !== targetDept);
@@ -409,13 +610,132 @@ export default function KomisariatPengurusPage() {
     }
   };
 
+  // Handlers for Biro CRUD
+  const handleOpenAddBiroModal = (dept: string) => {
+    setBiroModalDept(dept);
+    setEditingBiro(null);
+    setBiroInputName("");
+    setIsBiroModalOpen(true);
+  };
+
+  const handleOpenEditBiroModal = (dept: string, biroName: string) => {
+    setBiroModalDept(dept);
+    setEditingBiro(biroName);
+    setBiroInputName(biroName);
+    setIsBiroModalOpen(true);
+  };
+
+  const handleSaveBiro = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = biroInputName.trim();
+    if (!trimmed || !biroModalDept) return;
+
+    const currentDeptBiros = biros[biroModalDept] || [];
+
+    if (editingBiro) {
+      if (trimmed.toLowerCase() === editingBiro.toLowerCase()) {
+        setIsBiroModalOpen(false);
+        return;
+      }
+      if (
+        currentDeptBiros.some(
+          (b) => b.toLowerCase() === trimmed.toLowerCase() && b.toLowerCase() !== editingBiro.toLowerCase()
+        )
+      ) {
+        showError("Nama Biro Digunakan", `Nama biro "${trimmed}" sudah ada di bidang ${biroModalDept}.`);
+        return;
+      }
+
+      const updatedDeptBiros = currentDeptBiros.map((b) => (b === editingBiro ? trimmed : b));
+      const newBiros = { ...biros, [biroModalDept]: updatedDeptBiros };
+      saveBiros(newBiros);
+
+      // Update existing board members in this biro
+      const updatedMembers = boardMembers.map((m) =>
+        m.department === biroModalDept && m.biro === editingBiro
+          ? { ...m, biro: trimmed }
+          : m
+      );
+      saveBoardMembers(updatedMembers);
+      showToast(`Nama biro "${editingBiro}" berhasil diubah menjadi "${trimmed}".`);
+    } else {
+      if (currentDeptBiros.some((b) => b.toLowerCase() === trimmed.toLowerCase())) {
+        showError("Nama Biro Digunakan", `Nama biro "${trimmed}" sudah ada di bidang ${biroModalDept}.`);
+        return;
+      }
+
+      const updatedDeptBiros = [...currentDeptBiros, trimmed];
+      const newBiros = { ...biros, [biroModalDept]: updatedDeptBiros };
+      saveBiros(newBiros);
+      showToast(`Biro "${trimmed}" berhasil ditambahkan di bawah Bidang ${biroModalDept}.`);
+    }
+
+    setIsBiroModalOpen(false);
+    setBiroInputName("");
+    setEditingBiro(null);
+  };
+
+  const handleOpenDeleteBiroModal = (dept: string, biroName: string) => {
+    if (!canDelete) {
+      showError("Akses Ditolak", "Anda tidak memiliki izin untuk menghapus biro organisasi.");
+      return;
+    }
+    setBiroToDelete({ dept, biroName });
+  };
+
+  const handleConfirmDeleteBiro = () => {
+    if (!biroToDelete) return;
+    const { dept, biroName } = biroToDelete;
+
+    const currentDeptBiros = biros[dept] || [];
+    const updatedDeptBiros = currentDeptBiros.filter((b) => b !== biroName);
+    const newBiros = { ...biros, [dept]: updatedDeptBiros };
+    saveBiros(newBiros);
+
+    // Unassign members from this biro
+    const updatedMembers = boardMembers.map((m) =>
+      m.department === dept && m.biro === biroName
+        ? { ...m, biro: undefined }
+        : m
+    );
+    saveBoardMembers(updatedMembers);
+    setBiroToDelete(null);
+    showToast(`Biro "${biroName}" berhasil dihapus.`);
+  };
+
   const handleOpenEditModal = (member: BoardMember) => {
     setEditingMember(member);
     setFormName(member.name);
     setFormDept(member.department);
+    setFormBiro(member.biro || "");
     setFormPosition(member.position);
     setFormPeriod(member.period || getSystemPeriod());
     setFormStatus(member.status || "AKTIF");
+
+    const rawProker = member.program_kerja || member.programKerja;
+    let initialProker: string[] = [];
+    if (Array.isArray(rawProker)) {
+      initialProker = rawProker.filter(Boolean);
+    } else if (typeof rawProker === "string" && rawProker.trim()) {
+      try {
+        const parsed = JSON.parse(rawProker);
+        if (Array.isArray(parsed)) {
+          initialProker = parsed.filter(Boolean);
+        } else {
+          initialProker = rawProker
+            .split("\n")
+            .map((s) => s.replace(/^[0-9]+[.\-)]\s*/, "").trim())
+            .filter(Boolean);
+        }
+      } catch {
+        initialProker = rawProker
+          .split("\n")
+          .map((s) => s.replace(/^[0-9]+[.\-)]\s*/, "").trim())
+          .filter(Boolean);
+      }
+    }
+    setFormProgramKerja(initialProker);
+
     const matched = cadres.find((c) => c.name === member.name);
     setSelectedCadreData(matched || null);
     setIsFormModalOpen(true);
@@ -450,6 +770,25 @@ export default function KomisariatPengurusPage() {
       (activeTenant !== "ALL" ? getTenantIdByName(activeTenant) : CABANG_TENANT_ID) ||
       CABANG_TENANT_ID;
 
+    const cleanProker = formProgramKerja.map((p) => p.trim()).filter(Boolean);
+    const prokerToSave = cleanProker.length > 0 ? JSON.stringify(cleanProker) : "";
+
+    if (!editingMember) {
+      // Validasi: Anggota yang masih aktif menjabat tidak boleh ditugaskan ke jabatan baru sebelum copot jabatan
+      const alreadyActive = boardMembers.find(
+        (m) =>
+          m.status === "AKTIF" &&
+          m.name.toLowerCase().trim() === formName.toLowerCase().trim()
+      );
+      if (alreadyActive) {
+        showError(
+          "Anggota Sudah Menjabat",
+          `Sahabat/i "${alreadyActive.name}" saat ini masih aktif menjabat sebagai ${alreadyActive.position} (${alreadyActive.department}). Harap copot jabatan atau demisionerkan terlebih dahulu sebelum menugaskan ke jabatan baru.`
+        );
+        return;
+      }
+    }
+
     if (editingMember) {
       // Edit existing member
       const updated = boardMembers.map((m) =>
@@ -460,6 +799,7 @@ export default function KomisariatPengurusPage() {
               gender: matchedCadre ? inferredGender : (editingMember.gender || "Sahabat"),
               position: formPosition.trim() || editingMember.position || formDept,
               department: formDept,
+              biro: formDept !== "BPH" && formBiro ? formBiro : undefined,
               email: matchedCadre?.email || editingMember.email || "-",
               phone: matchedCadre?.phone || editingMember.phone || "-",
               status: formStatus,
@@ -467,7 +807,9 @@ export default function KomisariatPengurusPage() {
               commissariat: resolvedComm || m.commissariat || "Pengurus Cabang Grobogan",
               tenant_id: resolvedTenantId || m.tenant_id || CABANG_TENANT_ID,
               komisariat_id: resolvedTenantId || m.komisariat_id || CABANG_TENANT_ID,
-              avatar: memberAvatar
+              avatar: memberAvatar,
+              anggota_id: matchedCadre?.id || editingMember.anggota_id || null,
+              program_kerja: prokerToSave
             }
           : m
       );
@@ -475,20 +817,107 @@ export default function KomisariatPengurusPage() {
       showToast(`Data "${formName.trim()}" berhasil diperbarui!`);
     } else {
       // Add new member
+      // Resolusi Otomatis Wakil Sekretaris / Wakil Bendahara jika posisi utama sudah ada
+      let finalPosition = formPosition.trim();
+
+      if (formDept === "BPH") {
+        const posLower = finalPosition.toLowerCase();
+        const isSekretaris =
+          posLower.includes("sekretaris") && !posLower.includes("bidang");
+        const isBendahara =
+          posLower.includes("bendahara") && !posLower.includes("bidang");
+
+        // Cari fungsionaris yang sudah terdaftar di tenant/organisasi ini
+        const sameTenantMembers = boardMembers.filter((m) => {
+          const matchComm =
+            resolvedComm &&
+            m.commissariat &&
+            m.commissariat.toLowerCase() === resolvedComm.toLowerCase();
+          const matchTenant =
+            resolvedTenantId && m.tenant_id && m.tenant_id === resolvedTenantId;
+          return matchComm || matchTenant;
+        });
+
+        // Validasi: Cegah duplikasi Ketua utama jika sudah ada Ketua aktif di tenant ini
+        const isKetuaChoice =
+          (posLower.includes("ketua") || posLower.includes("ketum")) &&
+          !posLower.includes("wakil");
+
+        if (isKetuaChoice) {
+          const existingKetua = sameTenantMembers.find(
+            (m) =>
+              m.department === "BPH" &&
+              (m.position.toLowerCase().includes("ketua") ||
+                m.position.toLowerCase().includes("ketum")) &&
+              !m.position.toLowerCase().includes("wakil") &&
+              m.status === "AKTIF"
+          );
+          if (existingKetua) {
+            showError(
+              "Ketua Sudah Terdaftar",
+              `Jabatan ${existingKetua.position} sudah aktif diemban oleh "${existingKetua.name}". Sebuah kepengurusan hanya dapat memiliki satu Ketua utama.`
+            );
+            return;
+          }
+        }
+
+        if (isSekretaris) {
+          const existingSekretaris = sameTenantMembers.filter(
+            (m) =>
+              m.department === "BPH" &&
+              m.position.toLowerCase().includes("sekretaris") &&
+              !m.position.toLowerCase().includes("bidang")
+          );
+          const hasUtama = existingSekretaris.some(
+            (m) => !m.position.toLowerCase().includes("wakil")
+          );
+          if (hasUtama) {
+            const wakilCount = existingSekretaris.filter((m) =>
+              m.position.toLowerCase().includes("wakil")
+            ).length;
+            finalPosition = `Wakil Sekretaris ${wakilCount + 1}`;
+          } else {
+            finalPosition = isCabangLevel ? "Sekretaris Cabang" : "Sekretaris";
+          }
+        } else if (isBendahara) {
+          const existingBendahara = sameTenantMembers.filter(
+            (m) =>
+              m.department === "BPH" &&
+              m.position.toLowerCase().includes("bendahara") &&
+              !m.position.toLowerCase().includes("bidang")
+          );
+          const hasUtama = existingBendahara.some(
+            (m) => !m.position.toLowerCase().includes("wakil")
+          );
+          if (hasUtama) {
+            const wakilCount = existingBendahara.filter((m) =>
+              m.position.toLowerCase().includes("wakil")
+            ).length;
+            finalPosition = `Wakil Bendahara ${wakilCount + 1}`;
+          } else {
+            finalPosition = isCabangLevel ? "Bendahara Cabang" : "Bendahara";
+          }
+        }
+      }
+
+      if (!finalPosition) {
+        finalPosition =
+          formDept === "BPH"
+            ? isCabangLevel
+              ? "Pengurus BPH Cabang"
+              : "Pengurus BPH"
+            : `Anggota Bidang ${formDept}`;
+      }
+
       const newMember: BoardMember = enforceTenantWrite<BoardMember>(
         currentUser,
         {
           id: generateUUID(),
           name: formName.trim(),
           gender: inferredGender,
-          position:
-            formPosition.trim() ||
-            (formDept === "BPH"
-              ? isCabangLevel
-                ? "Pengurus BPH Cabang"
-                : "Pengurus BPH"
-              : `Anggota Bidang ${formDept}`),
+          position: finalPosition,
           department: formDept,
+          biro: formDept !== "BPH" && formBiro ? formBiro : undefined,
           email: matchedCadre?.email || "-",
           phone: matchedCadre?.phone || "-",
           status: formStatus,
@@ -496,13 +925,15 @@ export default function KomisariatPengurusPage() {
           commissariat: resolvedComm,
           tenant_id: resolvedTenantId,
           komisariat_id: resolvedTenantId,
-          avatar: memberAvatar
+          avatar: memberAvatar,
+          anggota_id: matchedCadre?.id || null,
+          program_kerja: prokerToSave
         },
         activeTenant
       );
       const updated = [newMember, ...boardMembers];
       saveBoardMembers(updated);
-      showToast(`Berhasil menambahkan ${formName.trim()} sebagai pengurus!`);
+      showToast(`Berhasil menambahkan ${formName.trim()} sebagai ${finalPosition}!`);
     }
 
     setIsFormModalOpen(false);
@@ -568,14 +999,14 @@ export default function KomisariatPengurusPage() {
       const rows = filteredMembers.map((m, idx) => ({
         "No": idx + 1,
         "Nama Pengurus": m.name || "-",
-        "Sapaan": m.gender || "Sahabat",
+        "Sapaan": getMemberGender(m),
         "Jabatan": m.position || "-",
         "Departemen / Divisi": m.department || "-",
         "Status": m.status || "AKTIF",
         "Periode": m.period || "-",
         "Komisariat / Afiliasi": m.commissariat || "-",
-        "Email": m.email || "-",
-        "No. Telepon": m.phone || "-"
+        "Email": getMemberEmail(m),
+        "No. Telepon": getMemberPhone(m)
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
@@ -640,7 +1071,7 @@ export default function KomisariatPengurusPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500">
           <Link
-            href={isCabangOrAdmin(currentUser) ? "/admin" : "/pengurus"}
+            href="/dashboard"
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
             Dashboard
@@ -664,7 +1095,13 @@ export default function KomisariatPengurusPage() {
           </Button>
 
           <Button
-            onClick={() => handleOpenAddModal()}
+            onClick={() =>
+              handleOpenAddModal(
+                undefined,
+                undefined,
+                !isCabangOrAdmin(currentUser) ? targetStructureTenant : undefined
+              )
+            }
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-8.5 px-3.5 rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors border-none"
           >
             <UserPlus className="w-4 h-4" />
@@ -728,28 +1165,78 @@ export default function KomisariatPengurusPage() {
             <PengurusGrid
               filteredMembers={filteredMembers}
               getMemberAvatar={getMemberAvatar}
+              getMemberGender={getMemberGender}
               onEdit={handleOpenEditModal}
               onDelete={handleOpenDeleteMember}
               canDelete={canDelete}
+              onAddInTenant={(tName) => handleOpenAddModal(undefined, undefined, tName)}
+              divisions={divisions}
+              biros={biros}
+              onOpenAddModal={handleOpenAddModal}
+              onOpenAddDeptModal={handleOpenAddDeptModal}
+              onOpenEditDeptModal={handleOpenEditDeptModal}
+              onDeleteDept={handleOpenDeleteDeptModal}
+              onOpenAddBiroModal={handleOpenAddBiroModal}
+              onOpenEditBiroModal={handleOpenEditBiroModal}
+              onDeleteBiro={handleOpenDeleteBiroModal}
+              isCabang={isCabangOrAdmin(currentUser)}
             />
           </div>
         )}
 
         {/* TAB 2: ORGANIZATIONAL STRUCTURE TREE */}
         {activeTab === "struktur" && (
-          <PengurusStructureTree
-            boardMembers={boardMembers}
-            divisions={divisions}
-            getMemberAvatar={getMemberAvatar}
-            onOpenAddModal={handleOpenAddModal}
-            onOpenEditModal={handleOpenEditModal}
-            onDeleteMember={handleOpenDeleteMember}
-            onOpenAddDeptModal={handleOpenAddDeptModal}
-            onOpenEditDeptModal={handleOpenEditDeptModal}
-            onDeleteDept={handleOpenDeleteDeptModal}
-            isCabangLevel={isCabangLevel}
-            canDelete={canDelete}
-          />
+          <div className="space-y-4">
+            {isCabangOrAdmin(currentUser) && (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                <span className="text-xs font-bold text-zinc-500 shrink-0">Pilih Struktur:</span>
+                {["Pengurus Cabang Grobogan", ...availableKomisariats].map((kName) => {
+                  const isSelected =
+                    (structureTenant || activeCampus).toLowerCase() === kName.toLowerCase();
+                  return (
+                    <button
+                      key={kName}
+                      type="button"
+                      onClick={() => setStructureTenant(kName)}
+                      className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                        isSelected
+                          ? "bg-blue-600 text-white font-semibold shadow-xs"
+                          : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      }`}
+                    >
+                      {kName}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <PengurusStructureTree
+              boardMembers={structureMembers}
+              divisions={divisions}
+              biros={biros}
+              getMemberAvatar={getMemberAvatar}
+              onOpenAddModal={(dDept, dPos, dBiro) =>
+                handleOpenAddModal(
+                  dDept,
+                  dPos,
+                  targetStructureTenant,
+                  dBiro
+                )
+              }
+              onOpenEditModal={handleOpenEditModal}
+              onDeleteMember={handleOpenDeleteMember}
+              onOpenAddDeptModal={handleOpenAddDeptModal}
+              onOpenEditDeptModal={handleOpenEditDeptModal}
+              onDeleteDept={handleOpenDeleteDeptModal}
+              onOpenAddBiroModal={handleOpenAddBiroModal}
+              onOpenEditBiroModal={handleOpenEditBiroModal}
+              onDeleteBiro={handleOpenDeleteBiroModal}
+              isCabangLevel={isStructureCabangLevel}
+              canDelete={canDelete}
+              tenantTitle={targetStructureTenant}
+            />
+          </div>
         )}
       </div>
 
@@ -762,11 +1249,16 @@ export default function KomisariatPengurusPage() {
         setFormName={setFormName}
         formDept={formDept}
         setFormDept={setFormDept}
+        formBiro={formBiro}
+        setFormBiro={setFormBiro}
+        biros={biros}
         formPosition={formPosition}
         setFormPosition={setFormPosition}
         formPeriod={formPeriod}
         formStatus={formStatus}
         setFormStatus={setFormStatus}
+        formProgramKerja={formProgramKerja}
+        setFormProgramKerja={setFormProgramKerja}
         cadres={availableCadres}
         selectedCadreData={selectedCadreData}
         setSelectedCadreData={setSelectedCadreData}
@@ -803,6 +1295,29 @@ export default function KomisariatPengurusPage() {
         memberCountInDept={
           deptToDelete
             ? boardMembers.filter((m) => m.department === deptToDelete).length
+            : 0
+        }
+      />
+
+      {/* MODALS: ADD/EDIT BIRO & DELETE BIRO */}
+      <BiroModal
+        isOpen={isBiroModalOpen}
+        onOpenChange={setIsBiroModalOpen}
+        targetDept={biroModalDept}
+        editingBiro={editingBiro}
+        biroInputName={biroInputName}
+        setBiroInputName={setBiroInputName}
+        onSaveBiro={handleSaveBiro}
+        biroToDelete={biroToDelete}
+        onCloseDeleteBiro={() => setBiroToDelete(null)}
+        onConfirmDeleteBiro={handleConfirmDeleteBiro}
+        memberCountInBiro={
+          biroToDelete
+            ? boardMembers.filter(
+                (m) =>
+                  m.department === biroToDelete.dept &&
+                  m.biro === biroToDelete.biroName
+              ).length
             : 0
         }
       />

@@ -5,7 +5,8 @@ import {
   UserPlus,
   Edit2,
   Trash2,
-  Printer
+  Printer,
+  Network
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,20 +16,50 @@ import { type BoardMember, getInitials } from "./types";
 interface PengurusStructureTreeProps {
   boardMembers: BoardMember[];
   divisions: string[];
+  biros?: Record<string, string[]>;
   getMemberAvatar: (member?: BoardMember | null) => string;
-  onOpenAddModal: (defaultDept?: string, defaultPosition?: string) => void;
+  onOpenAddModal: (
+    defaultDept?: string,
+    defaultPosition?: string,
+    defaultBiro?: string
+  ) => void;
   onOpenEditModal: (member: BoardMember) => void;
   onDeleteMember: (member: BoardMember) => void;
   onOpenAddDeptModal: () => void;
   onOpenEditDeptModal: (dept: string) => void;
   onDeleteDept: (dept: string) => void;
+  onOpenAddBiroModal?: (dept: string) => void;
+  onOpenEditBiroModal?: (dept: string, biroName: string) => void;
+  onDeleteBiro?: (dept: string, biroName: string) => void;
   isCabangLevel?: boolean;
   canDelete?: boolean;
+  tenantTitle?: string;
 }
+
+export const parseProgramKerja = (val?: string | string[]): string[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
+    } catch {
+      return trimmed
+        .split("\n")
+        .map((s) => s.replace(/^[0-9]+[.\-)]\s*/, "").trim())
+        .filter(Boolean);
+    }
+    return [trimmed];
+  }
+  return [];
+};
 
 export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
   boardMembers,
   divisions,
+  biros = {},
   getMemberAvatar,
   onOpenAddModal,
   onOpenEditModal,
@@ -36,8 +67,12 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
   onOpenAddDeptModal,
   onOpenEditDeptModal,
   onDeleteDept,
+  onOpenAddBiroModal,
+  onOpenEditBiroModal,
+  onDeleteBiro,
   isCabangLevel = false,
-  canDelete = true
+  canDelete = true,
+  tenantTitle
 }) => {
   const ketuaTitle = isCabangLevel ? "Ketua Cabang" : "Ketua Komisariat";
   const ketua = boardMembers.find(
@@ -46,50 +81,92 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
       (m.position.toLowerCase().includes("ketua") || m.position.toLowerCase().includes("ketum")) &&
       !m.position.toLowerCase().includes("wakil")
   );
-  const sekretaris = boardMembers.find(
-    (m) => m.position.toLowerCase().includes("sekretaris") && m.department === "BPH"
+  const sekretarisList = boardMembers.filter(
+    (m) => m.department === "BPH" && m.position.toLowerCase().includes("sekretaris")
   );
-  const bendahara = boardMembers.find(
-    (m) => m.position.toLowerCase().includes("bendahara") && m.department === "BPH"
+  sekretarisList.sort((a, b) => {
+    const isWakilA = a.position.toLowerCase().includes("wakil");
+    const isWakilB = b.position.toLowerCase().includes("wakil");
+    if (!isWakilA && isWakilB) return -1;
+    if (isWakilA && !isWakilB) return 1;
+    return a.position.localeCompare(b.position);
+  });
+
+  const bendaharaList = boardMembers.filter(
+    (m) => m.department === "BPH" && m.position.toLowerCase().includes("bendahara")
   );
+  bendaharaList.sort((a, b) => {
+    const isWakilA = a.position.toLowerCase().includes("wakil");
+    const isWakilB = b.position.toLowerCase().includes("wakil");
+    if (!isWakilA && isWakilB) return -1;
+    if (isWakilA && !isWakilB) return 1;
+    return a.position.localeCompare(b.position);
+  });
 
   return (
     <div id="pmii-structure-diagram" className="space-y-4">
+      {/* PRINT-ONLY HEADER */}
+      <div className="hidden print:block text-center pb-4 mb-4 border-b border-zinc-300">
+        <h2 className="text-base font-bold text-zinc-900 uppercase tracking-wide">
+          Bagan Struktur Organisasi {tenantTitle ? tenantTitle : (isCabangLevel ? "Pengurus Cabang Grobogan" : "Komisariat")}
+        </h2>
+        <p className="text-xs text-zinc-600 mt-1">
+          Masa Khidmat {boardMembers[0]?.period || "2026 - 2027"} • Total {boardMembers.length} Fungsionaris Terdaftar
+        </p>
+      </div>
+
       {/* ACTION TOOLBAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl print:hidden">
-        <div>
-          <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-            <GitFork className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            Diagram Struktur Organisasi
-          </h3>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Kelola struktur dan bidang secara langsung: tambah bidang baru, sesuaikan nama, atau tetapkan fungsionaris.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl print:hidden">
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="space-y-0.5 min-w-0">
+            <h3 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <GitFork className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="truncate">{tenantTitle ? `Struktur Organisasi ${tenantTitle}` : "Diagram Struktur Organisasi"}</span>
+            </h3>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Kelola struktur dan bidang secara langsung: tambah bidang baru, sesuaikan nama, atau tetapkan fungsionaris.
+            </p>
+          </div>
+          {/* Mobile-only compact Cetak icon button */}
           <Button
             size="sm"
             variant="outline"
             onClick={() => window.print()}
-            className="h-8 px-3 text-xs border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer flex items-center gap-1.5"
+            className="sm:hidden h-8 w-8 p-0 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 rounded-lg shrink-0 flex items-center justify-center cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            title="Cetak atau Simpan Bagan ke PDF"
+          >
+            <Printer className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+
+        {/* Buttons: 2 equal-width columns on mobile, flex row on desktop */}
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
+          {/* Desktop Cetak / PDF */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => window.print()}
+            className="hidden sm:flex h-8 px-3 text-xs border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer items-center gap-1.5"
             title="Cetak atau Simpan Bagan ke PDF"
           >
             <Printer className="w-3.5 h-3.5 text-zinc-500" />
             <span>Cetak / PDF</span>
           </Button>
+
           <Button
             size="sm"
             variant="outline"
             onClick={onOpenAddDeptModal}
-            className="h-8 px-3 text-xs border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer flex items-center gap-1.5"
+            className="h-8.5 sm:h-8 px-3 text-xs border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer flex items-center justify-center gap-1.5 font-medium"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Tambah Bidang</span>
           </Button>
+
           <Button
             size="sm"
             onClick={() => onOpenAddModal()}
-            className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer flex items-center gap-1.5 shadow-sm"
+            className="h-8.5 sm:h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer flex items-center justify-center gap-1.5 shadow-xs font-medium"
           >
             <UserPlus className="w-3.5 h-3.5" />
             <span>Tambah Pengurus</span>
@@ -167,117 +244,197 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
 
           {/* Sekretaris & Bendahara Mobile */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <Card className="p-3 bg-white dark:bg-zinc-900 border-l-4 border-l-blue-500 border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none">
-              <div className="flex items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {sekretaris && getMemberAvatar(sekretaris) ? (
-                    <img
-                      src={getMemberAvatar(sekretaris)}
-                      alt={sekretaris.name}
-                      className="w-9 h-9 rounded-full object-cover border border-blue-500/30 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[11px] flex items-center justify-center border border-blue-500/20 shrink-0">
-                      {sekretaris ? getInitials(sekretaris.name) : "SK"}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
-                      Sekretaris
-                    </span>
-                    <h5 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                      {sekretaris?.name || "Belum Ditetapkan"}
-                    </h5>
-                  </div>
-                </div>
-                {sekretaris ? (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onOpenEditModal(sekretaris)}
-                      className="h-7 px-1.5 text-xs shrink-0 cursor-pointer"
+            {/* Sekretaris Column */}
+            <div className="space-y-2">
+              {sekretarisList.length > 0 ? (
+                <>
+                  {sekretarisList.map((s) => (
+                    <Card
+                      key={s.id}
+                      className="p-3 bg-white dark:bg-zinc-900 border-l-4 border-l-blue-500 border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none"
                     >
-                      <Edit2 className="w-3 h-3" />
-                    </Button>
-                    {canDelete && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onDeleteMember(sekretaris)}
-                        className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    )}
-                  </div>
-                ) : (
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {getMemberAvatar(s) ? (
+                            <img
+                              src={getMemberAvatar(s)}
+                              alt={s.name}
+                              className="w-9 h-9 rounded-full object-cover border border-blue-500/30 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[11px] flex items-center justify-center border border-blue-500/20 shrink-0">
+                              {getInitials(s.name)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                              {s.position}
+                            </span>
+                            <h5 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                              {s.name}
+                            </h5>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onOpenEditModal(s)}
+                            className="h-7 px-1.5 text-xs shrink-0 cursor-pointer"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onDeleteMember(s)}
+                              className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
                   <Button
                     size="sm"
-                    onClick={() => onOpenAddModal("BPH", "Sekretaris")}
-                    className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer"
+                    variant="outline"
+                    onClick={() =>
+                      onOpenAddModal(
+                        "BPH",
+                        isCabangLevel ? "Sekretaris Cabang" : "Sekretaris"
+                      )
+                    }
+                    className="w-full h-7 text-[11px] text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 cursor-pointer flex items-center justify-center gap-1"
                   >
-                    <Plus className="w-3 h-3 mr-0.5" /> Tetapkan
+                    <Plus className="w-3 h-3" /> Tambah Sekretaris Lainnya
                   </Button>
-                )}
-              </div>
-            </Card>
+                </>
+              ) : (
+                <Card className="p-3 bg-white dark:bg-zinc-900 border-l-4 border-l-blue-500 border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none">
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                        Sekretaris
+                      </span>
+                      <h5 className="text-xs font-medium text-zinc-400">
+                        Belum Ditetapkan
+                      </h5>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        onOpenAddModal(
+                          "BPH",
+                          isCabangLevel ? "Sekretaris Cabang" : "Sekretaris"
+                        )
+                      }
+                      className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3 mr-0.5" /> Tetapkan
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
 
-            <Card className="p-3 bg-white dark:bg-zinc-900 border-l-4 border-l-emerald-500 border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none">
-              <div className="flex items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {bendahara && getMemberAvatar(bendahara) ? (
-                    <img
-                      src={getMemberAvatar(bendahara)}
-                      alt={bendahara.name}
-                      className="w-9 h-9 rounded-full object-cover border border-emerald-500/30 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/20 shrink-0">
-                      {bendahara ? getInitials(bendahara.name) : "BD"}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      Bendahara
-                    </span>
-                    <h5 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                      {bendahara?.name || "Belum Ditetapkan"}
-                    </h5>
-                  </div>
-                </div>
-                {bendahara ? (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onOpenEditModal(bendahara)}
-                      className="h-7 px-1.5 text-xs shrink-0 cursor-pointer"
+            {/* Bendahara Column */}
+            <div className="space-y-2">
+              {bendaharaList.length > 0 ? (
+                <>
+                  {bendaharaList.map((b) => (
+                    <Card
+                      key={b.id}
+                      className="p-3 bg-white dark:bg-zinc-900 border-l-4 border-l-emerald-500 border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none"
                     >
-                      <Edit2 className="w-3 h-3" />
-                    </Button>
-                    {canDelete && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onDeleteMember(bendahara)}
-                        className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    )}
-                  </div>
-                ) : (
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {getMemberAvatar(b) ? (
+                            <img
+                              src={getMemberAvatar(b)}
+                              alt={b.name}
+                              className="w-9 h-9 rounded-full object-cover border border-emerald-500/30 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/20 shrink-0">
+                              {getInitials(b.name)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                              {b.position}
+                            </span>
+                            <h5 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                              {b.name}
+                            </h5>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onOpenEditModal(b)}
+                            className="h-7 px-1.5 text-xs shrink-0 cursor-pointer"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onDeleteMember(b)}
+                              className="h-7 px-1.5 text-xs shrink-0 text-rose-500 hover:text-rose-600 border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
                   <Button
                     size="sm"
-                    onClick={() => onOpenAddModal("BPH", "Bendahara")}
-                    className="h-7 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer"
+                    variant="outline"
+                    onClick={() =>
+                      onOpenAddModal(
+                        "BPH",
+                        isCabangLevel ? "Bendahara Cabang" : "Bendahara"
+                      )
+                    }
+                    className="w-full h-7 text-[11px] text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 cursor-pointer flex items-center justify-center gap-1"
                   >
-                    <Plus className="w-3 h-3 mr-0.5" /> Tetapkan
+                    <Plus className="w-3 h-3" /> Tambah Bendahara Lainnya
                   </Button>
-                )}
-              </div>
-            </Card>
+                </>
+              ) : (
+                <Card className="p-3 bg-white dark:bg-zinc-900 border-l-4 border-l-emerald-500 border-zinc-200 dark:border-zinc-800 rounded-lg shadow-none">
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        Bendahara
+                      </span>
+                      <h5 className="text-xs font-medium text-zinc-400">
+                        Belum Ditetapkan
+                      </h5>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        onOpenAddModal(
+                          "BPH",
+                          isCabangLevel ? "Bendahara Cabang" : "Bendahara"
+                        )
+                      }
+                      className="h-7 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3 mr-0.5" /> Tetapkan
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
 
@@ -301,10 +458,15 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
             const divMembers = boardMembers.filter((m) => m.department === dept);
             const headOfDiv = divMembers.find(
               (m) =>
-                m.position.toLowerCase().includes("kepala") ||
-                m.position.toLowerCase().includes("kabid")
+                (m.position.toLowerCase().includes("kepala") ||
+                  m.position.toLowerCase().includes("kabid")) &&
+                !m.position.toLowerCase().includes("biro")
             );
-            const staffOfDiv = divMembers.filter((m) => m.id !== headOfDiv?.id);
+            // Anggota langsung bidang tanpa biro
+            const directStaffOfDiv = divMembers.filter(
+              (m) => !m.biro && m.id !== headOfDiv?.id
+            );
+            const deptBiros = biros?.[dept] || [];
 
             return (
               <Card
@@ -317,19 +479,21 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                       Bidang {dept}
                     </span>
                     <button
+                      type="button"
                       onClick={() => onOpenEditDeptModal(dept)}
-                      className="text-zinc-400 hover:text-blue-600 cursor-pointer p-0.5"
-                      title="Edit nama bidang"
+                      className="w-6 h-6 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-blue-600 cursor-pointer transition-colors"
+                      title={`Ubah nama bidang ${dept}`}
                     >
-                      <Edit2 className="w-2.5 h-2.5" />
+                      <Edit2 className="w-3 h-3" />
                     </button>
                     {canDelete && (
                       <button
+                        type="button"
                         onClick={() => onDeleteDept(dept)}
-                        className="text-zinc-400 hover:text-rose-600 cursor-pointer p-0.5"
-                        title="Hapus bidang"
+                        className="w-6 h-6 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/60 flex items-center justify-center text-zinc-400 hover:text-rose-600 cursor-pointer transition-colors"
+                        title={`Hapus bidang ${dept}`}
                       >
-                        <Trash2 className="w-2.5 h-2.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     )}
                   </div>
@@ -399,14 +563,14 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                   </div>
                 </div>
 
-                {/* Staff Mobile */}
-                {staffOfDiv.length > 0 && (
+                {/* Direct Staff Mobile (Anggota Inti Bidang) */}
+                {directStaffOfDiv.length > 0 && (
                   <div className="pt-1 text-[11px]">
-                    <span className="text-zinc-400 block mb-1.5">
-                      Anggota Bidang ({staffOfDiv.length}):
+                    <span className="text-zinc-400 block mb-1.5 font-medium">
+                      Anggota Inti Bidang ({directStaffOfDiv.length}):
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {staffOfDiv.map((staff) => {
+                      {directStaffOfDiv.map((staff) => {
                         const staffAvatar = getMemberAvatar(staff);
                         return (
                           <span
@@ -449,6 +613,133 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Sub-Biro Hierarchy (Mobile) */}
+                <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                      Biro Pelaksana ({deptBiros.length})
+                    </span>
+                    {onOpenAddBiroModal && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAddBiroModal(dept)}
+                        className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" /> Tambah Biro
+                      </button>
+                    )}
+                  </div>
+
+                  {deptBiros.length > 0 ? (
+                    <div className="space-y-2">
+                      {deptBiros.map((bName) => {
+                        const biroMembers = divMembers.filter((m) => m.biro === bName);
+                        const kabiro = biroMembers.find(
+                          (m) =>
+                            m.position.toLowerCase().includes("kabiro") ||
+                            m.position.toLowerCase().includes("kepala biro")
+                        );
+                        const staffBiro = biroMembers.filter((m) => m.id !== kabiro?.id);
+
+                        return (
+                          <div
+                            key={bName}
+                            className="p-2.5 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 truncate">
+                                  Biro {bName}
+                                </span>
+                                {onOpenEditBiroModal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenEditBiroModal(dept, bName)}
+                                    className="text-zinc-400 hover:text-indigo-600 p-0.5"
+                                    title="Edit nama biro"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                                {onDeleteBiro && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteBiro(dept, bName)}
+                                    className="text-zinc-400 hover:text-rose-600 p-0.5"
+                                    title="Hapus biro"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => onOpenAddModal(dept, "Anggota Biro", bName)}
+                                className="text-[9.5px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
+                              >
+                                <Plus className="w-2.5 h-2.5" /> Anggota
+                              </button>
+                            </div>
+
+                            {/* Kabiro */}
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-[9.5px] text-zinc-400">Kepala Biro:</span>
+                              {kabiro ? (
+                                <div className="flex items-center gap-1.5 font-medium text-zinc-800 dark:text-zinc-200">
+                                  <span className="truncate">{kabiro.name}</span>
+                                  <button
+                                    onClick={() => onOpenEditModal(kabiro)}
+                                    className="text-indigo-600 text-[10px] hover:underline"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onOpenAddModal(dept, "Kepala Biro (Kabiro)", bName)
+                                  }
+                                  className="text-indigo-600 dark:text-indigo-400 text-[10px] font-medium hover:underline flex items-center gap-0.5"
+                                >
+                                  <Plus className="w-2.5 h-2.5" /> Tetapkan
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Staff Biro */}
+                            {staffBiro.length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1 border-t border-indigo-100/60 dark:border-indigo-900/30">
+                                {staffBiro.map((sb) => (
+                                  <span
+                                    key={sb.id}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/40 text-[9.5px] text-zinc-700 dark:text-zinc-300"
+                                  >
+                                    <span className="truncate max-w-[100px]">{sb.name}</span>
+                                    <span className="text-[8px] text-indigo-500 uppercase">
+                                      ({sb.position.replace(/Biro/gi, "").trim() || "Anggota"})
+                                    </span>
+                                    <button
+                                      onClick={() => onOpenEditModal(sb)}
+                                      className="text-zinc-400 hover:text-indigo-600"
+                                    >
+                                      <Edit2 className="w-2 h-2" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-2 bg-zinc-50 dark:bg-zinc-950/40 rounded border border-dashed border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[10px] text-zinc-400">Belum ada biro di bidang ini</p>
+                    </div>
+                  )}
+                </div>
               </Card>
             );
           })}
@@ -456,7 +747,23 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
       </div>
 
       {/* DESKTOP VIEW: INTERACTIVE TREE DIAGRAM (>= md) */}
-      <div className="hidden md:block bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 overflow-x-auto shadow-none">
+      <div className="hidden md:block bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 sm:p-6 overflow-x-auto shadow-none">
+        {/* Helper bar above canvas */}
+        <div className="flex items-center justify-between pb-3.5 mb-2 border-b border-zinc-100 dark:border-zinc-800 text-[11px] text-zinc-500 dark:text-zinc-400 print:hidden">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] font-semibold bg-zinc-50 dark:bg-zinc-950">
+              {boardMembers.length} Fungsionaris
+            </Badge>
+            <span>•</span>
+            <span>{divisions.length} Bidang Pelaksana</span>
+          </div>
+          {divisions.length >= 3 && (
+            <span className="text-[10.5px] text-zinc-400 flex items-center gap-1">
+              ↔ Geser horizontal untuk melihat bidang lainnya
+            </span>
+          )}
+        </div>
+
         <div className="min-w-[850px] flex flex-col items-center py-6">
           {/* TOP LEVEL: KETUA */}
           <div className="flex flex-col items-center">
@@ -487,6 +794,29 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     <p className="text-[10px] text-zinc-400">
                       {ketua.period} • BPH
                     </p>
+                    {(() => {
+                      const prokers = parseProgramKerja(ketua.program_kerja || ketua.programKerja);
+                      if (prokers.length === 0) return null;
+                      return (
+                        <div className="mt-1.5 w-full text-left space-y-1">
+                          <span className="text-[9px] font-semibold text-zinc-400 block uppercase tracking-wider">
+                            Proker ({prokers.length}):
+                          </span>
+                          <div className="space-y-0.5 max-h-24 overflow-y-auto pr-0.5">
+                            {prokers.map((p, idx) => (
+                              <div
+                                key={idx}
+                                className="text-[9px] text-zinc-700 dark:text-zinc-300 bg-amber-500/5 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 truncate flex items-center gap-1"
+                                title={`Program Kerja: ${p}`}
+                              >
+                                <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
+                                <span className="truncate">{p}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-3">
@@ -540,58 +870,103 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
             <div className="absolute top-0 left-1/4 w-0.5 h-6 bg-zinc-200 dark:bg-zinc-800" />
             <div className="absolute top-0 right-1/4 w-0.5 h-6 bg-zinc-200 dark:bg-zinc-800" />
 
-            {/* Sekretaris Card (Left) */}
-            <div className="flex flex-col items-center w-1/2 pt-6">
-              {sekretaris ? (
-                <div className="p-0.5 bg-blue-500/30 rounded-xl shadow-xs transition-transform hover:-translate-y-0.5 duration-200">
-                  <div className="bg-white dark:bg-zinc-900 px-5 py-3.5 rounded-[10px] text-center w-56 space-y-1.5 flex flex-col items-center">
-                    {getMemberAvatar(sekretaris) ? (
-                      <img
-                        src={getMemberAvatar(sekretaris)}
-                        alt={sekretaris.name}
-                        className="w-11 h-11 rounded-full object-cover border-2 border-blue-500/40 shadow-xs"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center border-2 border-blue-500/20 shadow-xs">
-                        {getInitials(sekretaris.name)}
-                      </div>
-                    )}
+            {/* Sekretaris Cards (Left Wing) */}
+            <div className="flex flex-col items-center w-1/2 pt-6 space-y-3">
+              {sekretarisList.length > 0 ? (
+                <>
+                  {sekretarisList.map((s) => (
+                    <div
+                      key={s.id}
+                      className="p-0.5 bg-blue-500/30 rounded-xl shadow-xs transition-transform hover:-translate-y-0.5 duration-200"
+                    >
+                      <div className="bg-white dark:bg-zinc-900 px-5 py-3.5 rounded-[10px] text-center w-56 space-y-1.5 flex flex-col items-center">
+                        {getMemberAvatar(s) ? (
+                          <img
+                            src={getMemberAvatar(s)}
+                            alt={s.name}
+                            className="w-11 h-11 rounded-full object-cover border-2 border-blue-500/40 shadow-xs"
+                          />
+                        ) : (
+                          <div className="w-11 h-11 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center border-2 border-blue-500/20 shadow-xs">
+                            {getInitials(s.name)}
+                          </div>
+                        )}
 
-                    <Badge className="bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/60 text-[9px] font-semibold uppercase py-0.5 px-2 mx-auto w-fit">
-                      Sekretaris
-                    </Badge>
-                    <div className="w-full">
-                      <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                        {sekretaris.name}
-                      </h4>
-                      <p className="text-[10px] text-zinc-400">
-                        {sekretaris.period}
-                      </p>
-                    </div>
+                        <Badge className="bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/60 text-[9px] font-semibold uppercase py-0.5 px-2 mx-auto w-fit">
+                          {s.position}
+                        </Badge>
+                        <div className="w-full">
+                          <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                            {s.name}
+                          </h4>
+                          <p className="text-[10px] text-zinc-400">
+                            {s.period}
+                          </p>
+                          {(() => {
+                            const prokers = parseProgramKerja(s.program_kerja || s.programKerja);
+                            if (prokers.length === 0) return null;
+                            return (
+                              <div className="mt-1.5 w-full text-left space-y-1">
+                                <span className="text-[9px] font-semibold text-zinc-400 block uppercase tracking-wider">
+                                  Proker ({prokers.length}):
+                                </span>
+                                <div className="space-y-0.5 max-h-24 overflow-y-auto pr-0.5">
+                                  {prokers.map((p, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="text-[9px] text-zinc-700 dark:text-zinc-300 bg-blue-500/5 dark:bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 truncate flex items-center gap-1"
+                                      title={`Program Kerja: ${p}`}
+                                    >
+                                      <span className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />
+                                      <span className="truncate">{p}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
 
-                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-3">
-                      <button
-                        onClick={() => onOpenEditModal(sekretaris)}
-                        className="text-[10px] font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 cursor-pointer flex items-center gap-1"
-                      >
-                        <Edit2 className="w-3 h-3" /> Edit
-                      </button>
-                      {canDelete && (
-                        <>
-                          <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
-                            •
-                          </span>
+                        <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-3">
                           <button
-                            onClick={() => onDeleteMember(sekretaris)}
-                            className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                            onClick={() => onOpenEditModal(s)}
+                            className="text-[10px] font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 cursor-pointer flex items-center gap-1"
                           >
-                            <Trash2 className="w-3 h-3" /> Hapus
+                            <Edit2 className="w-3 h-3" /> Edit
                           </button>
-                        </>
-                      )}
+                          {canDelete && (
+                            <>
+                              <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
+                                •
+                              </span>
+                              <button
+                                onClick={() => onDeleteMember(s)}
+                                className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> Hapus
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  ))}
+
+                  {/* Button to add another secretary */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenAddModal(
+                        "BPH",
+                        isCabangLevel ? "Sekretaris Cabang" : "Sekretaris"
+                      )
+                    }
+                    className="w-56 h-7 text-[10px] border-dashed border-blue-300 hover:border-blue-500 dark:border-blue-900/60 dark:hover:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Tambah Sekretaris Lainnya
+                  </Button>
+                </>
               ) : (
                 <button
                   onClick={() => onOpenAddModal("BPH", "Sekretaris")}
@@ -610,58 +985,103 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
               )}
             </div>
 
-            {/* Bendahara Card (Right) */}
-            <div className="flex flex-col items-center w-1/2 pt-6">
-              {bendahara ? (
-                <div className="p-0.5 bg-emerald-500/30 rounded-xl shadow-xs transition-transform hover:-translate-y-0.5 duration-200">
-                  <div className="bg-white dark:bg-zinc-900 px-5 py-3.5 rounded-[10px] text-center w-56 space-y-1.5 flex flex-col items-center">
-                    {getMemberAvatar(bendahara) ? (
-                      <img
-                        src={getMemberAvatar(bendahara)}
-                        alt={bendahara.name}
-                        className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500/40 shadow-xs"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center border-2 border-emerald-500/20 shadow-xs">
-                        {getInitials(bendahara.name)}
-                      </div>
-                    )}
+            {/* Bendahara Cards (Right Wing) */}
+            <div className="flex flex-col items-center w-1/2 pt-6 space-y-3">
+              {bendaharaList.length > 0 ? (
+                <>
+                  {bendaharaList.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-0.5 bg-emerald-500/30 rounded-xl shadow-xs transition-transform hover:-translate-y-0.5 duration-200"
+                    >
+                      <div className="bg-white dark:bg-zinc-900 px-5 py-3.5 rounded-[10px] text-center w-56 space-y-1.5 flex flex-col items-center">
+                        {getMemberAvatar(b) ? (
+                          <img
+                            src={getMemberAvatar(b)}
+                            alt={b.name}
+                            className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500/40 shadow-xs"
+                          />
+                        ) : (
+                          <div className="w-11 h-11 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center border-2 border-emerald-500/20 shadow-xs">
+                            {getInitials(b.name)}
+                          </div>
+                        )}
 
-                    <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/60 text-[9px] font-semibold uppercase py-0.5 px-2 mx-auto w-fit">
-                      Bendahara
-                    </Badge>
-                    <div className="w-full">
-                      <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                        {bendahara.name}
-                      </h4>
-                      <p className="text-[10px] text-zinc-400">
-                        {bendahara.period}
-                      </p>
-                    </div>
+                        <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/60 text-[9px] font-semibold uppercase py-0.5 px-2 mx-auto w-fit">
+                          {b.position}
+                        </Badge>
+                        <div className="w-full">
+                          <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                            {b.name}
+                          </h4>
+                          <p className="text-[10px] text-zinc-400">
+                            {b.period}
+                          </p>
+                          {(() => {
+                            const prokers = parseProgramKerja(b.program_kerja || b.programKerja);
+                            if (prokers.length === 0) return null;
+                            return (
+                              <div className="mt-1.5 w-full text-left space-y-1">
+                                <span className="text-[9px] font-semibold text-zinc-400 block uppercase tracking-wider">
+                                  Proker ({prokers.length}):
+                                </span>
+                                <div className="space-y-0.5 max-h-24 overflow-y-auto pr-0.5">
+                                  {prokers.map((p, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="text-[9px] text-zinc-700 dark:text-zinc-300 bg-emerald-500/5 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 truncate flex items-center gap-1"
+                                      title={`Program Kerja: ${p}`}
+                                    >
+                                      <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+                                      <span className="truncate">{p}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
 
-                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-3">
-                      <button
-                        onClick={() => onOpenEditModal(bendahara)}
-                        className="text-[10px] font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 cursor-pointer flex items-center gap-1"
-                      >
-                        <Edit2 className="w-3 h-3" /> Edit
-                      </button>
-                      {canDelete && (
-                        <>
-                          <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
-                            •
-                          </span>
+                        <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-3">
                           <button
-                            onClick={() => onDeleteMember(bendahara)}
-                            className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                            onClick={() => onOpenEditModal(b)}
+                            className="text-[10px] font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 cursor-pointer flex items-center gap-1"
                           >
-                            <Trash2 className="w-3 h-3" /> Hapus
+                            <Edit2 className="w-3 h-3" /> Edit
                           </button>
-                        </>
-                      )}
+                          {canDelete && (
+                            <>
+                              <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">
+                                •
+                              </span>
+                              <button
+                                onClick={() => onDeleteMember(b)}
+                                className="text-[10px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> Hapus
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  ))}
+
+                  {/* Button to add another treasurer */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenAddModal(
+                        "BPH",
+                        isCabangLevel ? "Bendahara Cabang" : "Bendahara"
+                      )
+                    }
+                    className="w-56 h-7 text-[10px] border-dashed border-emerald-300 hover:border-emerald-500 dark:border-emerald-900/60 dark:hover:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Tambah Bendahara Lainnya
+                  </Button>
+                </>
               ) : (
                 <button
                   onClick={() => onOpenAddModal("BPH", "Bendahara")}
@@ -695,17 +1115,20 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                 );
                 const headOfDiv = divisionMembers.find(
                   (m) =>
-                    m.position.toLowerCase().includes("kepala") ||
-                    m.position.toLowerCase().includes("kabid")
+                    (m.position.toLowerCase().includes("kepala") ||
+                      m.position.toLowerCase().includes("kabid")) &&
+                    !m.position.toLowerCase().includes("biro")
                 );
-                const staffOfDiv = divisionMembers.filter(
-                  (m) => m.id !== headOfDiv?.id
+                // Anggota langsung bidang tanpa biro
+                const directStaffOfDiv = divisionMembers.filter(
+                  (m) => !m.biro && m.id !== headOfDiv?.id
                 );
+                const deptBiros = biros?.[dept] || [];
 
                 return (
                   <div
                     key={dept}
-                    className="w-60 min-w-[240px] max-w-[280px] flex flex-col items-center relative"
+                    className="w-72 min-w-[270px] max-w-[320px] flex flex-col items-center relative"
                   >
                     <div className="absolute -top-6 w-0.5 h-6 bg-zinc-200 dark:bg-zinc-800" />
 
@@ -718,21 +1141,23 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                           >
                             Bidang {dept}
                           </span>
-                          <div className="flex items-center shrink-0">
+                          <div className="flex items-center gap-0.5 shrink-0">
                             <button
+                              type="button"
                               onClick={() => onOpenEditDeptModal(dept)}
-                              className="w-5 h-5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
-                              title="Ubah nama bidang"
+                              className="w-6 h-6 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
+                              title={`Ubah nama bidang ${dept}`}
                             >
-                              <Edit2 className="w-2.5 h-2.5" />
+                              <Edit2 className="w-3 h-3" />
                             </button>
                             {canDelete && (
                               <button
+                                type="button"
                                 onClick={() => onDeleteDept(dept)}
-                                className="w-5 h-5 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
-                                title="Hapus bidang"
+                                className="w-6 h-6 rounded-md hover:bg-rose-100 dark:hover:bg-rose-950/60 flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
+                                title={`Hapus bidang ${dept}`}
                               >
-                                <Trash2 className="w-2.5 h-2.5" />
+                                <Trash2 className="w-3 h-3" />
                               </button>
                             )}
                           </div>
@@ -769,6 +1194,24 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                               <h5 className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 truncate">
                                 {headOfDiv.name}
                               </h5>
+                              {(() => {
+                                const prokers = parseProgramKerja(headOfDiv.program_kerja || headOfDiv.programKerja);
+                                if (prokers.length === 0) return null;
+                                return (
+                                  <div className="mt-1 w-full text-left space-y-0.5">
+                                    {prokers.map((p, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="text-[8.5px] text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/60 px-1 py-0.5 rounded border border-zinc-200/50 dark:border-zinc-700/50 truncate flex items-center gap-1"
+                                        title={`Program Kerja: ${p}`}
+                                      >
+                                        <span className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />
+                                        <span className="truncate">{p}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-2">
                               <button
@@ -800,29 +1243,29 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                             className="w-full bg-zinc-50 hover:bg-blue-50/50 dark:bg-zinc-950 dark:hover:bg-blue-950/20 border border-dashed border-zinc-300 hover:border-blue-400 dark:border-zinc-800 dark:hover:border-blue-700 rounded-lg p-3 text-center text-xs font-semibold text-zinc-500 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            <span>+ Tetapkan Kabid</span>
+                            <span>Tetapkan Kabid</span>
                           </button>
                         )}
                       </div>
 
-                      {/* Staff Members List */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between px-1">
-                          <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block text-left">
-                            Anggota ({staffOfDiv.length})
-                          </span>
-                          <button
-                            onClick={() =>
-                              onOpenAddModal(dept, "Anggota Bidang")
-                            }
-                            className="text-[9px] font-medium text-blue-600 hover:underline cursor-pointer"
-                          >
-                            + Tambah
-                          </button>
-                        </div>
-                        {staffOfDiv.length > 0 ? (
-                          <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
-                            {staffOfDiv.map((staff) => {
+                      {/* Direct Staff Members List (Anggota Inti Bidang) */}
+                      {directStaffOfDiv.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between px-1">
+                            <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block text-left">
+                              Anggota Inti ({directStaffOfDiv.length})
+                            </span>
+                            <button
+                              onClick={() =>
+                                onOpenAddModal(dept, "Anggota Bidang")
+                              }
+                              className="text-[9px] font-medium text-blue-600 hover:underline cursor-pointer"
+                            >
+                              + Tambah
+                            </button>
+                          </div>
+                          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                            {directStaffOfDiv.map((staff) => {
                               const staffAvatar = getMemberAvatar(staff);
                               return (
                                 <div
@@ -874,16 +1317,197 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                               );
                             })}
                           </div>
+                        </div>
+                      )}
+
+                      {/* BIRO SECTION: Sub-divisi di bawah Bidang */}
+                      <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2 text-left">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                            <span>Biro Pelaksana</span>
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold">
+                              {deptBiros.length}
+                            </span>
+                          </span>
+                          {onOpenAddBiroModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenAddBiroModal(dept)}
+                              className="text-[9.5px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                              title={`Tambah Biro di Bidang ${dept}`}
+                            >
+                              <Plus className="w-3 h-3" /> Tambah Biro
+                            </button>
+                          )}
+                        </div>
+
+                        {deptBiros.length > 0 ? (
+                          <div className="space-y-2.5">
+                            {deptBiros.map((bName) => {
+                              const biroMembers = divisionMembers.filter((m) => m.biro === bName);
+                              const kabiro = biroMembers.find(
+                                (m) =>
+                                  m.position.toLowerCase().includes("kabiro") ||
+                                  m.position.toLowerCase().includes("kepala biro")
+                              );
+                              const staffBiro = biroMembers.filter((m) => m.id !== kabiro?.id);
+
+                              return (
+                                <div
+                                  key={bName}
+                                  className="bg-indigo-50/30 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 rounded-lg p-2.5 space-y-2"
+                                >
+                                  {/* Biro Header */}
+                                  <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-indigo-100 dark:border-indigo-900/40">
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span
+                                        className="text-[10.5px] font-bold text-indigo-900 dark:text-indigo-200 truncate"
+                                        title={`Biro ${bName}`}
+                                      >
+                                        Biro {bName}
+                                      </span>
+                                      {onOpenEditBiroModal && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onOpenEditBiroModal(dept, bName)}
+                                          className="text-zinc-400 hover:text-indigo-600 p-0.5"
+                                          title="Edit nama biro"
+                                        >
+                                          <Edit2 className="w-2.5 h-2.5" />
+                                        </button>
+                                      )}
+                                      {onDeleteBiro && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onDeleteBiro(dept, bName)}
+                                          className="text-zinc-400 hover:text-rose-600 p-0.5"
+                                          title="Hapus biro"
+                                        >
+                                          <Trash2 className="w-2.5 h-2.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenAddModal(dept, "Anggota Biro", bName)}
+                                      className="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 shrink-0"
+                                    >
+                                      <Plus className="w-2.5 h-2.5" /> Anggota
+                                    </button>
+                                  </div>
+
+                                  {/* Kabiro Card */}
+                                  <div>
+                                    {kabiro ? (
+                                      <div className="bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/40 rounded p-1.5 flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                          {getMemberAvatar(kabiro) ? (
+                                            <img
+                                              src={getMemberAvatar(kabiro)}
+                                              alt={kabiro.name}
+                                              className="w-5 h-5 rounded-full object-cover shrink-0"
+                                            />
+                                          ) : (
+                                            <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[8px] font-bold flex items-center justify-center shrink-0">
+                                              {getInitials(kabiro.name)[0]}
+                                            </div>
+                                          )}
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-[10px] font-bold text-zinc-800 dark:text-zinc-200 truncate">
+                                              {kabiro.name.replace(/Sahabat|Sahabati/g, "").trim()}
+                                            </p>
+                                            <span className="text-[8px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase block">
+                                              Kabiro
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => onOpenEditModal(kabiro)}
+                                            className="text-zinc-400 hover:text-indigo-600"
+                                            title="Edit Kabiro"
+                                          >
+                                            <Edit2 className="w-2.5 h-2.5" />
+                                          </button>
+                                          {canDelete && (
+                                            <button
+                                              onClick={() => onDeleteMember(kabiro)}
+                                              className="text-zinc-400 hover:text-rose-600"
+                                              title="Hapus Kabiro"
+                                            >
+                                              <Trash2 className="w-2.5 h-2.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          onOpenAddModal(dept, "Kepala Biro (Kabiro)", bName)
+                                        }
+                                        className="w-full bg-white/80 dark:bg-zinc-900/80 hover:bg-indigo-50/80 border border-dashed border-indigo-200 dark:border-indigo-900/60 rounded p-1.5 text-center text-[9.5px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                      >
+                                        <Plus className="w-2.5 h-2.5" /> Tetapkan Kabiro
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {/* Staff Biro list */}
+                                  {staffBiro.length > 0 && (
+                                    <div className="space-y-1 pt-1 max-h-36 overflow-y-auto">
+                                      {staffBiro.map((sb) => (
+                                        <div
+                                          key={sb.id}
+                                          className="bg-white/90 dark:bg-zinc-900/90 border border-zinc-200/50 dark:border-zinc-800/50 rounded px-1.5 py-1 flex items-center justify-between text-left group/sb gap-1"
+                                        >
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-[9.5px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                                              {sb.name.replace(/Sahabat|Sahabati/g, "").trim()}
+                                            </p>
+                                            <p className="text-[8px] text-zinc-400 uppercase truncate">
+                                              {sb.position}
+                                            </p>
+                                          </div>
+                                          <div className="flex items-center gap-1 opacity-0 group-hover/sb:opacity-100 transition-opacity">
+                                            <button
+                                              onClick={() => onOpenEditModal(sb)}
+                                              className="text-zinc-400 hover:text-indigo-600"
+                                              title="Edit"
+                                            >
+                                              <Edit2 className="w-2.5 h-2.5" />
+                                            </button>
+                                            {canDelete && (
+                                              <button
+                                                onClick={() => onDeleteMember(sb)}
+                                                className="text-zinc-400 hover:text-rose-600"
+                                                title="Hapus"
+                                              >
+                                                <Trash2 className="w-2.5 h-2.5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         ) : (
-                          <button
-                            onClick={() =>
-                              onOpenAddModal(dept, "Anggota Bidang")
-                            }
-                            className="w-full bg-zinc-50/50 hover:bg-blue-50/50 dark:bg-zinc-950/30 dark:hover:bg-blue-950/20 border border-dashed border-zinc-200 hover:border-blue-300 dark:border-zinc-800 dark:hover:border-blue-800 rounded-lg p-2.5 text-center text-[10px] text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Tambah Anggota Bidang</span>
-                          </button>
+                          <div className="text-center py-2.5 bg-zinc-50 dark:bg-zinc-950/30 rounded border border-dashed border-zinc-200 dark:border-zinc-800">
+                            <p className="text-[9.5px] text-zinc-400">Belum ada biro di bidang ini</p>
+                            {onOpenAddBiroModal && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenAddBiroModal(dept)}
+                                className="mt-1 text-[9.5px] text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                              >
+                                + Buat Biro Baru
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

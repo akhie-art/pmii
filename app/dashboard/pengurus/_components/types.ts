@@ -3,15 +3,19 @@ export interface BoardMember {
   name: string;
   position: string;
   department: string;
-  gender: "Sahabat" | "Sahabati";
-  email: string;
-  phone: string;
+  biro?: string;
+  gender?: "Sahabat" | "Sahabati";
+  email?: string;
+  phone?: string;
   status: "AKTIF" | "DEMISIONER";
   period: string;
   commissariat?: string;
   avatar?: string;
+  anggota_id?: string | null;
   tenant_id?: string | null;
   komisariat_id?: string | null;
+  program_kerja?: string | string[];
+  programKerja?: string | string[];
 }
 
 export const DEFAULT_DIVISIONS = [
@@ -20,6 +24,13 @@ export const DEFAULT_DIVISIONS = [
   "Advokasi & Humas",
   "Minat, Bakat & Seni"
 ];
+
+export const DEFAULT_BIROS: Record<string, string[]> = {
+  "Kaderisasi": ["Pelatihan & Kaderisasi Formal", "Litbang & Database Kader"],
+  "Keagamaan & Dakwah": ["Kajian & Dakwah", "Sosial & Kemasyarakatan"],
+  "Advokasi & Humas": ["Advokasi Kebijakan", "Media & Hubungan Eksternal"],
+  "Minat, Bakat & Seni": ["Olahraga & Kebugaran", "Seni & Kreativitas"]
+};
 
 export const getInitials = (name: string): string => {
   return (

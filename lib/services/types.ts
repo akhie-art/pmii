@@ -247,16 +247,20 @@ export interface BoardMember {
   email?: string;
   commissariat?: string;
   rayon?: string;
-  role?: string;
+  role?: string; // @deprecated - Gunakan tabel roles/anggota.role_id
   position?: string;
   department?: string;
+  biro?: string;
   gender?: string;
   status?: string;
   avatar?: string;
+  anggota_id?: string | null;
   order?: number;
-  user_id?: string;
+  user_id?: string; // @deprecated - Gunakan anggota_id (relasi ke tabel anggota)
   komisariat_id?: string | null;
   tenant_id?: string | null;
+  program_kerja?: string | string[];
+  programKerja?: string | string[];
 }
 
 export interface KomisariatRayon {
