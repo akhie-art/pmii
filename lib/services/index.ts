@@ -32,9 +32,23 @@ import {
 import { getRoles, getRoleByCode, getRoleById, upsertRole, deleteRole, DEFAULT_ROLES } from "./roles";
 import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow } from "./core";
 import { getPengajuanSK, savePengajuanSK, deletePengajuanSK } from "./pengajuan-sk";
+import {
+  getGalleryItems,
+  getGalleryByTenant,
+  saveGalleryItems,
+  upsertGalleryItem,
+  deleteGalleryItem
+} from "./gallery";
 
 // Unified db facade for 100% backward compatibility
 export const db = {
+  // Galeri / Gallery Dokumentasi Kegiatan
+  getGalleryItems,
+  getGalleryByTenant,
+  saveGalleryItems,
+  upsertGalleryItem,
+  deleteGalleryItem,
+
   // Cadres / Anggota
   getCadres,
   saveCadres,
@@ -170,9 +184,15 @@ export {
   DEFAULT_ROLES,
   getPengajuanSK,
   savePengajuanSK,
-  deletePengajuanSK
+  deletePengajuanSK,
+  getGalleryItems,
+  getGalleryByTenant,
+  saveGalleryItems,
+  upsertGalleryItem,
+  deleteGalleryItem
 };
 
 export { generateUUID, isValidUUID } from "../utils";
 export * from "./certificatePdf";
 export * from "./pengajuan-sk";
+export * from "./gallery";

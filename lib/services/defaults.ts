@@ -11,7 +11,8 @@ import {
   Article,
   CertificateLayoutConfig,
   SuratTemplate,
-  PengajuanSK
+  PengajuanSK,
+  GalleryItem
 } from "./types";
 
 // LocalStorage Keys
@@ -32,7 +33,32 @@ export const KEYS = {
   SURAT: "PMII_SURAT_DATA",
   SURAT_TEMPLATES: "PMII_SURAT_TEMPLATES",
   PENGAJUAN_SK: "PMII_PENGAJUAN_SK",
+  GALLERY: "PMII_GALLERY_DATA",
 };
+
+export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
+  {
+    id: "gal-1",
+    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
+    imageUrl: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=800&q=80",
+    image_url: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=800&q=80",
+    created_at: "2026-10-12T08:00:00.000Z"
+  },
+  {
+    id: "gal-2",
+    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
+    imageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
+    image_url: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
+    created_at: "2026-10-18T08:00:00.000Z"
+  },
+  {
+    id: "gal-3",
+    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
+    imageUrl: "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=800&q=80",
+    image_url: "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=800&q=80",
+    created_at: "2026-10-25T08:00:00.000Z"
+  }
+];
 
 export const DEFAULT_PENGAJUAN_SK: PengajuanSK[] = [
   {
@@ -100,7 +126,21 @@ export const DEFAULT_COMMISSARIATS: CommissariatList[] = [
     logo: "https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/komisariat/komisariat-ki-ageng-getas-pendawa-1791910240206.png",
     rayons: [],
     level: "KOMISARIAT",
-    type: "KOMISARIAT"
+    type: "KOMISARIAT",
+    gallery: [
+      {
+        id: "gal-1",
+        imageUrl: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=800&q=80"
+      },
+      {
+        id: "gal-2",
+        imageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80"
+      },
+      {
+        id: "gal-3",
+        imageUrl: "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=800&q=80"
+      }
+    ]
   },
   {
     id: "2342112a-7413-4151-9998-3a13e833902f",
@@ -178,6 +218,7 @@ export const DEFAULT_USERS: UserAccount[] = [
       "/admin/pengajuan-sk",
       "/admin/arsip",
       "/admin/artikel",
+      "/admin/galeri",
       "/admin/penilaian",
       "/admin/rekap-nilai",
       "/admin/verifikasi",

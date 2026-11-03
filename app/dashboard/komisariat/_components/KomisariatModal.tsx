@@ -21,10 +21,14 @@ import {
   Mail,
   UserCheck,
   Loader2,
+  Image as ImageIcon,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { CommissariatList, KomisariatFormData, DEFAULT_FORM_DATA, getKomisariatBph } from "./types";
+import { CommissariatList, KomisariatFormData, DEFAULT_FORM_DATA, getKomisariatBph, KomisariatGalleryItem } from "./types";
 import { normalizeTenantName } from "@/lib/tenancy";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { generateUUID } from "@/lib/db";
 
 interface KomisariatModalProps {
   open: boolean;
@@ -33,6 +37,7 @@ interface KomisariatModalProps {
   onSave: (data: KomisariatFormData) => Promise<void>;
   boardMembers?: any[];
   isTenantView?: boolean;
+  defaultTab?: "umum" | "bph" | "galeri";
 }
 
 export function KomisariatModal({
@@ -42,13 +47,31 @@ export function KomisariatModal({
   onSave,
   boardMembers = [],
   isTenantView = false,
+  defaultTab = "umum",
 }: KomisariatModalProps) {
   const [formData, setFormData] = useState<KomisariatFormData>(DEFAULT_FORM_DATA);
-  const [activeTab, setActiveTab] = useState<"umum" | "bph">("umum");
+  const [activeTab, setActiveTab] = useState<"umum" | "bph" | "galeri">("umum");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Gallery item form state
+  const [newPhoto, setNewPhoto] = useState<{
+    title: string;
+    imageUrl: string;
+    category: string;
+    date: string;
+    caption: string;
+  }>({
+    title: "",
+    imageUrl: "",
+    category: "Kaderisasi",
+    date: new Date().toISOString().split("T")[0],
+    caption: "",
+  });
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editingItem) {
@@ -71,13 +94,97 @@ export function KomisariatModal({
           treasurer_id: editingItem.structure?.treasurer_id || null,
           period: editingItem.structure?.period || (detectedBph.period ? detectedBph.period : "2026 - 2027"),
         },
+        gallery: editingItem.gallery || [],
       });
     } else {
       setFormData(DEFAULT_FORM_DATA);
     }
-    setActiveTab("umum");
+    setActiveTab(defaultTab || "umum");
     setErrorMsg("");
-  }, [editingItem, open]);
+  }, [editingItem, open, defaultTab]);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg("Ukuran foto maksimal 10MB.");
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    setErrorMsg("");
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const cleanName = (formData.name || "komisariat").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const filePath = `gallery/${cleanName}-${Date.now()}.${fileExt}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from("materials")
+          .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+        if (!uploadErr) {
+          const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+          setNewPhoto((prev) => ({ ...prev, imageUrl: data.publicUrl }));
+          setIsUploadingPhoto(false);
+          return;
+        }
+      }
+
+      // Fallback base64
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setNewPhoto((prev) => ({ ...prev, imageUrl: ev.target?.result as string }));
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Gagal mengunggah foto galeri:", err);
+      setErrorMsg("Gagal mengunggah foto.");
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleAddPhotoToGallery = () => {
+    if (!newPhoto.imageUrl) {
+      setErrorMsg("Pilih atau unggah file foto terlebih dahulu.");
+      return;
+    }
+
+    const newItem: KomisariatGalleryItem = {
+      id: generateUUID(),
+      title: "Dokumentasi Kegiatan",
+      imageUrl: newPhoto.imageUrl,
+      category: "Dokumentasi",
+      date: new Date().toISOString().split("T")[0],
+      caption: "",
+      created_at: new Date().toISOString(),
+    };
+
+    setFormData((prev) => ({
+      ...prev,
+      gallery: [newItem, ...(prev.gallery || [])],
+    }));
+
+    setNewPhoto({
+      title: "",
+      imageUrl: "",
+      category: "Dokumentasi",
+      date: new Date().toISOString().split("T")[0],
+      caption: "",
+    });
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    setErrorMsg("");
+  };
+
+  const handleDeletePhotoFromGallery = (photoId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      gallery: (prev.gallery || []).filter((p) => p.id !== photoId),
+    }));
+  };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -221,7 +328,7 @@ export function KomisariatModal({
               </div>
             </div>
 
-            {/* Navigation Tabs (Hanya 2 Tab: Umum & BPH) */}
+            {/* Navigation Tabs (Umum, BPH, & Galeri) */}
             <div className="flex items-center gap-1.5 mt-4 pt-1 border-t border-zinc-100 dark:border-zinc-800">
               <button
                 type="button"
@@ -246,6 +353,18 @@ export function KomisariatModal({
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Struktur BPH
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("galeri")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === "galeri"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Galeri Foto ({formData.gallery?.length || 0})</span>
               </button>
             </div>
           </DialogHeader>
@@ -519,6 +638,140 @@ export function KomisariatModal({
                       </p>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: GALERI DOKUMENTASI KEGIATAN */}
+            {activeTab === "galeri" && (
+              <div className="space-y-6">
+                {/* Form Tambah Foto */}
+                <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Tambah Foto Dokumentasi Kegiatan</span>
+                    </h4>
+                    <span className="text-[10px] text-zinc-500">Maks. 10MB per foto</span>
+                  </div>
+
+                  {/* Upload Foto Box */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                      File Foto Dokumentasi <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {newPhoto.imageUrl ? (
+                        <div className="relative w-16 h-12 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 shrink-0">
+                          <img src={newPhoto.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setNewPhoto({ ...newPhoto, imageUrl: "" })}
+                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px]"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <input
+                        type="file"
+                        ref={photoInputRef}
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                        className="hidden"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => photoInputRef.current?.click()}
+                        disabled={isUploadingPhoto}
+                        className="h-8 text-xs gap-1.5 cursor-pointer"
+                      >
+                        {isUploadingPhoto ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Mengunggah...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Pilih File Foto</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddPhotoToGallery}
+                      className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambahkan ke Galeri</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* List Foto Tersimpan */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                      Foto Tersimpan ({formData.gallery?.length || 0})
+                    </h5>
+                    <span className="text-[10px] text-zinc-400">
+                      Foto ini otomatis tampil di Landing Page Publik Komisariat
+                    </span>
+                  </div>
+
+                  {formData.gallery && formData.gallery.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {formData.gallery.map((photo) => (
+                        <div
+                          key={photo.id}
+                          className="group relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs"
+                        >
+                          <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                            <img
+                              src={photo.imageUrl}
+                              alt={photo.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <span className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-[9px] font-semibold text-white px-1.5 py-0.5 rounded">
+                              {photo.category || "Dokumentasi"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePhotoFromGallery(photo.id)}
+                              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-rose-600 text-white flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
+                              title="Hapus foto dari galeri"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="p-2">
+                            <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate">
+                              {photo.title}
+                            </p>
+                            {photo.date && (
+                              <p className="text-[9.5px] text-zinc-400 mt-0.5">
+                                {photo.date}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-400">
+                      Belum ada foto dokumentasi di galeri komisariat ini. Gunakan formulir di atas untuk menambahkan momen kegiatan.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

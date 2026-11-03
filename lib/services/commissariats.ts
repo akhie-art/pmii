@@ -1,11 +1,16 @@
 import { CommissariatList } from "./types";
 import { KEYS, DEFAULT_COMMISSARIATS } from "./defaults";
 import { getTableData, saveTableData, deleteTableRow, upsertTableRow } from "./core";
+import { getGalleryItems } from "./gallery";
 
 export async function getCommissariats(
   defaultData: CommissariatList[] = DEFAULT_COMMISSARIATS
 ): Promise<CommissariatList[]> {
-  const data = await getTableData<CommissariatList>("komisariat", KEYS.COMMISSARIATS, defaultData);
+  const [data, galleryItems] = await Promise.all([
+    getTableData<CommissariatList>("komisariat", KEYS.COMMISSARIATS, defaultData),
+    getGalleryItems().catch(() => [])
+  ]);
+
   return data.map((c) => {
     const uni = c.university || (c as any).campusName || "";
     const name = c.name || "";
@@ -20,12 +25,17 @@ export async function getCommissariats(
         .toUpperCase() ||
       "PK";
 
+    const commGalleries = galleryItems.filter(
+      (g) => g.tenant_id === c.id || (g as any).commissariatId === c.id
+    );
+
     return {
       ...c,
       university: uni,
       campusName: uni,
       logoInitial: autoInitial,
       establishedYear: c.establishedYear || undefined,
+      gallery: commGalleries.length > 0 ? commGalleries : (c.gallery || []),
     };
   });
 }

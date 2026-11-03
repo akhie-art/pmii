@@ -7,6 +7,7 @@ import {
   Edit2,
   Trash2,
   Building2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,7 @@ interface KomisariatTableProps {
   komisariats: CommissariatList[];
   getMemberCount: (name: string) => number;
   getBph?: (k: CommissariatList) => KomisariatBphData;
-  onEdit: (k: CommissariatList) => void;
+  onEdit: (k: CommissariatList, defaultTab?: "umum" | "bph" | "galeri") => void;
   onDelete: (k: CommissariatList) => void;
   canDelete?: boolean;
   isTenantView?: boolean;
@@ -169,7 +170,17 @@ export function KomisariatTable({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => onEdit(k)}
+                        onClick={() => onEdit(k, "galeri")}
+                        className="h-7 w-7 p-0 text-zinc-500 hover:text-emerald-600"
+                        title={`Kelola Galeri Foto (${k.gallery?.length || 0})`}
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-emerald-500" />
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onEdit(k, "umum")}
                         className="h-7 w-7 p-0 text-zinc-500 hover:text-blue-600"
                         title="Ubah Data"
                       >

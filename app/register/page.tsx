@@ -329,6 +329,11 @@ export default function RegisterPage() {
           setRedirectParam(redirect);
         }
 
+        const commParam = params.get("commissariat") || params.get("komisariat");
+        if (commParam) {
+          setCommissariat(commParam);
+        }
+
         let eventId = params.get("event");
         if (!eventId && redirect) {
           const match = redirect.match(/event=([^&]+)/);

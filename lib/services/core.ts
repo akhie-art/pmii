@@ -184,7 +184,8 @@ export async function getTableData<T>(
             "kurikulum",
             "persyaratan",
             "board_members",
-            "pengurus"
+            "pengurus",
+            "galeri"
           ];
           if (authoritativeTables.includes(effectiveTable) || authoritativeTables.includes(tableName)) {
             // Database Supabase adalah sumber data tunggal yang otoritatif.

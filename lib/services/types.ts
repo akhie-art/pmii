@@ -269,6 +269,21 @@ export interface KomisariatRayon {
   memberCount: number;
 }
 
+export interface KomisariatGalleryItem {
+  id: string;
+  tenant_id?: string;
+  title?: string;
+  imageUrl: string;
+  image_url?: string;
+  caption?: string;
+  date?: string;
+  category?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type GalleryItem = KomisariatGalleryItem;
+
 export interface KomisariatStructure {
   chairman?: string;
   chairman_id?: string | null;
@@ -298,6 +313,7 @@ export interface Tenant {
   contactEmail?: string;
   structure: KomisariatStructure;
   rayons?: KomisariatRayon[];
+  gallery?: KomisariatGalleryItem[];
   created_at?: string;
 }
 

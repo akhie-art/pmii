@@ -22,6 +22,7 @@ export const AVAILABLE_MENUS: MenuItemConfig[] = [
   { group: "Administrasi & Dokumen", name: "Pengajuan SK", href: "/dashboard/pengajuan-sk", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Administrasi & Dokumen", name: "Arsip Dokumen", href: "/dashboard/arsip", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Publikasi & Media", name: "Artikel & Berita", href: "/dashboard/artikel", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
+  { group: "Publikasi & Media", name: "Galeri", href: "/dashboard/galeri", defaultRoles: ["admin", "superadmin", "pengurus", "ketua_cabang", "pengurus_cabang", "ketua_komisariat", "pengurus_komisariat"] },
   { group: "Konfigurasi & Pengaturan", name: "Manajemen Pengguna", href: "/dashboard/pengguna", defaultRoles: ["admin", "superadmin", "ketua_cabang"] },
   { group: "Konfigurasi & Pengaturan", name: "Pengaturan Sistem", href: "/dashboard/pengaturan", defaultRoles: ["admin", "superadmin", "ketua_cabang"] },
 ];

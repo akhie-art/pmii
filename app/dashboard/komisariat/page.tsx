@@ -63,6 +63,7 @@ export default function KomisariatPage() {
 
   // Dialog States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDefaultTab, setModalDefaultTab] = useState<"umum" | "bph" | "galeri">("umum");
   const [editingItem, setEditingItem] = useState<CommissariatList | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<CommissariatList | null>(null);
@@ -207,11 +208,13 @@ export default function KomisariatPage() {
   // Handlers
   const handleOpenCreate = () => {
     setEditingItem(null);
+    setModalDefaultTab("umum");
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (k: CommissariatList) => {
+  const handleOpenEdit = (k: CommissariatList, tab: "umum" | "bph" | "galeri" = "umum") => {
     setEditingItem(k);
+    setModalDefaultTab(tab);
     setIsModalOpen(true);
   };
 
@@ -562,6 +565,7 @@ export default function KomisariatPage() {
         onSave={handleSaveCommissariat}
         boardMembers={boardMembers}
         isTenantView={isTenantView}
+        defaultTab={modalDefaultTab}
       />
 
       {/* Delete Confirmation Dialog */}

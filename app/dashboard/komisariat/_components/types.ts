@@ -1,7 +1,7 @@
-import { CommissariatList, KomisariatStructure } from "@/lib/services/types";
+import { CommissariatList, KomisariatStructure, KomisariatGalleryItem } from "@/lib/services/types";
 import { normalizeTenantName } from "@/lib/tenancy";
 
-export type { CommissariatList, KomisariatStructure };
+export type { CommissariatList, KomisariatStructure, KomisariatGalleryItem };
 
 export interface KomisariatBphData {
   chairman: string;
@@ -149,6 +149,7 @@ export interface KomisariatFormData {
     treasurer_id?: string | null;
     period: string;
   };
+  gallery?: KomisariatGalleryItem[];
 }
 
 export const DEFAULT_FORM_DATA: KomisariatFormData = {
@@ -167,5 +168,6 @@ export const DEFAULT_FORM_DATA: KomisariatFormData = {
     treasurer_id: null,
     period: "2026 - 2027",
   },
+  gallery: [],
 };
 

@@ -25,6 +25,7 @@ import {
   User,
   GraduationCap,
   Newspaper,
+  Image as ImageIcon,
   Award,
   ChevronDown,
   FileCheck,
@@ -451,6 +452,7 @@ export default function DashboardLayout({
           groupLabel: "Publikasi & Media",
           items: [
             { name: "Artikel & Berita", href: `${staffPrefix}/artikel`, icon: Newspaper },
+            { name: "Galeri", href: `${staffPrefix}/galeri`, icon: ImageIcon },
           ]
         },
         {

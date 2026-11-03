@@ -101,6 +101,22 @@ export function getTenantNameById(id: string | undefined | null): string | null 
 export const getKomisariatNameById = getTenantNameById;
 
 /**
+ * Membuat URL slug yang ramah SEO dan bersih untuk halaman landing masing-masing Komisariat
+ * Contoh: "Komisariat Ki Ageng Getas Pendawa" -> "ki-ageng-getas-pendawa"
+ */
+export function getKomisariatSlug(nameOrObj: string | { name: string; id?: string } | undefined | null): string {
+  if (!nameOrObj) return "";
+  const name = typeof nameOrObj === "string" ? nameOrObj : nameOrObj.name || "";
+  const clean = name
+    .toLowerCase()
+    .replace(/pengurus\s+cabang|komisariat|pk\s+pmii|pmii/gi, "")
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return clean || "komisariat";
+}
+
+/**
  * Memeriksa apakah user memiliki peran Pengurus Cabang (PC) atau Super Admin.
  */
 export function isCabangOrAdmin(user: UserAccount | null | undefined): boolean {

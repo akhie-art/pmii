@@ -35,6 +35,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { db, DEFAULT_ARTICLES, formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
+import { getKomisariatSlug } from "@/lib/tenancy";
+import { DEFAULT_COMMISSARIATS } from "@/lib/services/defaults";
+import type { CommissariatList } from "@/lib/services/types";
 
 interface PublicVerifiedCadre {
   name: string;
@@ -47,15 +50,15 @@ const HERO_SLIDES = [
   {
     id: 1,
     titlePrefix: "Mari Tumbuh & Berdaya Bersama",
-    highlight: "Ayo Gabung PK PMII Ki Ageng Getas Pendawa!",
-    description: "Temukan ruang terbaik untuk belajar, mengasah kepemimpinan, dan berjuang bersama ribuan sahabat mahasiswa berlandaskan Ahlussunnah wal Jama'ah.",
+    highlight: "Ayo Gabung PC PMII Grobogan!",
+    description: "Temukan ruang terbaik untuk belajar, mengasah kepemimpinan, dan berjuang bersama ribuan sahabat mahasiswa di seluruh kampus se-Kabupaten Grobogan berlandaskan Ahlussunnah wal Jama'ah.",
     badges: [
       { icon: ShieldCheck, label: "Wadah Pengembangan Diri Mahasiswa", color: "text-blue-600 dark:text-blue-400" },
-      { icon: Users, label: "Jejaring Sahabat Seluruh Indonesia", color: "text-indigo-600 dark:text-indigo-400" },
+      { icon: Users, label: "Jejaring Seluruh Komisariat & Kampus", color: "text-indigo-600 dark:text-indigo-400" },
       { icon: Sparkles, label: "Aktualisasi & Pengabdian Nyata", color: "text-amber-500" },
     ],
     image: "/image/landing_page.png",
-    imageAlt: "Kader PK PMII Ki Ageng Getas Pendawa",
+    imageAlt: "Kader Pengurus Cabang PMII Grobogan",
   },
   {
     id: 2,
@@ -101,6 +104,16 @@ export function LandingContent() {
   const [articles, setArticles] = useState<Article[]>(DEFAULT_ARTICLES);
   const [selectedArticleCategory, setSelectedArticleCategory] = useState<string>("Semua");
 
+  // Komisariat List State
+  const [komisariats, setKomisariats] = useState<CommissariatList[]>(
+    DEFAULT_COMMISSARIATS.filter(
+      (k) =>
+        k.level !== "CABANG" &&
+        !k.name.toLowerCase().includes("cabang") &&
+        k.id !== "f9fd547e-117e-4d39-b8cc-2ff9a818a8d9"
+    )
+  );
+
   // Quick Verification State (Secure API)
   const [verifyQuery, setVerifyQuery] = useState("");
   const [verifyResult, setVerifyResult] = useState<PublicVerifiedCadre | null | "NOT_FOUND">(null);
@@ -127,6 +140,21 @@ export function LandingContent() {
     }).catch((err) => {
       console.error("Failed to fetch articles:", err);
       setArticles([]);
+    });
+
+    db.getCommissariats(DEFAULT_COMMISSARIATS).then((list) => {
+      if (Array.isArray(list) && list.length > 0) {
+        setKomisariats(
+          list.filter(
+            (k) =>
+              k.level !== "CABANG" &&
+              !k.name.toLowerCase().includes("cabang") &&
+              k.id !== "f9fd547e-117e-4d39-b8cc-2ff9a818a8d9"
+          )
+        );
+      }
+    }).catch((err) => {
+      console.error("Failed to fetch commissariats:", err);
     });
   }, []);
 
@@ -288,6 +316,9 @@ export function LandingContent() {
 
           {/* Quick Navigation Anchor Links (Desktop) */}
           <nav className="hidden lg:flex items-center gap-6 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <a href="#komisariat" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+              Komisariat Kampus
+            </a>
             <a href="#alur" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
               Alur Kaderisasi
             </a>
@@ -375,6 +406,26 @@ export function LandingContent() {
                 <p className="text-xs sm:text-sm md:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto lg:mx-0 leading-relaxed min-h-[38px] sm:min-h-[48px]">
                   {HERO_SLIDES[currentSlide].description}
                 </p>
+
+                {/* Hero Call-to-Action Buttons */}
+                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 sm:gap-3 pt-1">
+                  <Link
+                    href="/register"
+                    className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-xs hover:shadow-md transition-all group cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>Daftar Kader (MAPABA)</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Masuk Portal</span>
+                  </Link>
+                </div>
 
                 {/* Trust Badges */}
                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-1.5 sm:gap-3 pt-1 sm:pt-2">
@@ -478,13 +529,82 @@ export function LandingContent() {
               <span className="text-xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono tracking-tight block">
                 Terpadu
               </span>
-              <p className="text-[11px] sm:text-xs text-zinc-600 dark:text-zinc-400 font-medium">Tingkat Komisariat</p>
+              <p className="text-[11px] sm:text-xs text-zinc-600 dark:text-zinc-400 font-medium">Seluruh Komisariat se-Grobogan</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 4. ALUR KADERISASI FORMAL PMII */}
+      {/* 4. SECTION KOMISARIAT KAMPUS */}
+      <section id="komisariat" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 scroll-mt-20">
+        <div className="text-center max-w-2xl mx-auto space-y-3 mb-12">
+          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
+            Pangkalan Kampus
+          </Badge>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Komisariat PMII se-Kabupaten Grobogan
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            Pilih pangkalan pergerakan di kampus Anda untuk melihat profil, susunan kepengurusan, warta, serta pendaftaran kaderisasi MAPABA.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {komisariats.map((kom) => {
+            const slug = getKomisariatSlug(kom);
+            const campus = kom.university || (kom as any).campusName || "Perguruan Tinggi";
+            return (
+              <Link
+                key={kom.id}
+                href={`/komisariat/${slug}`}
+                className="group bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 hover:border-blue-500/50 dark:hover:border-blue-500/50 rounded-2xl p-6 shadow-none hover:shadow-xl dark:hover:shadow-zinc-950/50 transition-all duration-300 flex flex-col justify-between cursor-pointer"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/50 p-1 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                      {kom.logo ? (
+                        <img
+                          src={kom.logo}
+                          alt={kom.name}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-lg bg-blue-600 text-white font-bold text-sm flex items-center justify-center">
+                          {kom.logoInitial || "PK"}
+                        </div>
+                      )}
+                    </div>
+                    <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 text-[10px] font-semibold">
+                      {kom.establishedYear ? `Sejak ${kom.establishedYear}` : "Komisariat"}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      {kom.name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-medium mt-1">
+                      <GraduationCap className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{campus}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                    Pusat kaderisasi dan pergerakan mahasiswa Islam Indonesia di lingkungan {campus}.
+                  </p>
+                </div>
+
+                <div className="pt-4 mt-5 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  <span>Kunjungi Halaman Komisariat</span>
+                  <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 5. ALUR KADERISASI FORMAL PMII */}
       <section id="alur" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto space-y-3 mb-12">
           <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-0.5 tracking-wider px-2">
@@ -609,7 +729,7 @@ export function LandingContent() {
               Artikel & Wawasan Terbaru
             </h2>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Kumpulan tulisan ilmiah, pemikiran kader, serta kabar pergerakan resmi PK PMII Ki Ageng Getas Pendawa.
+              Kumpulan tulisan ilmiah, pemikiran kader, serta kabar pergerakan resmi PC PMII Grobogan dan seluruh komisariat.
             </p>
           </div>
 
@@ -758,7 +878,7 @@ export function LandingContent() {
                 {verifyResult === "NOT_FOUND" ? (
                   <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-400 flex items-center gap-2.5">
                     <ShieldCheck className="w-4 h-4 shrink-0" />
-                    <span>Data anggota tidak ditemukan dalam database resmi komisariat. Silakan periksa ejaan nama.</span>
+                    <span>Data anggota tidak ditemukan dalam database resmi cabang/komisariat. Silakan periksa ejaan nama.</span>
                   </div>
                 ) : (
                   <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-lg text-xs space-y-2">
@@ -813,7 +933,7 @@ export function LandingContent() {
         <div className="container mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
             <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-              PK PMII Ki Ageng Getas Pendawa
+              Pengurus Cabang PMII Grobogan
             </span>
             <span className="hidden sm:inline text-zinc-400">•</span>
             <span>© 2026 Hak cipta dilindungi.</span>

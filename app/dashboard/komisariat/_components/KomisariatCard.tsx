@@ -12,6 +12,7 @@ import {
   Users,
   ChevronRight,
   Sparkles,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,7 @@ import { CommissariatList, KomisariatBphData } from "./types";
 
 interface KomisariatCardProps {
   komisariat: CommissariatList;
-  onEdit: (k: CommissariatList) => void;
+  onEdit: (k: CommissariatList, defaultTab?: "umum" | "bph" | "galeri") => void;
   onDelete: (k: CommissariatList) => void;
   canDelete?: boolean;
   bph?: KomisariatBphData;
@@ -212,7 +213,18 @@ export function KomisariatCard({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => onEdit(komisariat)}
+            onClick={() => onEdit(komisariat, "galeri")}
+            className="h-8 px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-emerald-600 gap-1.5"
+            title="Kelola Galeri Foto Kegiatan"
+          >
+            <ImageIcon className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Galeri ({komisariat.gallery?.length || 0})</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onEdit(komisariat, "umum")}
             className="h-8 px-3 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 gap-1.5"
             title="Ubah Data"
           >
