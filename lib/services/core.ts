@@ -64,6 +64,26 @@ export function normalizeDateString(dateStr: string | undefined): string | null 
   return null;
 }
 
+export function broadcastTableSync(tableName: string, localStorageKey?: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent("PMII_TABLE_SYNC", {
+        detail: { table: tableName, key: localStorageKey, timestamp: Date.now() }
+      })
+    );
+  } catch (e) {}
+
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const bc = new BroadcastChannel("pmii_realtime_sync");
+      bc.postMessage({ table: tableName, key: localStorageKey, timestamp: Date.now() });
+      bc.close();
+    }
+  } catch (e) {}
+}
+
 let _resolvedAnggotaTable: string | null = null;
 
 export async function getEffectiveTableName(tableName: string): Promise<string> {
@@ -342,6 +362,7 @@ export async function deleteTableRow(
         const list = JSON.parse(stored) as any[];
         const filtered = list.filter((item) => String(item.id) !== String(id));
         localStorage.setItem(localStorageKey, JSON.stringify(filtered));
+        broadcastTableSync(effectiveTable, localStorageKey);
       }
     } catch (e) {
       console.error(`Error updating local cache for ${localStorageKey}:`, e);
@@ -447,6 +468,7 @@ export async function saveTableData<T extends { id: string | number }>(
   // Always update local cache first
   if (localStorageKey && typeof window !== "undefined") {
     localStorage.setItem(localStorageKey, JSON.stringify(sanitizedList));
+    broadcastTableSync(effectiveTable, localStorageKey);
   }
 
   if (isSupabaseConfigured && supabase) {

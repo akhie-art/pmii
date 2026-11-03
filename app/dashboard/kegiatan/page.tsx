@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { db, DEFAULT_EVENTS, DEFAULT_REGISTRATIONS, getDefaultEventTimeline, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserAccount, EventStageTimeline } from "@/lib/db";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   isRecordInTenant,
   enforceTenantWrite,
@@ -160,6 +161,34 @@ export default function KomisariatKegiatanPage() {
       setMounted(true);
     };
 
+    const refreshRegistrations = async (showNotice = false) => {
+      try {
+        const fetchedRegs = await db.getRegistrations();
+        const cleanedRegs = fetchedRegs.filter((r: any) => !r.id?.startsWith("reg-mock") && !r.id?.includes("mock"));
+        setRegistrations((prev) => {
+          if (showNotice && cleanedRegs.length > prev.length) {
+            const newItems = cleanedRegs.filter((nr) => !prev.some((pr) => pr.id === nr.id));
+            if (newItems.length > 0) {
+              const newest = newItems[0];
+              showToast(`Pendaftar baru masuk: ${newest.cadreName || "Peserta"}`);
+            }
+          }
+          return cleanedRegs;
+        });
+      } catch (err) {
+        console.warn("Realtime sync registrations warning:", err);
+      }
+    };
+
+    const refreshEvents = async () => {
+      try {
+        const fetchedEvents = await db.getEvents([]);
+        setEvents(fetchedEvents);
+      } catch (err) {
+        console.warn("Realtime sync events warning:", err);
+      }
+    };
+
     setActiveTenant(getActiveTenant() || "ALL");
     const handleTenant = (e: any) => {
       const nextTenant = e.detail?.activeTenant || "ALL";
@@ -170,10 +199,100 @@ export default function KomisariatKegiatanPage() {
     };
     window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
+    // 1. In-App Custom Event (Same Tab / In-App Event)
+    const handleTableSync = (event: any) => {
+      const table = event?.detail?.table;
+      if (!table || table === "pendaftaran" || table === "kegiatan" || table === "registrations") {
+        refreshRegistrations(true);
+        refreshEvents();
+      }
+    };
+    window.addEventListener("PMII_TABLE_SYNC", handleTableSync);
+
+    // 2. Storage Event (Cross-Tab Local Storage)
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (
+        !e.key ||
+        e.key.includes("registrations") ||
+        e.key.includes("pendaftaran") ||
+        e.key.includes("events") ||
+        e.key.includes("kegiatan")
+      ) {
+        refreshRegistrations(true);
+        refreshEvents();
+      }
+    };
+    window.addEventListener("storage", handleStorageEvent);
+
+    // 3. BroadcastChannel (Cross-Tab Realtime Channel)
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        bc = new BroadcastChannel("pmii_realtime_sync");
+        bc.onmessage = (msg) => {
+          const table = msg?.data?.table;
+          if (!table || table === "pendaftaran" || table === "kegiatan" || table === "registrations") {
+            refreshRegistrations(true);
+            refreshEvents();
+          }
+        };
+      } catch (e) {}
+    }
+
+    // 4. Supabase Postgres Realtime (Cross-Device & Multi-User Sync)
+    let supabaseChannel: any = null;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        supabaseChannel = supabase
+          .channel("pengurus-kegiatan-realtime-dashboard")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "pendaftaran" },
+            () => {
+              refreshRegistrations(true);
+            }
+          )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "kegiatan" },
+            () => {
+              refreshEvents();
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn("Supabase Realtime subscription error:", err);
+      }
+    }
+
+    // 5. Visibility Change (Auto-refresh saat tab kembali aktif)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshRegistrations(false);
+        refreshEvents();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // 6. Polling Heartbeat Ringan (setiap 8 detik saat tab aktif)
+    const heartbeatInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refreshRegistrations(false);
+      }
+    }, 8000);
+
     loadData();
 
     return () => {
       window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      window.removeEventListener("PMII_TABLE_SYNC", handleTableSync);
+      window.removeEventListener("storage", handleStorageEvent);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(heartbeatInterval);
+      if (bc) bc.close();
+      if (supabaseChannel && supabase) {
+        supabase.removeChannel(supabaseChannel);
+      }
     };
   }, []);
 
@@ -907,6 +1026,10 @@ export default function KomisariatKegiatanPage() {
           <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
           <span className="font-semibold text-zinc-900 dark:text-zinc-100">
             Kegiatan
+          </span>
+          <span className="inline-flex items-center gap-1.5 ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Live Sync
           </span>
         </nav>
 

@@ -149,7 +149,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg w-full p-0 overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl">
+      <DialogContent className="max-w-[calc(100vw-1.5rem)] sm:max-w-lg w-full p-0 overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl">
         <DialogHeader className="p-5 sm:p-6 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-2 mb-1">
             <Badge className="bg-blue-600 text-white border-none text-[10px] font-bold">
@@ -435,19 +435,19 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
               ))}
             </div>
 
-            <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
+            <DialogFooter className="p-4 sm:p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 grid grid-cols-2 sm:flex sm:flex-row items-center justify-between sm:justify-end gap-2.5 sm:gap-3 m-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="h-9 text-xs rounded-xl cursor-pointer"
+                className="w-full sm:w-auto sm:flex-initial h-10 sm:h-9 text-xs font-semibold rounded-xl cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 Batal
               </Button>
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="h-9 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm"
+                className="w-full sm:w-auto sm:flex-initial h-10 sm:h-9 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm"
               >
                 {isSubmitting ? "Mengirim..." : "Kirim Pendaftaran"}
               </Button>

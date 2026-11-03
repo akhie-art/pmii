@@ -508,8 +508,6 @@ export default function LoginPage() {
         const isStaffUser = isUserAdmin(userRoleNorm) || isUserPengurus(userRoleNorm) || isUserInstruktur(userRoleNorm);
         const targetPath = isStaffUser 
           ? getTargetStaffPrefix(userRoleNorm) 
-          : (userRoleNorm === "peserta" || userRoleNorm === "anggota")
-          ? "/kader"
           : `/${userRoleNorm}`;
 
         setTimeout(() => {

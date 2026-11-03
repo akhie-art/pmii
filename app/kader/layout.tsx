@@ -63,14 +63,15 @@ export default function KaderLayout({
       }
 
       let detectedRole = "peserta";
+      let parsedUser: any = null;
       if (savedUser) {
         try {
-          const parsed = JSON.parse(savedUser);
-          if (parsed?.needsOnboarding) {
+          parsedUser = JSON.parse(savedUser);
+          if (parsedUser?.needsOnboarding) {
             router.replace("/onboarding");
             return;
           }
-          const r = (parsed?.role || "").toLowerCase();
+          const r = (parsedUser?.role || "").toLowerCase();
           if (r === "admin" || r === "pengurus" || r === "komisariat") {
             setIsStaffUser(true);
             router.replace("/dashboard");
@@ -82,20 +83,40 @@ export default function KaderLayout({
       }
       setUserRole(detectedRole);
 
-      // Routing rule: URL must dynamically match the user's role
+      // Fast synchronous hydration from local cache so the layout renders instantly without freeze
+      if (parsedUser) {
+        setActiveCadre({
+          id: parsedUser.id || activeCadreId || "cadre-user",
+          name: parsedUser.name || "Kader PMII",
+          email: parsedUser.email || "",
+          level: "MAPABA",
+          commissariat: parsedUser.commissariat || "Ki Ageng Getas Pendawa",
+          role: parsedUser.role || detectedRole
+        });
+        if (parsedUser.commissariat) {
+          setTenantInfo({
+            name: parsedUser.commissariat,
+            logo: null,
+          });
+        }
+        setMounted(true);
+      }
+
+      // Synchronize browser address bar URL cleanly without freezing Next.js App Router
       const path = window.location.pathname;
       if (path === "/kader" || path.startsWith("/kader/")) {
         const target = path.replace(/^\/kader/, `/${detectedRole}`);
-        router.replace(target + window.location.search);
-        return;
-      }
-
-      // If user is at /peserta but role is anggota (or vice versa), redirect to their actual role URL
-      const matchRole = path.match(/^\/(peserta|anggota)/);
-      if (matchRole && matchRole[1] !== detectedRole && (detectedRole === "peserta" || detectedRole === "anggota")) {
-        const target = path.replace(/^\/(peserta|anggota)/, `/${detectedRole}`);
-        router.replace(target + window.location.search);
-        return;
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", target + window.location.search);
+        }
+      } else {
+        const matchRole = path.match(/^\/(peserta|anggota)/);
+        if (matchRole && matchRole[1] !== detectedRole && (detectedRole === "peserta" || detectedRole === "anggota")) {
+          const target = path.replace(/^\/(peserta|anggota)/, `/${detectedRole}`);
+          if (typeof window !== "undefined") {
+            window.history.replaceState(null, "", target + window.location.search);
+          }
+        }
       }
 
       const savedTheme = localStorage.getItem("PMII_THEME") || "dark";

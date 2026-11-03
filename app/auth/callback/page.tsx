@@ -198,9 +198,13 @@ export default function AuthCallbackPage() {
 
         if (isMounted) {
           setStatus("success");
-          setMessage("Akun belum terdaftar di keanggotaan. Mengarahkan ke Onboarding...");
+          setMessage(
+            targetRedirect
+              ? "Berhasil terhubung dengan Google! Mengarahkan kembali ke pendaftaran..."
+              : "Akun belum terdaftar di keanggotaan. Mengarahkan ke Onboarding..."
+          );
         }
-        setTimeout(() => router.push("/onboarding"), 150);
+        setTimeout(() => router.push(targetRedirect || "/onboarding"), 150);
         return;
 
       } catch (err: any) {

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Search, Calendar } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { db, ensureEvaluationForRegistration } from "@/lib/db";
+import { db, ensureEvaluationForRegistration, KEYS } from "@/lib/db";
 import { supabase, isSupabaseConfigured, clearSupabaseStorage } from "@/lib/supabase";
 import type {
   EventActivity,
@@ -65,8 +65,49 @@ export default function KaderKegiatanPage() {
   const [certReg, setCertReg] = useState<ParticipantRegistration | null>(null);
 
   useEffect(() => {
+    // 0. Instant Cache Hydration: langsung render dari data lokal agar tidak menunggu network request
+    if (typeof window !== "undefined") {
+      try {
+        const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (savedUserStr) {
+          const u = JSON.parse(savedUserStr);
+          setActiveCadre({
+            id: u.id || u.user_id || `cadre-${Date.now()}`,
+            name: u.name || "Peserta PMII",
+            email: u.email || "",
+            level: "MAPABA",
+            commissariat: u.commissariat || "Ki Ageng Getas Pendawa",
+            status: "AKTIF",
+            submissions: []
+          });
+        }
+
+        const cachedEventsStr = localStorage.getItem(KEYS.EVENTS);
+        if (cachedEventsStr) {
+          const parsedEv = JSON.parse(cachedEventsStr);
+          if (Array.isArray(parsedEv) && parsedEv.length > 0) {
+            setEvents(parsedEv);
+          }
+        }
+
+        const cachedRegsStr = localStorage.getItem(KEYS.REGISTRATIONS);
+        if (cachedRegsStr) {
+          const parsedReg = JSON.parse(cachedRegsStr);
+          if (Array.isArray(parsedReg)) {
+            setRegistrations(parsedReg);
+          }
+        }
+
+        if (savedUserStr || cachedEventsStr) {
+          setMounted(true);
+        }
+      } catch (fastHydrateErr) {
+        console.warn("Fast hydration error:", fastHydrateErr);
+      }
+    }
+
     const loadData = async () => {
-      // 1. Ambil session user yang sedang login dari localStorage
+      // 1. Session check cepat dari localStorage
       const savedUserStr =
         typeof window !== "undefined"
           ? localStorage.getItem("PMII_LOGGED_IN_USER")
@@ -78,143 +119,129 @@ export default function KaderKegiatanPage() {
         } catch (e) {}
       }
 
-      // 2. Jika ada Supabase Auth session, prioritaskan email user yang terautentikasi
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data: authData, error: authErr } = await supabase.auth.getUser();
-          if (authErr) {
-            const errStr = authErr.message?.toLowerCase() || "";
-            if (errStr.includes("refresh token") || errStr.includes("invalid_grant")) {
-              clearSupabaseStorage();
-            }
-          } else if (authData?.user?.email) {
-            const authEmail = authData.user.email.toLowerCase();
-            if (!loggedInUser || loggedInUser.email?.toLowerCase() !== authEmail) {
-              loggedInUser = {
-                id: authData.user.id,
-                name: authData.user.user_metadata?.name || authEmail.split("@")[0],
-                email: authEmail,
-                role: authData.user.user_metadata?.role || "anggota",
-                commissariat: authData.user.user_metadata?.commissariat || "Ki Ageng Getas Pendawa"
-              };
-            }
-          }
-        } catch (e) {
-          console.warn("Notice checking supabase auth user:", e);
-        }
-      }
+      // 2. Load semua data secara paralel (Promise.all) agar loading super cepat
+      try {
+        const [authSessionRes, allCadres, allKaderisasi, kurikulumRes, allEvents, allRegs, allReqs] = await Promise.all([
+          isSupabaseConfigured && supabase ? supabase.auth.getSession().catch(() => ({ data: { session: null } })) : Promise.resolve({ data: { session: null } }),
+          db.getCadres([]),
+          db.getKaderisasi(),
+          db.getKurikulum(),
+          db.getEvents([]),
+          db.getRegistrations([]),
+          db.getRequirements()
+        ]);
 
-      const activeId =
-        typeof window !== "undefined"
-          ? localStorage.getItem("PMII_ACTIVE_CADRE_ID") || ""
-          : "";
-
-      const allCadres = await db.getCadres([]);
-
-      // 3. Resolusi identitas kader aktif dengan ketat:
-      let current = null;
-
-      // Prioritas 1: Cocokkan email dari akun yang sedang login
-      if (loggedInUser?.email) {
-        const targetEmail = loggedInUser.email.trim().toLowerCase();
-        current = allCadres.find(
-          (c: any) => c.email && c.email.trim().toLowerCase() === targetEmail
-        );
-      }
-
-      // Prioritas 2: Cocokkan activeId atau ID user
-      if (!current && activeId) {
-        current = allCadres.find((c: any) => c.id === activeId);
-      }
-      if (!current && loggedInUser?.id) {
-        current = allCadres.find(
-          (c: any) => c.id === loggedInUser.id || c.user_id === loggedInUser.id
-        );
-      }
-
-      // Prioritas 3: Jika user login tapi belum terdaftar di tabel kader, gunakan profil loggedInUser
-      if (!current && loggedInUser) {
-        current = {
-          id: loggedInUser.id || `cadre-${Date.now()}`,
-          name: loggedInUser.name || loggedInUser.email?.split("@")[0] || "Peserta PMII",
-          email: loggedInUser.email || "",
-          level: "MAPABA",
-          commissariat: loggedInUser.commissariat || "Ki Ageng Getas Pendawa",
-          status: "AKTIF",
-          submissions: []
-        };
-      }
-
-      // Prioritas 4: Fallback hanya jika tidak ada sesi login sama sekali
-      if (!current) {
-        current = allCadres[0] || null;
-      }
-
-      setActiveCadre(current);
-      if (current?.id && typeof window !== "undefined") {
-        localStorage.setItem("PMII_ACTIVE_CADRE_ID", current.id);
-      }
-
-      const allKaderisasi = await db.getKaderisasi();
-      setKaderisasiList(allKaderisasi);
-
-      const kurikulumRes = await db.getKurikulum();
-      setKurikulumData(kurikulumRes);
-
-      const allEvents = await db.getEvents([]);
-      const enrichedEvents = allEvents.map((ev: any) => {
-        const matched = allKaderisasi.find(
-          (k: any) => k.nama === ev.level || k.id === ev.level
-        );
-        return {
-          ...ev,
-          formFields: matched?.formFields || []
-        };
-      });
-      setEvents(enrichedEvents);
-
-      const allRegs = await db.getRegistrations([]);
-      setRegistrations(allRegs);
-
-      const allReqs = await db.getRequirements();
-      setRequirements(allReqs);
-
-      // Check ?event= or ?level= parameter in URL
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const eventId = params.get("event") || params.get("id");
-        const levelParam = params.get("level") || params.get("kaderisasi");
-
-        let target: any = null;
-        if (eventId) {
-          target = enrichedEvents.find((e: any) => e.id === eventId);
-        } else if (levelParam) {
-          target = enrichedEvents.find(
-            (e: any) =>
-              e.level?.trim().toUpperCase() === levelParam.trim().toUpperCase() ||
-              e.name?.trim().toUpperCase().includes(levelParam.trim().toUpperCase())
-          );
-        }
-
-        if (target) {
-          setHighlightEventId(target.id);
-          const currentEmail = current?.email?.trim().toLowerCase();
-          const currentName = current?.name?.trim().toLowerCase();
-          const isAlreadyReg = allRegs.some(
-            (r) =>
-              r.eventId === target.id &&
-              ((currentEmail && r.cadreEmail && r.cadreEmail.trim().toLowerCase() === currentEmail) ||
-               (currentName && r.cadreName && r.cadreName.trim().toLowerCase() === currentName))
-          );
-          if (!isAlreadyReg && target.status === "OPEN") {
-            setSelectedEvent(target);
-            setIsRegisterModalOpen(true);
+        const sessionUser = authSessionRes?.data?.session?.user;
+        if (sessionUser?.email) {
+          const authEmail = sessionUser.email.toLowerCase();
+          if (!loggedInUser || loggedInUser.email?.toLowerCase() !== authEmail) {
+            loggedInUser = {
+              id: sessionUser.id,
+              name: sessionUser.user_metadata?.name || authEmail.split("@")[0],
+              email: authEmail,
+              role: sessionUser.user_metadata?.role || "anggota",
+              commissariat: sessionUser.user_metadata?.commissariat || "Ki Ageng Getas Pendawa"
+            };
           }
         }
-      }
 
-      setMounted(true);
+        const activeId =
+          typeof window !== "undefined"
+            ? localStorage.getItem("PMII_ACTIVE_CADRE_ID") || ""
+            : "";
+
+        // 3. Resolusi identitas kader aktif:
+        let current = null;
+        if (loggedInUser?.email) {
+          const targetEmail = loggedInUser.email.trim().toLowerCase();
+          current = allCadres.find(
+            (c: any) => c.email && c.email.trim().toLowerCase() === targetEmail
+          );
+        }
+        if (!current && activeId) {
+          current = allCadres.find((c: any) => c.id === activeId);
+        }
+        if (!current && loggedInUser?.id) {
+          current = allCadres.find(
+            (c: any) => c.id === loggedInUser.id || c.user_id === loggedInUser.id
+          );
+        }
+        if (!current && loggedInUser) {
+          current = {
+            id: loggedInUser.id || `cadre-${Date.now()}`,
+            name: loggedInUser.name || loggedInUser.email?.split("@")[0] || "Peserta PMII",
+            email: loggedInUser.email || "",
+            level: "MAPABA",
+            commissariat: loggedInUser.commissariat || "Ki Ageng Getas Pendawa",
+            status: "AKTIF",
+            submissions: []
+          };
+        }
+        if (!current) {
+          current = allCadres[0] || null;
+        }
+
+        setActiveCadre(current);
+        if (current?.id && typeof window !== "undefined") {
+          localStorage.setItem("PMII_ACTIVE_CADRE_ID", current.id);
+        }
+
+        setKaderisasiList(allKaderisasi);
+        setKurikulumData(kurikulumRes);
+
+        const enrichedEvents = allEvents.map((ev: any) => {
+          const matched = allKaderisasi.find(
+            (k: any) => k.nama === ev.level || k.id === ev.level
+          );
+          return {
+            ...ev,
+            formFields: matched?.formFields || []
+          };
+        });
+        setEvents(enrichedEvents);
+        setRegistrations(allRegs);
+        setRequirements(allReqs);
+
+        // Check ?event= or ?level= parameter in URL
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const eventId = params.get("event") || params.get("id");
+          const levelParam = params.get("level") || params.get("kaderisasi");
+
+          let target: any = null;
+          if (eventId) {
+            target = enrichedEvents.find((e: any) => e.id === eventId);
+          } else if (levelParam) {
+            target = enrichedEvents.find(
+              (e: any) =>
+                e.level?.trim().toUpperCase() === levelParam.trim().toUpperCase() ||
+                e.name?.trim().toUpperCase().includes(levelParam.trim().toUpperCase())
+            );
+          }
+
+          if (target) {
+            setHighlightEventId(target.id);
+            const currentEmail = current?.email?.trim().toLowerCase();
+            const currentName = current?.name?.trim().toLowerCase();
+            const isAlreadyReg = allRegs.some(
+              (r) =>
+                r.eventId === target.id &&
+                ((currentEmail && r.cadreEmail && r.cadreEmail.trim().toLowerCase() === currentEmail) ||
+                 (currentName && r.cadreName && r.cadreName.trim().toLowerCase() === currentName))
+            );
+            if (!isAlreadyReg && target.status === "OPEN") {
+              setSelectedEvent(target);
+              setIsRegisterModalOpen(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error loading kader kegiatan data in parallel:", err);
+      } finally {
+        setMounted(true);
+      }
     };
+
     loadData();
   }, []);
 

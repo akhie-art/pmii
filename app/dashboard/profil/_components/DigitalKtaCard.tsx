@@ -83,7 +83,7 @@ export function DigitalKtaCard({
                   Nama Pengurus
                 </span>
                 <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white truncate">
-                  {currentCadre.name.startsWith("Sahabat") ? currentCadre.name : `Sahabat ${currentCadre.name}`}
+                  {currentCadre.name.replace(/^Sahabat\s+/i, "").trim()}
                 </h3>
               </div>
 

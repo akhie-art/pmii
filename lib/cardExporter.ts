@@ -226,7 +226,7 @@ export async function exportCardAsImage(data: CardExportData): Promise<boolean> 
 
       if (data.type === "peserta") {
         // Name
-        const formattedName = data.name.startsWith("Sahabat") ? data.name : `Sahabat ${data.name}`;
+        const formattedName = data.name.replace(/^Sahabat\s+/i, "").trim();
         drawInfoField("Nama Lengkap", formattedName, 260, 156);
         // Event Name
         drawInfoField("Kegiatan", data.eventName || "-", 260, 224);
