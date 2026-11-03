@@ -29,6 +29,7 @@ import {
   Award,
   ChevronDown,
   FileCheck,
+  Trash2,
 } from "lucide-react";
 
 // Import shadcn/ui components
@@ -79,6 +80,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [dashboardNotifications, setDashboardNotifications] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +88,128 @@ export default function DashboardLayout({
     name: "PC PMII Grobogan",
     logo: null,
   });
+
+  const fetchDashboardNotifications = async () => {
+    try {
+      let readIds: string[] = [];
+      try {
+        const stored = localStorage.getItem("PMII_DASHBOARD_READ_NOTIFS");
+        if (stored) readIds = JSON.parse(stored);
+      } catch (e) {}
+
+      let deletedIds: string[] = [];
+      try {
+        const storedDel = localStorage.getItem("PMII_DASHBOARD_DELETED_NOTIFS");
+        if (storedDel) deletedIds = JSON.parse(storedDel);
+      } catch (e) {}
+
+      const [regs, events, cadres] = await Promise.all([
+        db.getRegistrations([]),
+        db.getEvents([]),
+        db.getCadres([])
+      ]);
+
+      const items: any[] = [];
+
+      // Pending registrations
+      const pendingRegs = regs.filter(r => r.status === "PENDING");
+      if (pendingRegs.length > 0) {
+        const id = `notif-pending-${pendingRegs.length}`;
+        items.push({
+          id,
+          text: `Ada ${pendingRegs.length} pendaftaran kaderisasi baru menunggu screening berkas.`,
+          time: "Menunggu Screening",
+          link: "/dashboard/kegiatan",
+          unread: !readIds.includes(id)
+        });
+      }
+
+      // Recent 3 registrations
+      regs.slice(-3).reverse().forEach(r => {
+        const ev = events.find(e => e.id === r.eventId);
+        const id = `notif-reg-${r.id}`;
+        items.push({
+          id,
+          text: `${r.cadreName || "Peserta"} mendaftar pada kegiatan ${ev?.name || "Kaderisasi"}.`,
+          time: r.dateApplied || "Baru saja",
+          link: `/dashboard/kegiatan?event=${r.eventId}`,
+          unread: !readIds.includes(id)
+        });
+      });
+
+      // Recent cadres registered
+      if (cadres.length > 0) {
+        const latestCadre = cadres[cadres.length - 1];
+        const id = `notif-cadre-${latestCadre.id}`;
+        items.push({
+          id,
+          text: `Kader baru terdaftar: ${latestCadre.name} (${latestCadre.commissariat || "PMII"}).`,
+          time: latestCadre.startDate || "Database Anggota",
+          link: "/dashboard/anggota",
+          unread: !readIds.includes(id)
+        });
+      }
+
+      setDashboardNotifications(items.filter(item => !deletedIds.includes(item.id)));
+    } catch (e) {
+      console.warn("Failed to load dashboard notifications", e);
+    }
+  };
+
+  const markDashboardNotifRead = (id: string, link?: string) => {
+    let readIds: string[] = [];
+    try {
+      const stored = localStorage.getItem("PMII_DASHBOARD_READ_NOTIFS");
+      if (stored) readIds = JSON.parse(stored);
+    } catch (e) {}
+    if (!readIds.includes(id)) {
+      readIds.push(id);
+      localStorage.setItem("PMII_DASHBOARD_READ_NOTIFS", JSON.stringify(readIds));
+    }
+    setDashboardNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n));
+    setNotificationsOpen(false);
+    if (link) router.push(link);
+  };
+
+  const markAllDashboardNotifsRead = () => {
+    const allIds = dashboardNotifications.map(n => n.id);
+    localStorage.setItem("PMII_DASHBOARD_READ_NOTIFS", JSON.stringify(allIds));
+    setDashboardNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+  };
+
+  const deleteDashboardNotif = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    let deletedIds: string[] = [];
+    try {
+      const stored = localStorage.getItem("PMII_DASHBOARD_DELETED_NOTIFS");
+      if (stored) deletedIds = JSON.parse(stored);
+    } catch (err) {}
+
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      localStorage.setItem("PMII_DASHBOARD_DELETED_NOTIFS", JSON.stringify(deletedIds));
+    }
+
+    setDashboardNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const deleteAllDashboardNotifs = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    let deletedIds: string[] = [];
+    try {
+      const stored = localStorage.getItem("PMII_DASHBOARD_DELETED_NOTIFS");
+      if (stored) deletedIds = JSON.parse(stored);
+    } catch (err) {}
+
+    dashboardNotifications.forEach(n => {
+      if (!deletedIds.includes(n.id)) {
+        deletedIds.push(n.id);
+      }
+    });
+
+    localStorage.setItem("PMII_DASHBOARD_DELETED_NOTIFS", JSON.stringify(deletedIds));
+    setDashboardNotifications([]);
+  };
 
   // Load dynamic tenant logo and name from database
   useEffect(() => {
@@ -183,6 +307,16 @@ export default function DashboardLayout({
     };
     window.addEventListener("pmii-profile-updated", handleProfileUpdate);
     return () => window.removeEventListener("pmii-profile-updated", handleProfileUpdate);
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardNotifications();
+    window.addEventListener("PMII_TABLE_SYNC", fetchDashboardNotifications);
+    window.addEventListener("storage", fetchDashboardNotifications);
+    return () => {
+      window.removeEventListener("PMII_TABLE_SYNC", fetchDashboardNotifications);
+      window.removeEventListener("storage", fetchDashboardNotifications);
+    };
   }, []);
 
   useEffect(() => {
@@ -469,11 +603,7 @@ export default function DashboardLayout({
     items: group.items.filter(item => isMenuAllowed(item.href, currentUser, staffPrefix))
   })).filter(group => group.items.length > 0);
 
-  const notifications = [
-    { id: 1, text: "Pendaftaran kegiatan kaderisasi baru masuk", time: "5 menit yang lalu", unread: true },
-    { id: 2, text: "Laporan tugas follow-up menunggu verifikasi pengurus", time: "2 jam yang lalu", unread: true },
-    { id: 3, text: "SK Kepengurusan PK PMII Ki Ageng Getas Pendawa tersimpan", time: "1 hari yang lalu", unread: false },
-  ];
+  const unreadDashboardCount = dashboardNotifications.filter(n => n.unread).length;
 
   if (loading) {
     return (
@@ -626,35 +756,83 @@ export default function DashboardLayout({
                       variant="outline"
                       size="icon-sm"
                       className="rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer relative"
+                      title="Pemberitahuan"
                     >
                       <Bell className="w-4.5 h-4.5" />
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950" />
+                      {unreadDashboardCount > 0 && (
+                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950 animate-pulse" />
+                      )}
                     </Button>
                   }
                 />
                 <DropdownMenuContent
                   align="end"
-                  className="w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg z-50 p-0 overflow-hidden"
+                  className="w-80 sm:w-96 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-50 p-0 overflow-hidden"
                 >
                   <div className="px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900">
-                    <span className="text-xs font-extrabold tracking-wide">Pemberitahuan</span>
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer">Tandai semua dibaca</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold tracking-wide">Pemberitahuan</span>
+                      {dashboardNotifications.length > 0 && (
+                        <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full">
+                          {dashboardNotifications.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      {unreadDashboardCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllDashboardNotifsRead}
+                          className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer hover:underline"
+                        >
+                          Tandai dibaca
+                        </button>
+                      )}
+                      {dashboardNotifications.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={deleteAllDashboardNotifs}
+                          className="text-[10px] text-rose-500 hover:text-rose-600 font-semibold cursor-pointer hover:underline flex items-center gap-1"
+                          title="Hapus semua pemberitahuan"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Hapus Semua</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="max-h-72 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {notifications.map((notif) => (
-                      <DropdownMenuItem
-                        key={notif.id}
-                        className="p-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer flex flex-col items-start gap-1 transition-colors duration-150 rounded-none focus:bg-zinc-50 dark:focus:bg-zinc-800/50"
-                      >
-                        <div className="flex items-start gap-2">
-                          {notif.unread && <span className="w-2 h-2 mt-1.5 rounded-full bg-blue-600 dark:bg-blue-400 flex-shrink-0" />}
-                          <p className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium select-text">
-                            {notif.text}
-                          </p>
+                    {dashboardNotifications.length === 0 ? (
+                      <div className="py-8 text-center px-4 space-y-1">
+                        <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Belum ada pemberitahuan</p>
+                      </div>
+                    ) : (
+                      dashboardNotifications.map((notif) => (
+                        <div
+                          key={notif.id}
+                          onClick={() => markDashboardNotifRead(notif.id, notif.link)}
+                          className="p-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer flex items-center justify-between gap-2.5 transition-colors duration-150 group"
+                        >
+                          <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              {notif.unread && <span className="w-2 h-2 mt-1.5 rounded-full bg-blue-600 dark:bg-blue-400 flex-shrink-0" />}
+                              <p className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium select-text line-clamp-2">
+                                {notif.text}
+                              </p>
+                            </div>
+                            <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium pl-4">{notif.time}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => deleteDashboardNotif(notif.id, e)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all opacity-60 group-hover:opacity-100 cursor-pointer shrink-0"
+                            title="Hapus pemberitahuan ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium pl-4">{notif.time}</span>
-                      </DropdownMenuItem>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
