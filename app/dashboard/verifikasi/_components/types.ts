@@ -84,16 +84,7 @@ export const getParticipantPhoto = (
     return cadre.avatar;
   }
 
-  // 2. Check cadre pasFotoName
-  if (
-    cadre?.pasFotoName &&
-    typeof cadre.pasFotoName === "string" &&
-    (cadre.pasFotoName.startsWith("data:") || cadre.pasFotoName.startsWith("http") || cadre.pasFotoName.startsWith("/"))
-  ) {
-    return cadre.pasFotoName;
-  }
-
-  // 3. Check registration answers (file answers or base64)
+  // 2. Check registration answers (file answers or base64)
   if (reg?.answers && typeof reg.answers === "object") {
     const photoKeys = [
       "f-foto",

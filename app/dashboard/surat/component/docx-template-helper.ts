@@ -121,7 +121,8 @@ export function extractDocxPlaceholders(arrayBuffer: ArrayBuffer): {
  */
 export function fillDocxTemplate(
   arrayBuffer: ArrayBuffer,
-  data: Record<string, any>
+  data: Record<string, any>,
+  photoBase64?: string
 ): {
   blob: Blob;
   arrayBuffer: ArrayBuffer;
@@ -141,6 +142,61 @@ export function fillDocxTemplate(
     doc.render(data);
 
     const outZip = doc.getZip();
+
+    // Jika ada foto kader, sematkan ke dalam shape foto dokumen Word (.docx)
+    if (photoBase64) {
+      try {
+        const cleanBase64 = photoBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+        const photoBinary = base64ToArrayBuffer(cleanBase64);
+        outZip.file("word/media/member_photo.jpg", photoBinary);
+
+        // 1. Tambahkan relasi di word/_rels/document.xml.rels
+        const relsFile = outZip.file("word/_rels/document.xml.rels");
+        if (relsFile) {
+          let relsXml = relsFile.asText();
+          if (!relsXml.includes('Id="rIdMemberPhoto"')) {
+            relsXml = relsXml.replace(
+              "</Relationships>",
+              '<Relationship Id="rIdMemberPhoto" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/member_photo.jpg"/></Relationships>'
+            );
+            outZip.file("word/_rels/document.xml.rels", relsXml);
+          }
+        }
+
+        // 2. Tambahkan content type jpg di [Content_Types].xml jika belum ada
+        const ctFile = outZip.file("[Content_Types].xml");
+        if (ctFile) {
+          let ctXml = ctFile.asText();
+          if (!ctXml.includes('Extension="jpg"')) {
+            ctXml = ctXml.replace(
+              "</Types>",
+              '<Default Extension="jpg" ContentType="image/jpeg"/></Types>'
+            );
+            outZip.file("[Content_Types].xml", ctXml);
+          }
+        }
+
+        // 3. Modifikasi shape Foto 3x4 di word/document.xml
+        const docFile = outZip.file("word/document.xml");
+        if (docFile) {
+          let docXml = docFile.asText();
+          const solidFillRegex = /<a:solidFill><a:schemeClr val="lt1"\s*\/><\/a:solidFill>/;
+          const blipFill =
+            '<a:blipFill><a:blip r:embed="rIdMemberPhoto"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>';
+
+          if (solidFillRegex.test(docXml)) {
+            docXml = docXml.replace(solidFillRegex, blipFill);
+          }
+          if (docXml.includes("<w:t>Foto 3x4</w:t>")) {
+            docXml = docXml.replace("<w:t>Foto 3x4</w:t>", "<w:t></w:t>");
+          }
+          outZip.file("word/document.xml", docXml);
+        }
+      } catch (err) {
+        console.warn("Gagal menyematkan foto ke Word template:", err);
+      }
+    }
+
     const outBuffer = outZip.generate({
       type: "arraybuffer",
       mimeType: DOCX_MIME_TYPE

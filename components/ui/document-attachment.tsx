@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   UploadCloud,
   FileText,
@@ -10,7 +10,8 @@ import {
   Trash2,
   RefreshCw,
   ZoomIn,
-  FileCheck
+  FileCheck,
+  ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,11 @@ export function DocumentAttachment({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [hasImgError, setHasImgError] = useState(false);
+
+  useEffect(() => {
+    setHasImgError(false);
+  }, [fileUrl]);
 
   const isImage =
     fileUrl?.startsWith("data:image/") ||
@@ -146,9 +152,9 @@ export function DocumentAttachment({
         /* Attached Document Card */
         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl gap-3 shadow-xs transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
           {/* File Thumbnail & Info */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {/* Thumbnail */}
-            {fileUrl && isImage ? (
+            {fileUrl && isImage && !hasImgError ? (
               <div
                 role="button"
                 tabIndex={0}
@@ -161,6 +167,7 @@ export function DocumentAttachment({
                   src={fileUrl}
                   alt={fileName || "Pratinjau Berkas"}
                   className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  onError={() => setHasImgError(true)}
                 />
                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
                   <ZoomIn className="w-4 h-4 drop-shadow" />
@@ -170,26 +177,34 @@ export function DocumentAttachment({
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => fileUrl && setIsPreviewOpen(true)}
+                onClick={() => fileUrl && !hasImgError && setIsPreviewOpen(true)}
                 className={`w-16 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border ${
                   isPdf
                     ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400"
-                    : "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400"
-                } ${fileUrl ? "cursor-pointer" : ""}`}
+                    : isImage
+                    ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400"
+                    : "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                } ${fileUrl && !hasImgError ? "cursor-pointer" : ""}`}
               >
-                <FileText className="w-5 h-5" />
+                {isPdf ? (
+                  <FileText className="w-5 h-5" />
+                ) : isImage ? (
+                  <ImageIcon className="w-5 h-5" />
+                ) : (
+                  <FileText className="w-5 h-5" />
+                )}
                 <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">
-                  {isPdf ? "PDF" : "Berkas"}
+                  {isPdf ? "PDF" : isImage ? "FOTO" : "Berkas"}
                 </span>
               </div>
             )}
 
             {/* Name & Metadata */}
             <div className="min-w-0 flex-1">
-              <span className="truncate block max-w-[200px] sm:max-w-[320px] text-zinc-900 dark:text-zinc-100 font-medium text-xs">
+              <span className="truncate block text-zinc-900 dark:text-zinc-100 font-medium text-xs">
                 {fileName || "Berkas Terlampir"}
               </span>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
                   <FileCheck className="w-3 h-3 text-emerald-500" />
                   {fileUrl?.startsWith("data:")
@@ -211,7 +226,7 @@ export function DocumentAttachment({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 self-end sm:self-center shrink-0">
             {/* Pratinjau Modal Trigger */}
             {fileUrl && (
               <Button
@@ -219,7 +234,7 @@ export function DocumentAttachment({
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsPreviewOpen(true)}
-                className="h-8 px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1 rounded-lg"
+                className="h-8 px-2 sm:px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1 rounded-lg shrink-0"
               >
                 <Eye className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Pratinjau</span>
@@ -233,7 +248,7 @@ export function DocumentAttachment({
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Buka dokumen di tab baru"
-                className="inline-flex items-center justify-center h-8 w-8 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="inline-flex items-center justify-center h-8 w-8 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -247,7 +262,7 @@ export function DocumentAttachment({
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 title="Ganti berkas ini dengan berkas baru"
-                className="h-8 px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1 rounded-lg"
+                className="h-8 px-2 sm:px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1 rounded-lg shrink-0"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Ganti</span>
@@ -262,7 +277,7 @@ export function DocumentAttachment({
                 size="sm"
                 onClick={onRemove}
                 title="Hapus lampiran ini"
-                className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>

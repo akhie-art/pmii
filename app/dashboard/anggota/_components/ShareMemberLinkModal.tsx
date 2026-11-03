@@ -44,15 +44,15 @@ export default function ShareMemberLinkModal({
     }
   };
 
-  const isDataIncomplete = !member.nik || !member.email || !member.phone || !member.perguruanTinggi || (!member.avatar && !member.pasFotoName);
+  const isDataIncomplete = !member.nim || !member.email || !member.phone || !member.perguruanTinggi || !member.avatar;
 
   const missingFields: string[] = [];
-  if (!member.nik) missingFields.push("NIK");
+  if (!member.nim) missingFields.push("NIM");
   if (!member.email) missingFields.push("Email");
   if (!member.phone) missingFields.push("No. WhatsApp");
   if (!member.tempatLahir || !member.tanggalLahir) missingFields.push("TTL");
   if (!member.perguruanTinggi) missingFields.push("Kampus");
-  if (!member.avatar && !member.pasFotoName) missingFields.push("Pas Foto");
+  if (!member.avatar) missingFields.push("Pas Foto");
 
   const waMessage = `Assalamu'alaikum Wr. Wb. Sahabat ${member.name},
 

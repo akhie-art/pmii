@@ -105,6 +105,30 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     syllabus: any;
   } | null>(null);
 
+  // Active Module Reader Modal State
+  const [activeReadingModal, setActiveReadingModal] = useState<{
+    fileName: string;
+    fileUrl?: string;
+    fileSize?: string;
+    sessionTitle?: string;
+    isRef?: boolean;
+  } | null>(null);
+
+  const handleDownloadMaterial = (url?: string, fileName?: string) => {
+    if (!url || url === "#") {
+      toast.info(`Berkas "${fileName || "materi"}" sedang disiapkan oleh panitia/instruktur.`);
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", fileName || "berkas-materi");
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Mengunduh berkas: ${fileName || "berkas materi"}`);
+  };
+
   // Pre-Test & Post-Test Quiz Runner State
   const [activeQuizSession, setActiveQuizSession] = useState<string | null>(null);
   const [activeQuizSubject, setActiveQuizSubject] = useState<string | null>(null);
@@ -892,21 +916,6 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               const levelQuizzes: QuizQuestion[] = levelKurikulum?.quiz || [];
               const matchedKaderisasi = kaderisasi.find((k: any) => k.nama === event?.level || k.id === event?.level);
 
-              const handleDownloadMaterial = (url?: string, fileName?: string) => {
-                if (!url || url === "#") {
-                  toast.info(`Berkas "${fileName || "materi"}" sedang disiapkan oleh panitia/instruktur.`);
-                  return;
-                }
-                const link = document.createElement("a");
-                link.href = url;
-                link.setAttribute("download", fileName || "berkas-materi");
-                link.target = "_blank";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                toast.success(`Mengunduh berkas: ${fileName || "berkas materi"}`);
-              };
-
               const getSessionResources = (sessionTitle: string) => {
                 const clean = sessionTitle.toLowerCase().replace(/^(sesi\s*\d+[:\-.]?|\d+[:\-.]?)\s*/i, "").trim();
                 const rawWords = clean.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
@@ -1141,13 +1150,13 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                               <div className="pl-0 sm:pl-8 pt-1 w-full max-w-full overflow-hidden">
                                 <div className="p-2.5 rounded-xl bg-zinc-50/70 dark:bg-zinc-950/70 border border-zinc-200/60 dark:border-zinc-800/60 space-y-2">
                                   <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                                    <span className="flex items-center gap-1">
-                                      <FileDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                      Berkas Materi Sesi:
+                                    <span className="flex items-center gap-1.5">
+                                      <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                      Modul & Berkas Materi:
                                     </span>
                                     {files.length > 0 && (
                                       <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-                                        {files.length} Berkas Siap Unduh
+                                        {files.length} Modul Tersedia
                                       </span>
                                     )}
                                   </div>
@@ -1177,10 +1186,19 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
                                             <Button
                                               size="sm"
-                                              onClick={() => handleDownloadMaterial(file.url, file.name)}
-                                              className="h-6 px-2 text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer shrink-0 shadow-none flex items-center gap-1"
+                                              type="button"
+                                              onClick={() =>
+                                                setActiveReadingModal({
+                                                  fileName: file.name,
+                                                  fileUrl: file.url,
+                                                  fileSize: file.size,
+                                                  sessionTitle: sesi,
+                                                  isRef: file.isRef
+                                                })
+                                              }
+                                              className="h-6 px-2.5 text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer shrink-0 shadow-none flex items-center gap-1 transition-colors"
                                             >
-                                              <Download className="w-3 h-3" /> Unduh
+                                              <BookOpen className="w-3 h-3" /> Baca
                                             </Button>
                                           </div>
                                         );
@@ -2158,6 +2176,154 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             </div>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal Baca Modul & Materi Sesi (Penampil Modul Pembelajaran Tanpa Pindah Halaman) */}
+    <Dialog
+      open={Boolean(activeReadingModal)}
+      onOpenChange={(open) => {
+        if (!open) setActiveReadingModal(null);
+      }}
+    >
+      <DialogContent showCloseButton={false} className="max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-2xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl">
+        {activeReadingModal && (() => {
+          const fileName = activeReadingModal.fileName || "Modul Materi";
+          const fileUrl = activeReadingModal.fileUrl;
+          const typeBadge = getFileTypeBadge(fileName);
+          const ext = fileName.split(".").pop()?.toLowerCase() || "";
+          const isPdf = ext === "pdf" || (fileUrl && fileUrl.toLowerCase().includes(".pdf"));
+          const isImage = ["jpg", "jpeg", "png", "webp", "svg", "gif"].includes(ext);
+          const isOfficeDoc = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+
+          const embedUrl = isOfficeDoc && fileUrl && fileUrl.startsWith("http")
+            ? `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`
+            : fileUrl;
+
+          return (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Header */}
+              <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-900/40">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${typeBadge.color}`}>
+                        {typeBadge.label}
+                      </Badge>
+                      {activeReadingModal.isRef && (
+                        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
+                          Referensi Tambahan
+                        </Badge>
+                      )}
+                      {activeReadingModal.sessionTitle && (
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate max-w-xs">
+                          {activeReadingModal.sessionTitle}
+                        </span>
+                      )}
+                    </div>
+                    <DialogTitle className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate block">
+                      {fileName}
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Penampil modul materi kegiatan {fileName}
+                    </DialogDescription>
+                  </div>
+                </div>
+
+                {/* Header Actions */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {fileUrl && fileUrl !== "#" && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownloadMaterial(fileUrl, fileName)}
+                        className="h-7.5 px-2.5 text-[11px] font-semibold gap-1 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                        title="Unduh untuk baca luring (offline)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Unduh</span>
+                      </Button>
+
+                      <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-7.5 px-2.5 text-[11px] font-semibold inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-400 hover:text-blue-600 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                        title="Buka di tab terpisah"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Tab Baru</span>
+                      </a>
+                    </>
+                  )}
+
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setActiveReadingModal(null)}
+                    className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg cursor-pointer"
+                    title="Tutup penampil modul"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Reader Body */}
+              <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-2 sm:p-4 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
+                {!fileUrl || fileUrl === "#" ? (
+                  <div className="p-8 text-center max-w-md space-y-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                        Berkas Sedang Disiapkan
+                      </h4>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        Instruktur atau panitia belum mengunggah salinan digital untuk berkas ini. Anda dapat mempelajari silabus atau menghubungi panitia pelaksana.
+                      </p>
+                    </div>
+                  </div>
+                ) : isImage ? (
+                  <div className="w-full h-full overflow-auto flex items-center justify-center p-2">
+                    <img
+                      src={fileUrl}
+                      alt={fileName}
+                      className="max-w-full max-h-full object-contain rounded-xl shadow-md border border-zinc-200 dark:border-zinc-800"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex flex-col rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner">
+                    <iframe
+                      src={embedUrl}
+                      title={fileName}
+                      className="w-full h-full border-0 rounded-xl"
+                      allow="autoplay; encrypted-media"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Reader Footer Info */}
+              <div className="px-4 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
+                <span className="flex items-center gap-1.5 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  Mode Pembaca Modul Mandiri
+                </span>
+                {activeReadingModal.fileSize && (
+                  <span className="font-mono text-[10px] shrink-0">
+                    Ukuran: {activeReadingModal.fileSize}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </DialogContent>
     </Dialog>
 

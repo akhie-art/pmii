@@ -54,9 +54,7 @@ export default function DashboardProfilPage() {
   // Step 1: Data Diri & Medis
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
-  const [nik, setNik] = useState("");
-  const [ktpName, setKtpName] = useState("");
-  const [ktpFileUrl, setKtpFileUrl] = useState<string | undefined>(undefined);
+  const [nim, setNim] = useState("");
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [alamatRumah, setAlamatRumah] = useState("");
@@ -80,7 +78,6 @@ export default function DashboardProfilPage() {
   const [pendidikanSD, setPendidikanSD] = useState("");
   const [pendidikanSMP, setPendidikanSMP] = useState("");
   const [pendidikanSMA, setPendidikanSMA] = useState("");
-  const [organisasiSD, setOrganisasiSD] = useState("");
   const [organisasiSMP, setOrganisasiSMP] = useState("");
   const [organisasiSMA, setOrganisasiSMA] = useState("");
   const [organisasiPT, setOrganisasiPT] = useState("");
@@ -171,9 +168,7 @@ export default function DashboardProfilPage() {
         setName(mine.name || loggedInUser?.name || "");
         setAvatar(mine.avatar || loggedInUser?.avatar || matchedBoard?.avatar || "");
         setGender((mine.gender as any) || "Laki-laki");
-        setNik(mine.nik || "");
-        setKtpName(mine.ktpName || "");
-        setKtpFileUrl(mine.ktpFileUrl || undefined);
+        setNim(mine.nim || mine.nik || "");
         setTempatLahir(mine.tempatLahir || "");
         setTanggalLahir(mine.tanggalLahir || "");
         setAlamatRumah(mine.alamatRumah || "");
@@ -195,7 +190,6 @@ export default function DashboardProfilPage() {
         setPendidikanSD(mine.pendidikanSD || "");
         setPendidikanSMP(mine.pendidikanSMP || "");
         setPendidikanSMA(mine.pendidikanSMA || "");
-        setOrganisasiSD(mine.organisasiSD || "");
         setOrganisasiSMP(mine.organisasiSMP || "");
         setOrganisasiSMA(mine.organisasiSMA || "");
         setOrganisasiPT(mine.organisasiPT || "");
@@ -406,67 +400,6 @@ export default function DashboardProfilPage() {
     }
   };
 
-  const handleKtpUpload = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Ukuran berkas KTP maksimal 5 MB.");
-      return;
-    }
-    const toastId = toast.loading(`Mengunggah berkas KTP (${file.name})...`);
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop() || "pdf";
-        const cadreId = currentCadre?.id || currentUser?.id || "cadre";
-        const filePath = `ktp/${cadreId}-${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from("materials")
-          .upload(filePath, file, { cacheControl: "3600", upsert: true });
-
-        if (uploadError) {
-          console.error("Supabase KTP upload error:", uploadError);
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const base64Url = e.target?.result as string;
-            setKtpName(file.name);
-            setKtpFileUrl(base64Url);
-            toast.success(`Berkas KTP (${file.name}) siap disimpan.`, { id: toastId });
-          };
-          reader.readAsDataURL(file);
-          return;
-        }
-
-        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
-        if (ktpFileUrl && ktpFileUrl !== data.publicUrl) {
-          deleteStorageFile(ktpFileUrl).catch(() => {});
-        }
-        setKtpName(file.name);
-        setKtpFileUrl(data.publicUrl);
-        toast.success(`Berkas KTP (${file.name}) berhasil diunggah.`, { id: toastId });
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64Url = e.target?.result as string;
-          setKtpName(file.name);
-          setKtpFileUrl(base64Url);
-          toast.success(`Berkas KTP (${file.name}) siap disimpan.`, { id: toastId });
-        };
-        reader.onerror = () => toast.error("Gagal membaca berkas KTP.", { id: toastId });
-        reader.readAsDataURL(file);
-      }
-    } catch (err) {
-      console.error("Error in handleKtpUpload:", err);
-      toast.error("Gagal mengunggah berkas KTP.", { id: toastId });
-    }
-  };
-
-  const handleRemoveKtp = async () => {
-    if (ktpFileUrl) {
-      deleteStorageFile(ktpFileUrl).catch(() => {});
-    }
-    setKtpName("");
-    setKtpFileUrl(undefined);
-    toast.info("Lampiran KTP dihapus.");
-  };
-
   const handleKtmUpload = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Ukuran berkas KTM maksimal 5 MB.");
@@ -545,9 +478,7 @@ export default function DashboardProfilPage() {
         name: name.trim(),
         avatar: avatar,
         gender,
-        nik: nik.trim(),
-        ktpName: ktpName.trim(),
-        ktpFileUrl: ktpFileUrl,
+        nim: nim.trim(),
         tempatLahir: tempatLahir.trim(),
         tanggalLahir: tanggalLahir.trim(),
         alamatRumah: alamatRumah.trim(),
@@ -568,7 +499,6 @@ export default function DashboardProfilPage() {
         pendidikanSD: pendidikanSD.trim(),
         pendidikanSMP: pendidikanSMP.trim(),
         pendidikanSMA: pendidikanSMA.trim(),
-        organisasiSD: organisasiSD.trim(),
         organisasiSMP: organisasiSMP.trim(),
         organisasiSMA: organisasiSMA.trim(),
         organisasiPT: organisasiPT.trim(),
@@ -596,7 +526,7 @@ export default function DashboardProfilPage() {
           loggedInUser.phone = phone.trim();
           loggedInUser.address = address.trim();
           loggedInUser.gender = gender;
-          loggedInUser.nik = nik.trim();
+          loggedInUser.nim = nim.trim();
           localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInUser));
           window.dispatchEvent(new CustomEvent("pmii-profile-updated", { detail: loggedInUser }));
 
@@ -676,7 +606,7 @@ export default function DashboardProfilPage() {
           currentCadre?.id,
           currentCadre?.user_id,
           currentCadre?.email,
-          currentCadre?.nik,
+          currentCadre?.nim || currentCadre?.nik,
           currentCadre?.name
         ],
         newPassword
@@ -754,9 +684,7 @@ export default function DashboardProfilPage() {
     setName(currentCadre.name || "");
     setAvatar(currentCadre.avatar || "");
     setGender((currentCadre.gender as any) || "Laki-laki");
-    setNik(currentCadre.nik || "");
-    setKtpName(currentCadre.ktpName || "");
-    setKtpFileUrl(currentCadre.ktpFileUrl || undefined);
+    setNim(currentCadre.nim || currentCadre.nik || "");
     setTempatLahir(currentCadre.tempatLahir || "");
     setTanggalLahir(currentCadre.tanggalLahir || "");
     setAlamatRumah(currentCadre.alamatRumah || "");
@@ -778,7 +706,6 @@ export default function DashboardProfilPage() {
     setPendidikanSD(currentCadre.pendidikanSD || "");
     setPendidikanSMP(currentCadre.pendidikanSMP || "");
     setPendidikanSMA(currentCadre.pendidikanSMA || "");
-    setOrganisasiSD(currentCadre.organisasiSD || "");
     setOrganisasiSMP(currentCadre.organisasiSMP || "");
     setOrganisasiSMA(currentCadre.organisasiSMA || "");
     setOrganisasiPT(currentCadre.organisasiPT || "");
@@ -936,8 +863,8 @@ export default function DashboardProfilPage() {
                     setName={setName}
                     gender={gender}
                     setGender={setGender}
-                    nik={nik}
-                    setNik={setNik}
+                    nim={nim}
+                    setNim={setNim}
                     tempatLahir={tempatLahir}
                     setTempatLahir={setTempatLahir}
                     tanggalLahir={tanggalLahir}
@@ -950,11 +877,6 @@ export default function DashboardProfilPage() {
                     setGolonganDarah={setGolonganDarah}
                     riwayatPenyakit={riwayatPenyakit}
                     setRiwayatPenyakit={setRiwayatPenyakit}
-                    ktpName={ktpName}
-                    setKtpName={setKtpName}
-                    ktpFileUrl={ktpFileUrl}
-                    onKtpUpload={handleKtpUpload}
-                    onRemoveKtp={handleRemoveKtp}
                   />
                 )}
 

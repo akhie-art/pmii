@@ -26,7 +26,7 @@ export async function saveCadres(cadresList: CadreFollowUp[]): Promise<boolean> 
   // Record any passwords into credentials store
   cadresList.forEach(c => {
     if (c.password) {
-      setUserPassword([c.id, c.user_id, c.email, c.nik, c.name], c.password);
+      setUserPassword([c.id, c.user_id, c.email, c.nim, c.nik, c.name], c.password);
     }
   });
 

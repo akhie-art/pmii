@@ -60,7 +60,7 @@ export default function LengkapiDataPage() {
 
   // Form states
   const [name, setName] = useState("");
-  const [nik, setNik] = useState("");
+  const [nim, setNim] = useState("");
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
@@ -110,7 +110,6 @@ export default function LengkapiDataPage() {
   };
 
   const [avatar, setAvatar] = useState("");
-  const [pasFotoName, setPasFotoName] = useState("");
 
   // Opsi aktivasi akun login
   const [createAccount, setCreateAccount] = useState(true);
@@ -166,7 +165,7 @@ export default function LengkapiDataPage() {
         } else {
           setMemberData(foundCadre);
           setName(foundCadre.name || "");
-          setNik(foundCadre.nik || "");
+          setNim(foundCadre.nim || foundCadre.nik || "");
           setTempatLahir(foundCadre.tempatLahir || "");
           setTanggalLahir(foundCadre.tanggalLahir || "");
           setGender(foundCadre.gender === "Perempuan" ? "Perempuan" : "Laki-laki");
@@ -184,8 +183,7 @@ export default function LengkapiDataPage() {
           setAngkatan(foundCadre.angkatan || "2024");
           setLevel(foundCadre.level || "MAPABA");
           setKomisariat(foundCadre.commissariat || "Ki Ageng Getas Pendawa");
-          setAvatar(foundCadre.avatar || foundCadre.pasFotoName || "");
-          setPasFotoName(foundCadre.pasFotoName || "");
+          setAvatar(foundCadre.avatar || "");
         }
       } catch (err) {
         console.error("Error loading member data:", err);
@@ -229,7 +227,6 @@ export default function LengkapiDataPage() {
           reader.onload = (event) => {
             const base64 = event.target?.result as string;
             setAvatar(base64);
-            setPasFotoName(file.name);
           };
           reader.readAsDataURL(file);
           return;
@@ -243,13 +240,11 @@ export default function LengkapiDataPage() {
         }
 
         setAvatar(publicUrl);
-        setPasFotoName(file.name);
       } else {
         const reader = new FileReader();
         reader.onload = (event) => {
           const base64 = event.target?.result as string;
           setAvatar(base64);
-          setPasFotoName(file.name);
         };
         reader.readAsDataURL(file);
       }
@@ -284,7 +279,7 @@ export default function LengkapiDataPage() {
         ...memberData,
         id: memberId,
         name: name.trim(),
-        nik: nik.trim(),
+        nim: nim.trim(),
         tempatLahir: tempatLahir.trim(),
         tanggalLahir: tanggalLahir.trim(),
         gender,
@@ -304,7 +299,6 @@ export default function LengkapiDataPage() {
         level,
         commissariat: komisariat,
         avatar,
-        pasFotoName: avatar,
         status: "AKTIF"
       };
 
@@ -584,12 +578,11 @@ export default function LengkapiDataPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Nomor Induk Kependudukan (NIK 16 Digit)</Label>
+                  <Label className="text-xs">Nomor Induk Mahasiswa (NIM)</Label>
                   <Input
-                    value={nik}
-                    onChange={(e) => setNik(e.target.value)}
-                    maxLength={16}
-                    placeholder="Contoh: 3324010101010001"
+                    value={nim}
+                    onChange={(e) => setNim(e.target.value)}
+                    placeholder="Contoh: 21010123"
                     className="text-xs font-mono bg-zinc-50 dark:bg-zinc-950"
                   />
                 </div>

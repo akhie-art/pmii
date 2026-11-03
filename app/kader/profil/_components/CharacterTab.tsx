@@ -10,9 +10,10 @@ import {
   Target,
   ArrowRight,
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  Calendar
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupTextarea } from "@/components/ui/input-group";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +28,7 @@ import {
   CareerAssessmentResult
 } from "@/lib/careerAssessment";
 import { CharacterTabProps } from "./types";
+import { ProfileField } from "./ProfileField";
 
 export function CharacterTab({
   isEditing,
@@ -89,62 +91,69 @@ export function CharacterTab({
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       {/* 1. INFORMASI KEPENGURUSAN */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Tahun Angkatan PMII
-          </label>
-          <Input
-            placeholder="Contoh: 2026"
-            value={isGraduated ? angkatan : ""}
-            disabled={!isEditing || !isGraduated}
-            onChange={(e) => {
-              if (isGraduated) {
-                setAngkatan(e.target.value);
-              }
-            }}
-            className={`h-8.5 text-xs rounded-lg ${
-              !isGraduated
-                ? "bg-zinc-100 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
-                : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-            }`}
-          />
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+        <ProfileField
+          label="Tahun Angkatan PMII"
+          isEditing={isEditing}
+          value={isGraduated ? angkatan : ""}
+          emptyPlaceholder={isGraduated ? "Belum dicantumkan" : "Kader Baru (Belum Kelulusan)"}
+        >
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Calendar className="size-4 text-zinc-400" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="Contoh: 2026"
+              value={isGraduated ? angkatan : ""}
+              disabled={!isGraduated}
+              onChange={(e) => {
+                if (isGraduated) {
+                  setAngkatan(e.target.value);
+                }
+              }}
+              className="font-mono"
+            />
+          </InputGroup>
+        </ProfileField>
 
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Jabatan Kepengurusan
-          </label>
-          <Input
-            disabled
-            placeholder="Misal: Anggota, Pengurus Komisariat"
-            value={jabatan}
-            className="h-8.5 text-xs bg-zinc-100 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
-          />
-        </div>
+        <ProfileField
+          label="Jabatan Kepengurusan"
+          isEditing={false}
+          value={jabatan || "Anggota"}
+          emptyPlaceholder="Anggota"
+        >
+          <div className="h-9.5 px-3.5 flex items-center text-xs font-semibold text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            {jabatan || "Anggota"}
+          </div>
+        </ProfileField>
       </div>
 
-      <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+      <div className="space-y-3.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
         {/* 2. INPUT: ORIENTASI PROFETIK / JALUR PENGEMBANGAN */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-              Orientasi Profetik / Jalur Pengembangan
-            </label>
-            {isEditing && (
+        <ProfileField
+          label="Orientasi Profetik / Jalur Pengembangan"
+          isEditing={isEditing}
+          value={orientasiProfetik}
+          emptyPlaceholder="Belum ditentukan (Intelektual, Advokasi, Keagamaan, dsb.)"
+          badge={
+            isEditing ? (
               <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
                 Bebas disunting
               </span>
-            )}
-          </div>
-          <Input
-            disabled={!isEditing}
-            placeholder="Misal: Intelektual, Akademik, Advokasi, Keagamaan"
-            value={orientasiProfetik}
-            onChange={(e) => setOrientasiProfetik(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
-        </div>
+            ) : undefined
+          }
+        >
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Compass className="size-4 text-blue-500" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="Misal: Intelektual, Akademik, Advokasi Kebijakan, Entrepreneur"
+              value={orientasiProfetik}
+              onChange={(e) => setOrientasiProfetik(e.target.value)}
+            />
+          </InputGroup>
+        </ProfileField>
 
         {/* 3. REKOMENDASI PREFERENSI KOGNITIF & ARAH KARIER - ULTRA CLEAN & MINIMALIST */}
         <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 p-3 sm:p-3.5 space-y-2">
@@ -227,40 +236,54 @@ export function CharacterTab({
         </div>
 
         {/* 4. INPUT: MINAT & PASSION */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-              Minat & Passion
-            </label>
-            {isEditing && (
+        <ProfileField
+          label="Minat & Passion"
+          isEditing={isEditing}
+          value={minatPassion}
+          emptyPlaceholder="Belum dicantumkan (Kepenulisan, Riset, Wirausaha, dsb.)"
+          badge={
+            isEditing ? (
               <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
                 Bebas disunting
               </span>
-            )}
-          </div>
-          <Input
-            disabled={!isEditing}
-            placeholder="Misal: Kepenulisan, Desain Grafis, Riset, Wirausaha"
-            value={minatPassion}
-            onChange={(e) => setMinatPassion(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
-        </div>
+            ) : undefined
+          }
+        >
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Sparkles className="size-4 text-amber-500" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="Misal: Kepenulisan, Desain Grafis, Riset, Wirausaha"
+              value={minatPassion}
+              onChange={(e) => setMinatPassion(e.target.value)}
+            />
+          </InputGroup>
+        </ProfileField>
 
         {/* 5. INPUT: MOTIVASI BERGABUNG PMII (TEXTAREA) */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Motivasi Bergabung PMII
-          </label>
-          <textarea
-            disabled={!isEditing}
-            rows={2}
-            placeholder="Alasan, komitmen & cita-cita berkhidmat di PMII"
-            value={motivasiMapaba}
-            onChange={(e) => setMotivasiMapaba(e.target.value)}
-            className="w-full text-xs p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default resize-none"
-          />
-        </div>
+        <ProfileField
+          label="Motivasi Bergabung PMII"
+          isEditing={isEditing}
+          value={motivasiMapaba}
+          emptyPlaceholder="Belum menuliskan motivasi bergabung PMII"
+          displayValue={
+            motivasiMapaba ? (
+              <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic">
+                &ldquo;{motivasiMapaba}&rdquo;
+              </p>
+            ) : undefined
+          }
+        >
+          <InputGroup className="items-start">
+            <InputGroupTextarea
+              rows={3}
+              placeholder="Tuliskan alasan, komitmen & cita-cita berkhidmat di PMII"
+              value={motivasiMapaba}
+              onChange={(e) => setMotivasiMapaba(e.target.value)}
+            />
+          </InputGroup>
+        </ProfileField>
       </div>
 
       {/* MODAL KUESIONER & HASIL ANALISIS KOGNITIF */}

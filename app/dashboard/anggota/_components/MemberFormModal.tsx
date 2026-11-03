@@ -11,7 +11,10 @@ import {
   Trash,
   Check,
   Building,
-  Heart
+  Heart,
+  AlertCircle,
+  UserPlus,
+  UserCheck
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +26,6 @@ import {
   SelectContent,
   SelectItem
 } from "@/components/ui/select";
-import NikInput from "./NikInput";
 import type { Member, CadreHistory } from "./types";
 import { DocumentAttachment } from "@/components/ui/document-attachment";
 import {
@@ -52,19 +54,18 @@ export default function MemberFormModal({
 }: MemberFormModalProps) {
   const isEdit = Boolean(member);
   const [activeTab, setActiveTab] = useState<"diri" | "akademik" | "riwayat" | "kaderisasi">("diri");
+  const [formErrors, setFormErrors] = useState<{ name?: string; email?: string }>({});
+  const [validationAlert, setValidationAlert] = useState<string | null>(null);
 
   // Step 1: Data Diri
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
-  const [nik, setNik] = useState("");
-  const [ktpName, setKtpName] = useState("");
-  const [ktpFileUrl, setKtpFileUrl] = useState("");
+  const [nim, setNim] = useState("");
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [alamatRumah, setAlamatRumah] = useState("");
   const [alamatDomisili, setAlamatDomisili] = useState("");
   const [golonganDarah, setGolonganDarah] = useState("O");
-  const [pasFotoName, setPasFotoName] = useState("");
   const [avatar, setAvatar] = useState("");
   const [riwayatPenyakit, setRiwayatPenyakit] = useState("");
 
@@ -84,7 +85,6 @@ export default function MemberFormModal({
   const [pendidikanSD, setPendidikanSD] = useState("");
   const [pendidikanSMP, setPendidikanSMP] = useState("");
   const [pendidikanSMA, setPendidikanSMA] = useState("");
-  const [organisasiSD, setOrganisasiSD] = useState("");
   const [organisasiSMP, setOrganisasiSMP] = useState("");
   const [organisasiSMA, setOrganisasiSMA] = useState("");
   const [organisasiPT, setOrganisasiPT] = useState("");
@@ -101,19 +101,18 @@ export default function MemberFormModal({
 
   useEffect(() => {
     if (!isOpen) return;
+    setFormErrors({});
+    setValidationAlert(null);
 
     if (member) {
       setName(member.name || "");
       setGender(member.gender || "Laki-laki");
-      setNik(member.nik || "");
-      setKtpName(member.ktpName || "");
-      setKtpFileUrl(member.ktpFileUrl || "");
+      setNim(member.nim || member.nik || "");
       setTempatLahir(member.tempatLahir || "");
       setTanggalLahir(member.tanggalLahir || "");
       setAlamatRumah(member.alamatRumah || "");
       setAlamatDomisili(member.alamatDomisili || "");
       setGolonganDarah(member.golonganDarah || "O");
-      setPasFotoName(member.pasFotoName || "");
       setAvatar(member.avatar || "");
       setRiwayatPenyakit(member.riwayatPenyakit || "");
 
@@ -131,7 +130,6 @@ export default function MemberFormModal({
       setPendidikanSD(member.pendidikanSD || "");
       setPendidikanSMP(member.pendidikanSMP || "");
       setPendidikanSMA(member.pendidikanSMA || "");
-      setOrganisasiSD(member.organisasiSD || "");
       setOrganisasiSMP(member.organisasiSMP || "");
       setOrganisasiSMA(member.organisasiSMA || "");
       setOrganisasiPT(member.organisasiPT || "");
@@ -148,15 +146,12 @@ export default function MemberFormModal({
       // Reset form
       setName("");
       setGender("Laki-laki");
-      setNik("");
-      setKtpName("");
-      setKtpFileUrl("");
+      setNim("");
       setTempatLahir("");
       setTanggalLahir("");
       setAlamatRumah("");
       setAlamatDomisili("");
       setGolonganDarah("O");
-      setPasFotoName("");
       setAvatar("");
       setRiwayatPenyakit("");
 
@@ -174,7 +169,6 @@ export default function MemberFormModal({
       setPendidikanSD("");
       setPendidikanSMP("");
       setPendidikanSMA("");
-      setOrganisasiSD("");
       setOrganisasiSMP("");
       setOrganisasiSMA("");
       setOrganisasiPT("");
@@ -191,18 +185,16 @@ export default function MemberFormModal({
     setActiveTab("diri");
   }, [isOpen, member, defaultKomisariat]);
 
-  const handleKtpUpload = (file: File) => {
-    setKtpName(file.name);
+  const handlePasFotoUpload = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      setKtpFileUrl(e.target?.result as string);
+      setAvatar(e.target?.result as string);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleRemoveKtp = () => {
-    setKtpName("");
-    setKtpFileUrl("");
+  const handleRemovePasFoto = () => {
+    setAvatar("");
   };
 
   const handleKtmUpload = (file: File) => {
@@ -221,32 +213,61 @@ export default function MemberFormModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim()) {
+  const resolvedPhotoUrl = avatar;
+
+  const resolvedKtmUrl =
+    ktmFileUrl ||
+    (ktmName &&
+    (ktmName.startsWith("data:") ||
+      ktmName.startsWith("http") ||
+      ktmName.startsWith("/"))
+      ? ktmName
+      : "");
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const errors: { name?: string; email?: string } = {};
+    if (!name.trim()) {
+      errors.name = "Nama lengkap wajib diisi.";
+    }
+    if (!email.trim()) {
+      errors.email = "Alamat email wajib diisi.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errors.email = "Format alamat email tidak valid.";
+    }
+
+    setFormErrors(errors);
+
+    if (errors.name) {
       setActiveTab("diri");
+      setValidationAlert("Mohon lengkapi Nama Lengkap pada Data Diri.");
       return;
     }
 
+    if (errors.email) {
+      setActiveTab("akademik");
+      setValidationAlert("Mohon isi Email valid pada informasi Akademik & Kontak.");
+      return;
+    }
+
+    setValidationAlert(null);
     onSubmit({
       name: name.trim(),
       gender,
-      nik: nik.trim(),
-      ktpName,
-      ktpFileUrl,
+      nim: nim.trim(),
       tempatLahir: tempatLahir.trim(),
       tanggalLahir,
       alamatRumah: alamatRumah.trim(),
       alamatDomisili: alamatDomisili.trim(),
       golonganDarah,
-      pasFotoName,
-      avatar,
+      avatar: resolvedPhotoUrl,
       riwayatPenyakit: riwayatPenyakit.trim(),
       perguruanTinggi: perguruanTinggi.trim(),
       fakultas: fakultas.trim(),
       jurusan: jurusan.trim(),
       ktmName,
-      ktmFileUrl,
+      ktmFileUrl: resolvedKtmUrl,
       email: email.trim(),
       phone: phone.trim(),
       instagram: instagram.trim(),
@@ -255,7 +276,6 @@ export default function MemberFormModal({
       pendidikanSD: pendidikanSD.trim(),
       pendidikanSMP: pendidikanSMP.trim(),
       pendidikanSMA: pendidikanSMA.trim(),
-      organisasiSD: organisasiSD.trim(),
       organisasiSMP: organisasiSMP.trim(),
       organisasiSMA: organisasiSMA.trim(),
       organisasiPT: organisasiPT.trim(),
@@ -271,36 +291,54 @@ export default function MemberFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <Card className="w-full max-w-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden relative max-h-[90vh] flex flex-col text-zinc-900 dark:text-zinc-100">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fadeIn">
+      <Card className="w-full max-w-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden relative max-h-[92vh] flex flex-col text-zinc-900 dark:text-zinc-100">
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           {/* Header */}
           <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-950">
-            <div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
-                {isEdit ? "Edit Profil Anggota" : "Registrasi Anggota Baru"}
-              </h3>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
-                Lengkapi identitas, riwayat kaderisasi, dan informasi keanggotaan
-              </p>
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                isEdit 
+                  ? "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60" 
+                  : "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60"
+              }`}>
+                {isEdit ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    {isEdit ? "Edit Profil Anggota" : "Registrasi Anggota Baru"}
+                  </h3>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    isEdit
+                      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
+                      : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/60"
+                  }`}>
+                    {isEdit ? (member?.name ? member.name.slice(0, 22) : "Mode Edit") : "Kader Baru"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Lengkapi identitas, riwayat kaderisasi, dan dokumen resmi keanggotaan
+                </p>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="w-7 h-7 rounded-md border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer"
+              className="w-7 h-7 rounded-md border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Clean Underline Tabs */}
-          <div className="flex border-b border-zinc-200 dark:border-zinc-800 px-4 gap-4 text-xs font-medium bg-white dark:bg-zinc-950 overflow-x-auto no-scrollbar">
+          {/* Clean Underline Tabs with Step Numbers & Error Indicators */}
+          <div className="flex border-b border-zinc-200 dark:border-zinc-800 px-4 gap-2 text-xs font-medium bg-white dark:bg-zinc-950 overflow-x-auto no-scrollbar">
             {[
-              { id: "diri", label: "1. Data Diri", icon: User },
-              { id: "akademik", label: "2. Akademik & Kontak", icon: GraduationCap },
-              { id: "riwayat", label: "3. Riwayat Pendidikan", icon: Briefcase },
-              { id: "kaderisasi", label: "4. Kaderisasi & Status", icon: Compass }
+              { id: "diri", label: "1. Data Diri", icon: User, hasError: Boolean(formErrors.name) },
+              { id: "akademik", label: "2. Akademik & Kontak", icon: GraduationCap, hasError: Boolean(formErrors.email) },
+              { id: "riwayat", label: "3. Riwayat Pendidikan", icon: Briefcase, hasError: false },
+              { id: "kaderisasi", label: "4. Kaderisasi & Status", icon: Compass, hasError: false }
             ].map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -308,17 +346,38 @@ export default function MemberFormModal({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`py-2.5 cursor-pointer border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`py-2.5 px-2 cursor-pointer border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                     isActive
                       ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                   }`}
                 >
+                  <tab.icon className="w-3.5 h-3.5" />
                   <span>{tab.label}</span>
+                  {tab.hasError && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 animate-ping" />
+                  )}
                 </button>
               );
             })}
           </div>
+
+          {/* Validation Alert Banner */}
+          {validationAlert && (
+            <div className="mx-4 mt-3 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                <span>{validationAlert}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setValidationAlert(null)}
+                className="text-rose-400 hover:text-rose-700 p-0.5 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
 
           {/* Form Body */}
           <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-left bg-zinc-50/50 dark:bg-zinc-950/40">
@@ -327,15 +386,23 @@ export default function MemberFormModal({
               <div className="space-y-3.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Nama Lengkap *
+                    <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
+                      <span>Nama Lengkap *</span>
+                      {formErrors.name && (
+                        <span className="text-[10px] text-rose-500 font-normal">{formErrors.name}</span>
+                      )}
                     </label>
                     <Input
                       required
                       placeholder="Misal: Sahabat M. Zulkifli"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
+                      }}
+                      className={`h-8.5 text-xs bg-white dark:bg-zinc-900 rounded-lg text-zinc-900 dark:text-zinc-100 ${
+                        formErrors.name ? "border-rose-500 focus-visible:ring-rose-500/20" : "border-zinc-200 dark:border-zinc-800"
+                      }`}
                     />
                   </div>
 
@@ -355,12 +422,17 @@ export default function MemberFormModal({
                   </div>
                 </div>
 
-                {/* NIK Input */}
+                {/* NIM Input */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                    Nomor Induk Kependudukan (NIK 16 Digit)
+                    Nomor Induk Mahasiswa (NIM)
                   </label>
-                  <NikInput value={nik} onChange={setNik} />
+                  <Input
+                    placeholder="Masukkan NIM (contoh: 21010123)"
+                    value={nim}
+                    onChange={(e) => setNim(e.target.value)}
+                    className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -446,72 +518,18 @@ export default function MemberFormModal({
                   </div>
                 </div>
 
-                {/* Upload KTP & Foto Minimal Box */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <DocumentAttachment
-                      label="Lampiran Berkas KTP (Asli / Scan)"
-                      fileName={ktpName}
-                      fileUrl={ktpFileUrl}
-                      onUpload={handleKtpUpload}
-                      onRemove={handleRemoveKtp}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Pas Foto Resmi 3x4
-                    </label>
-                    {avatar || pasFotoName ? (
-                      <div className="flex items-center justify-between p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {avatar && (
-                            <img
-                              src={avatar}
-                              alt="Pas Foto"
-                              className="w-7 h-7 rounded object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
-                            />
-                          )}
-                          <span className="truncate max-w-[150px] text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-                            {pasFotoName || "foto_terpilih.jpg"}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPasFotoName("");
-                            setAvatar("");
-                          }}
-                          className="text-zinc-400 hover:text-rose-500 p-0.5 cursor-pointer"
-                        >
-                          <Trash className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center justify-center gap-2 p-2 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50 rounded-lg cursor-pointer bg-white dark:bg-zinc-900 text-xs text-zinc-500">
-                        <Upload className="w-3.5 h-3.5 text-zinc-400" />
-                        <span className="text-[11px]">Pilih Pas Foto</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setPasFotoName(file.name);
-                              const reader = new FileReader();
-                              reader.onload = (ev) => {
-                                if (ev.target?.result) {
-                                  setAvatar(ev.target.result as string);
-                                }
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
+                {/* Upload Dokumen Resmi: Pas Foto 3x4 & KTP (Full Width, Consistent, No Cramping) */}
+                <div className="space-y-3 pt-2">
+                  <DocumentAttachment
+                    label="Pas Foto Resmi 3x4"
+                    description="Format: JPG, PNG, atau WebP (Rasio 3:4 dengan pakaian rapi/jas PMII & background resmi)"
+                    fileName={resolvedPhotoUrl ? "pas_foto_resmi.jpg" : ""}
+                    fileUrl={resolvedPhotoUrl}
+                    onUpload={handlePasFotoUpload}
+                    onRemove={handleRemovePasFoto}
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    accentColor="blue"
+                  />
                 </div>
               </div>
             )}
@@ -680,16 +698,24 @@ export default function MemberFormModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Email *
+                    <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
+                      <span>Email *</span>
+                      {formErrors.email && (
+                        <span className="text-[10px] text-rose-500 font-normal">{formErrors.email}</span>
+                      )}
                     </label>
                     <Input
                       type="email"
                       required
                       placeholder="kader@pmii.org"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
+                      }}
+                      className={`h-8.5 text-xs bg-white dark:bg-zinc-900 rounded-lg text-zinc-900 dark:text-zinc-100 ${
+                        formErrors.email ? "border-rose-500 focus-visible:ring-rose-500/20" : "border-zinc-200 dark:border-zinc-800"
+                      }`}
                     />
                   </div>
 
@@ -744,13 +770,16 @@ export default function MemberFormModal({
                   </div>
                 </div>
 
-                <div className="pt-1">
+                <div className="pt-2">
                   <DocumentAttachment
                     label="Unggah Kartu Tanda Mahasiswa (KTM Asli / Scan)"
+                    description="Format: JPG, PNG, WebP, atau PDF (Maksimal 5 MB)"
                     fileName={ktmName}
-                    fileUrl={ktmFileUrl}
+                    fileUrl={resolvedKtmUrl}
                     onUpload={handleKtmUpload}
                     onRemove={handleRemoveKtm}
+                    accept="image/png,image/jpeg,image/jpg,image/webp,.pdf"
+                    accentColor="blue"
                   />
                 </div>
               </div>
@@ -955,8 +984,8 @@ export default function MemberFormModal({
           </div>
 
           {/* Footer */}
-          <div className="p-3.5 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
-            <div className="flex gap-2">
+          <div className="p-3.5 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row justify-between items-center gap-2.5 sm:gap-0 bg-zinc-50/50 dark:bg-zinc-900/50">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               {activeTab !== "diri" && (
                 <Button
                   type="button"
@@ -974,7 +1003,7 @@ export default function MemberFormModal({
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -985,26 +1014,56 @@ export default function MemberFormModal({
                 Batal
               </Button>
 
-              {activeTab !== "kaderisasi" ? (
+              {/* In Edit mode, show "Simpan Perubahan" on EVERY tab! */}
+              {isEdit && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="text-xs font-semibold h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-xs"
+                >
+                  Simpan Perubahan
+                </Button>
+              )}
+
+              {/* In Add mode, show "Selanjutnya" until Tab 4, then "Daftarkan Anggota" */}
+              {!isEdit && activeTab !== "kaderisasi" && (
                 <Button
                   type="button"
                   size="sm"
                   onClick={() => {
-                    if (activeTab === "diri") setActiveTab("akademik");
-                    if (activeTab === "akademik") setActiveTab("riwayat");
-                    if (activeTab === "riwayat") setActiveTab("kaderisasi");
+                    if (activeTab === "diri") {
+                      if (!name.trim()) {
+                        setFormErrors((prev) => ({ ...prev, name: "Nama lengkap wajib diisi." }));
+                        setValidationAlert("Mohon isi Nama Lengkap terlebih dahulu.");
+                        return;
+                      }
+                      setValidationAlert(null);
+                      setActiveTab("akademik");
+                    } else if (activeTab === "akademik") {
+                      if (!email.trim()) {
+                        setFormErrors((prev) => ({ ...prev, email: "Alamat email wajib diisi." }));
+                        setValidationAlert("Mohon isi Email terlebih dahulu.");
+                        return;
+                      }
+                      setValidationAlert(null);
+                      setActiveTab("riwayat");
+                    } else if (activeTab === "riwayat") {
+                      setActiveTab("kaderisasi");
+                    }
                   }}
-                  className="text-xs font-medium h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer"
+                  className="text-xs font-medium h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-xs"
                 >
                   Selanjutnya
                 </Button>
-              ) : (
+              )}
+
+              {!isEdit && activeTab === "kaderisasi" && (
                 <Button
                   type="submit"
                   size="sm"
-                  className="text-xs font-medium h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer"
+                  className="text-xs font-semibold h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-xs"
                 >
-                  {isEdit ? "Simpan Perubahan" : "Daftarkan Anggota"}
+                  Daftarkan Anggota
                 </Button>
               )}
             </div>

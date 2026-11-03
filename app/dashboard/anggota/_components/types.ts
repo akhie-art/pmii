@@ -23,14 +23,10 @@ export interface Member {
   nipa: string;
   gender: "Laki-laki" | "Perempuan";
   history: CadreHistory[];
-  provinsi: string;
-  kabupaten: string;
-  kecamatan: string;
   
   // Extended fields
+  nim?: string;
   nik?: string;
-  ktpName?: string;
-  ktpFileUrl?: string;
   tempatLahir?: string;
   tanggalLahir?: string;
   alamatRumah?: string;
@@ -46,11 +42,9 @@ export interface Member {
   instagram?: string;
   twitter?: string;
   facebook?: string;
-  pasFotoName?: string;
   avatar?: string;
   riwayatPenyakit?: string;
   golonganDarah?: string;
-  organisasiSD?: string;
   organisasiSMP?: string;
   organisasiSMA?: string;
   organisasiPT?: string;
@@ -83,12 +77,7 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     history: c.history || [
       { level: c.level, date: c.startDate || "", location: komisariat, status: "Selesai" }
     ],
-    provinsi: c.provinsi || "",
-    kabupaten: c.kabupaten || "",
-    kecamatan: c.kecamatan || "",
-    nik: c.nik || "",
-    ktpName: c.ktpName || "",
-    ktpFileUrl: c.ktpFileUrl || "",
+    nim: c.nim || c.nik || "",
     tempatLahir: c.tempatLahir || "",
     tanggalLahir: c.tanggalLahir || "",
     alamatRumah: c.alamatRumah || c.address || "",
@@ -104,11 +93,9 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     instagram: c.instagram || "",
     twitter: c.twitter || "",
     facebook: c.facebook || "",
-    pasFotoName: c.pasFotoName || "",
     avatar: c.avatar || "",
     riwayatPenyakit: c.riwayatPenyakit || "",
     golonganDarah: c.golonganDarah || "O",
-    organisasiSD: c.organisasiSD || "",
     organisasiSMP: c.organisasiSMP || "",
     organisasiSMA: c.organisasiSMA || "",
     organisasiPT: c.organisasiPT || "",
@@ -148,12 +135,7 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     nipa: m.nipa,
     gender: m.gender,
     history: m.history,
-    provinsi: m.provinsi,
-    kabupaten: m.kabupaten,
-    kecamatan: m.kecamatan,
-    nik: m.nik,
-    ktpName: m.ktpName,
-    ktpFileUrl: m.ktpFileUrl,
+    nim: m.nim || m.nik,
     tempatLahir: m.tempatLahir,
     tanggalLahir: m.tanggalLahir,
     alamatRumah: m.alamatRumah,
@@ -168,11 +150,9 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     ktmFileUrl: m.ktmFileUrl,
     twitter: m.twitter,
     facebook: m.facebook,
-    pasFotoName: m.pasFotoName,
     avatar: m.avatar,
     riwayatPenyakit: m.riwayatPenyakit,
     golonganDarah: m.golonganDarah,
-    organisasiSD: m.organisasiSD,
     organisasiSMP: m.organisasiSMP,
     organisasiSMA: m.organisasiSMA,
     organisasiPT: m.organisasiPT,

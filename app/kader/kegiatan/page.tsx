@@ -425,11 +425,11 @@ export default function KaderKegiatanPage() {
             />
           </div>
 
-          <div className="flex rounded-md border border-zinc-200 dark:border-zinc-800 p-0.5 bg-zinc-50 dark:bg-zinc-900 w-full sm:w-auto justify-center">
+          <div className="grid grid-cols-3 sm:flex gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5 bg-zinc-100/70 dark:bg-zinc-900 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setFilterTab("SEMUA")}
-              className={`text-xs px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
+              className={`w-full sm:w-auto text-center text-xs px-3 h-8 sm:h-7.5 rounded-md font-medium cursor-pointer transition-colors ${
                 filterTab === "SEMUA"
                   ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -440,7 +440,7 @@ export default function KaderKegiatanPage() {
             <button
               type="button"
               onClick={() => setFilterTab("OPEN")}
-              className={`text-xs px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
+              className={`w-full sm:w-auto text-center text-xs px-3 h-8 sm:h-7.5 rounded-md font-medium cursor-pointer transition-colors ${
                 filterTab === "OPEN"
                   ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -451,7 +451,7 @@ export default function KaderKegiatanPage() {
             <button
               type="button"
               onClick={() => setFilterTab("MY_EVENTS")}
-              className={`text-xs px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
+              className={`w-full sm:w-auto text-center text-xs px-3 h-8 sm:h-7.5 rounded-md font-medium cursor-pointer transition-colors ${
                 filterTab === "MY_EVENTS"
                   ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs"
                   : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"

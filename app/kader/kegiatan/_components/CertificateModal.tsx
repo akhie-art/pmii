@@ -111,10 +111,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const cadreName =
     activeCadre?.name || registration?.cadreName || "Kader PMII";
   const cadreNik =
+    activeCadre?.nim ||
     activeCadre?.nik ||
+    (registration?.answers as any)?.["f-nim"] ||
     (registration?.answers as any)?.["f-nik"] ||
+    (registration?.answers as any)?.nim ||
     (registration?.answers as any)?.nik ||
-    "3315082103980001";
+    "-";
 
   const rawBirthPlace =
     activeCadre?.tempatLahir ||

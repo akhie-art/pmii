@@ -27,8 +27,8 @@ export interface BiodataTabProps {
   setName: (val: string) => void;
   gender: "Laki-laki" | "Perempuan";
   setGender: (val: "Laki-laki" | "Perempuan") => void;
-  nik: string;
-  setNik: (val: string) => void;
+  nim: string;
+  setNim: (val: string) => void;
   tempatLahir: string;
   setTempatLahir: (val: string) => void;
   tanggalLahir: string;
@@ -41,11 +41,6 @@ export interface BiodataTabProps {
   setGolonganDarah: (val: string) => void;
   riwayatPenyakit: string;
   setRiwayatPenyakit: (val: string) => void;
-  ktpName: string;
-  setKtpName: (val: string) => void;
-  ktpFileUrl?: string;
-  onKtpUpload?: (file: File) => void;
-  onRemoveKtp?: () => void;
 }
 
 export interface AcademicTabProps {

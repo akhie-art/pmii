@@ -1,8 +1,10 @@
 "use client";
 
 import React from "react";
-import { Input } from "@/components/ui/input";
+import { GraduationCap, School, Building2, Users } from "lucide-react";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { HistoryTabProps } from "./types";
+import { ProfileField } from "./ProfileField";
 
 export function HistoryTab({
   isEditing,
@@ -21,85 +23,136 @@ export function HistoryTab({
 }: HistoryTabProps) {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Sekolah Dasar (SD/MI)
-          </label>
-          <Input
-            disabled={!isEditing}
-            placeholder="Nama SD / MI"
+      {/* 1. RIWAYAT PENDIDIKAN FORMAL */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+            <School className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Riwayat Pendidikan Formal</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
+          <ProfileField
+            label="Sekolah Dasar (SD/MI)"
+            isEditing={isEditing}
             value={pendidikanSD}
-            onChange={(e) => setPendidikanSD(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
-        </div>
+            emptyPlaceholder="SD/MI belum diisi"
+          >
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <School className="size-4 text-zinc-400" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Nama SD / MI"
+                value={pendidikanSD}
+                onChange={(e) => setPendidikanSD(e.target.value)}
+              />
+            </InputGroup>
+          </ProfileField>
 
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            SMP / MTs
-          </label>
-          <Input
-            disabled={!isEditing}
-            placeholder="Nama SMP / MTs"
+          <ProfileField
+            label="SMP / MTs"
+            isEditing={isEditing}
             value={pendidikanSMP}
-            onChange={(e) => setPendidikanSMP(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
-        </div>
+            emptyPlaceholder="SMP/MTs belum diisi"
+          >
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <School className="size-4 text-zinc-400" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Nama SMP / MTs"
+                value={pendidikanSMP}
+                onChange={(e) => setPendidikanSMP(e.target.value)}
+              />
+            </InputGroup>
+          </ProfileField>
 
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            SMA / SMK / MA
-          </label>
-          <Input
-            disabled={!isEditing}
-            placeholder="Nama SMA / SMK / MA"
+          <ProfileField
+            label="SMA / SMK / MA"
+            isEditing={isEditing}
             value={pendidikanSMA}
-            onChange={(e) => setPendidikanSMA(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
+            emptyPlaceholder="SMA/SMK/MA belum diisi"
+          >
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <GraduationCap className="size-4 text-zinc-400" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Nama SMA / SMK / MA"
+                value={pendidikanSMA}
+                onChange={(e) => setPendidikanSMA(e.target.value)}
+              />
+            </InputGroup>
+          </ProfileField>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Organisasi Tingkat SMP / MTs
-          </label>
-          <Input
-            disabled={!isEditing}
-            placeholder="Misal: OSIS, Pramuka"
+      {/* 2. RIWAYAT PENGALAMAN ORGANISASI */}
+      <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Pengalaman Organisasi</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+          <ProfileField
+            label="Organisasi Tingkat SMP / MTs"
+            isEditing={isEditing}
             value={organisasiSMP}
-            onChange={(e) => setOrganisasiSMP(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
-        </div>
+            emptyPlaceholder="Belum ada riwayat"
+          >
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <Users className="size-4 text-indigo-500" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Misal: OSIS, Pramuka, Palang Merah Remaja"
+                value={organisasiSMP}
+                onChange={(e) => setOrganisasiSMP(e.target.value)}
+              />
+            </InputGroup>
+          </ProfileField>
 
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Organisasi Tingkat SMA / SMK / MA
-          </label>
-          <Input
-            disabled={!isEditing}
-            placeholder="Misal: IPNU/IPPNU, OSIS"
+          <ProfileField
+            label="Organisasi Tingkat SMA / SMK / MA"
+            isEditing={isEditing}
             value={organisasiSMA}
-            onChange={(e) => setOrganisasiSMA(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
-        </div>
+            emptyPlaceholder="Belum ada riwayat"
+          >
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <Users className="size-4 text-indigo-500" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Misal: IPNU/IPPNU, OSIS, Rohis, Paskibra"
+                value={organisasiSMA}
+                onChange={(e) => setOrganisasiSMA(e.target.value)}
+              />
+            </InputGroup>
+          </ProfileField>
 
-        <div className="space-y-1 sm:col-span-2">
-          <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Organisasi di Kampus / Luar PMII (Lainnya)
-          </label>
-          <Input
-            disabled={!isEditing}
-            placeholder="Misal: BEM, Himpunan Mahasiswa Jurusan, UKM"
+          <ProfileField
+            label="Organisasi Kampus / Luar PMII"
+            isEditing={isEditing}
             value={organisasiPT}
-            onChange={(e) => setOrganisasiPT(e.target.value)}
-            className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
-          />
+            emptyPlaceholder="Belum ada riwayat organisasi kampus/luar"
+            className="sm:col-span-2"
+          >
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <Building2 className="size-4 text-indigo-500" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="Misal: BEM, Himpunan Mahasiswa Jurusan (HMJ), UKM Teater"
+                value={organisasiPT}
+                onChange={(e) => setOrganisasiPT(e.target.value)}
+              />
+            </InputGroup>
+          </ProfileField>
         </div>
       </div>
     </div>

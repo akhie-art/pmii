@@ -63,15 +63,13 @@ export default function ProfilPage() {
   // Step 1: Data Diri & Medis
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"Laki-laki" | "Perempuan">("Laki-laki");
-  const [nik, setNik] = useState("");
+  const [nim, setNim] = useState("");
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [alamatRumah, setAlamatRumah] = useState("");
   const [address, setAddress] = useState("");
   const [golonganDarah, setGolonganDarah] = useState("O");
   const [riwayatPenyakit, setRiwayatPenyakit] = useState("");
-  const [ktpName, setKtpName] = useState("");
-  const [ktpFileUrl, setKtpFileUrl] = useState<string | undefined>(undefined);
 
   // Step 2: Akademik & Kontak
   const [perguruanTinggi, setPerguruanTinggi] = useState("");
@@ -89,7 +87,6 @@ export default function ProfilPage() {
   const [pendidikanSD, setPendidikanSD] = useState("");
   const [pendidikanSMP, setPendidikanSMP] = useState("");
   const [pendidikanSMA, setPendidikanSMA] = useState("");
-  const [organisasiSD, setOrganisasiSD] = useState("");
   const [organisasiSMP, setOrganisasiSMP] = useState("");
   const [organisasiSMA, setOrganisasiSMA] = useState("");
   const [organisasiPT, setOrganisasiPT] = useState("");
@@ -177,15 +174,13 @@ export default function ProfilPage() {
         setName(mine.name || "");
         setAvatar(mine.avatar || loggedInUser?.avatar || "");
         setGender((mine.gender as any) || "Laki-laki");
-        setNik(mine.nik || "");
+        setNim(mine.nim || mine.nik || "");
         setTempatLahir(mine.tempatLahir || "");
         setTanggalLahir(mine.tanggalLahir || "");
         setAlamatRumah(mine.alamatRumah || "");
         setAddress(mine.alamatDomisili || mine.address || "");
         setGolonganDarah(mine.golonganDarah || "O");
         setRiwayatPenyakit(mine.riwayatPenyakit || "");
-        setKtpName(mine.ktpName || "");
-        setKtpFileUrl(mine.ktpFileUrl || undefined);
 
         setPerguruanTinggi(mine.perguruanTinggi || mine.commissariat || "");
         setFakultas(mine.fakultas || "");
@@ -201,7 +196,6 @@ export default function ProfilPage() {
         setPendidikanSD(mine.pendidikanSD || "");
         setPendidikanSMP(mine.pendidikanSMP || "");
         setPendidikanSMA(mine.pendidikanSMA || "");
-        setOrganisasiSD(mine.organisasiSD || "");
         setOrganisasiSMP(mine.organisasiSMP || "");
         setOrganisasiSMA(mine.organisasiSMA || "");
         setOrganisasiPT(mine.organisasiPT || "");
@@ -378,8 +372,7 @@ export default function ProfilPage() {
       if (currentCadre) {
         const updated: CadreFollowUp = {
           ...currentCadre,
-          avatar: finalAvatarUrl,
-          pasFotoName: file.name
+          avatar: finalAvatarUrl
         };
         setCurrentCadre(updated);
 
@@ -431,8 +424,7 @@ export default function ProfilPage() {
     if (currentCadre) {
       const updated: CadreFollowUp = {
         ...currentCadre,
-        avatar: "",
-        pasFotoName: ""
+        avatar: ""
       };
       setCurrentCadre(updated);
 
@@ -463,80 +455,7 @@ export default function ProfilPage() {
     }
   };
 
-  // File Upload Handlers for KTP & KTM with Supabase Storage & Data URL Fallback
-  const handleKtpUpload = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Ukuran berkas KTP maksimal 5 MB.");
-      return;
-    }
-
-    const toastId = toast.loading(`Mengunggah berkas KTP (${file.name})...`);
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop() || "pdf";
-        const cadreId = currentCadre?.id || "cadre";
-        const filePath = `ktp/${cadreId}-${Date.now()}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("materials")
-          .upload(filePath, file, { cacheControl: "3600", upsert: true });
-
-        if (uploadError) {
-          console.error("Supabase upload error for KTP:", uploadError);
-          // Fallback to base64
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const base64Url = e.target?.result as string;
-            setKtpName(file.name);
-            setKtpFileUrl(base64Url);
-            toast.success(`Berkas KTP (${file.name}) siap disimpan secara lokal.`, { id: toastId });
-          };
-          reader.onerror = () => toast.error("Gagal membaca berkas KTP.", { id: toastId });
-          reader.readAsDataURL(file);
-          return;
-        }
-
-        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
-
-        // Hapus file KTP lama di storage jika ada penggantian berkas
-        if (ktpFileUrl && ktpFileUrl !== data.publicUrl) {
-          deleteStorageFile(ktpFileUrl).catch(() => {});
-        }
-
-        setKtpName(file.name);
-        setKtpFileUrl(data.publicUrl);
-        toast.success(`Berkas KTP (${file.name}) berhasil diunggah ke storage cloud.`, { id: toastId });
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64Url = e.target?.result as string;
-          setKtpName(file.name);
-          setKtpFileUrl(base64Url);
-          toast.success(`Berkas KTP (${file.name}) siap disimpan.`, { id: toastId });
-        };
-        reader.onerror = () => toast.error("Gagal membaca berkas KTP.", { id: toastId });
-        reader.readAsDataURL(file);
-      }
-    } catch (err) {
-      console.error("Error in handleKtpUpload:", err);
-      toast.error("Terjadi kesalahan saat mengunggah KTP.", { id: toastId });
-    }
-  };
-
-  const handleRemoveKtp = async () => {
-    if (ktpFileUrl) {
-      try {
-        await deleteStorageFile(ktpFileUrl);
-      } catch (e) {
-        console.error("Failed to delete KTP from storage:", e);
-      }
-    }
-    setKtpName("");
-    setKtpFileUrl(undefined);
-    toast.info("Lampiran KTP dihapus.");
-  };
-
+  // File Upload Handlers for KTM with Supabase Storage & Data URL Fallback
   const handleKtmUpload = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Ukuran berkas KTM maksimal 5 MB.");
@@ -619,12 +538,7 @@ export default function ProfilPage() {
       return;
     }
 
-    const cleanNik = nik.trim().replace(/\D/g, "");
-    if (nik.trim() && cleanNik.length !== 16) {
-      toast.error("NIK harus terdiri dari tepat 16 digit angka.");
-      changeTab("diri");
-      return;
-    }
+    const cleanNim = nim.trim();
 
     let cleanPhone = phone.trim().replace(/[\s-]/g, "");
     if (cleanPhone.startsWith("+62")) {
@@ -638,9 +552,7 @@ export default function ProfilPage() {
         name: name.trim(),
         avatar: avatar,
         gender,
-        nik: cleanNik || nik.trim(),
-        ktpName,
-        ktpFileUrl,
+        nim: cleanNim,
         tempatLahir: tempatLahir.trim(),
         tanggalLahir,
         alamatRumah: alamatRumah.trim(),
@@ -661,7 +573,6 @@ export default function ProfilPage() {
         pendidikanSD: pendidikanSD.trim(),
         pendidikanSMP: pendidikanSMP.trim(),
         pendidikanSMA: pendidikanSMA.trim(),
-        organisasiSD: organisasiSD.trim(),
         organisasiSMP: organisasiSMP.trim(),
         organisasiSMA: organisasiSMA.trim(),
         organisasiPT: organisasiPT.trim(),
@@ -687,7 +598,7 @@ export default function ProfilPage() {
       // Re-bind password to new email & identifiers
       const currentPwd = db.getUserPassword(currentCadre) || (currentCadre as any).password;
       if (currentPwd) {
-        db.setUserPassword([currentCadre.id, currentCadre.user_id, email.trim(), currentCadre.nik, name.trim()], currentPwd);
+        db.setUserPassword([currentCadre.id, currentCadre.user_id, email.trim(), currentCadre.nim || currentCadre.nik, name.trim()], currentPwd);
       }
 
       // Sync user session & accounts
@@ -707,7 +618,7 @@ export default function ProfilPage() {
             loggedInUser.perguruanTinggi = perguruanTinggi.trim();
             loggedInUser.jurusan = jurusan.trim();
             loggedInUser.gender = gender;
-            loggedInUser.nik = nik.trim();
+            loggedInUser.nim = nim.trim();
             localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInUser));
 
             const users = await db.getUsers();
@@ -776,15 +687,13 @@ export default function ProfilPage() {
     setName(currentCadre.name || "");
     setAvatar(currentCadre.avatar || "");
     setGender((currentCadre.gender as any) || "Laki-laki");
-    setNik(currentCadre.nik || "");
+    setNim(currentCadre.nim || currentCadre.nik || "");
     setTempatLahir(currentCadre.tempatLahir || "");
     setTanggalLahir(currentCadre.tanggalLahir || "");
     setAlamatRumah(currentCadre.alamatRumah || "");
     setAddress(currentCadre.alamatDomisili || currentCadre.address || "");
     setGolonganDarah(currentCadre.golonganDarah || "O");
     setRiwayatPenyakit(currentCadre.riwayatPenyakit || "");
-    setKtpName(currentCadre.ktpName || "");
-    setKtpFileUrl(currentCadre.ktpFileUrl || undefined);
 
     setPerguruanTinggi(currentCadre.perguruanTinggi || currentCadre.commissariat || "");
     setFakultas(currentCadre.fakultas || "");
@@ -800,7 +709,6 @@ export default function ProfilPage() {
     setPendidikanSD(currentCadre.pendidikanSD || "");
     setPendidikanSMP(currentCadre.pendidikanSMP || "");
     setPendidikanSMA(currentCadre.pendidikanSMA || "");
-    setOrganisasiSD(currentCadre.organisasiSD || "");
     setOrganisasiSMP(currentCadre.organisasiSMP || "");
     setOrganisasiSMA(currentCadre.organisasiSMA || "");
     setOrganisasiPT(currentCadre.organisasiPT || "");
@@ -870,7 +778,7 @@ export default function ProfilPage() {
           currentCadre?.user_id,
           currentCadre?.email,
           email.trim(),
-          currentCadre?.nik,
+          currentCadre?.nim || currentCadre?.nik,
           currentCadre?.name,
           name.trim()
         ],
@@ -1054,38 +962,24 @@ export default function ProfilPage() {
         <div className="lg:col-span-7" ref={formCardRef}>
           <form onSubmit={handleSaveProfile} className="space-y-4">
             <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-none">
-              {/* Clean Underline Tabs Header with Edit Button */}
-              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 bg-zinc-50/50 dark:bg-zinc-950/50 gap-2">
-                <div className="flex gap-4 text-xs font-medium overflow-x-auto no-scrollbar">
-                  {[
-                    { id: "diri", label: "1. Data Diri", icon: User },
-                    { id: "akademik", label: "2. Akademik", icon: GraduationCap },
-                    { id: "riwayat", label: "3. Riwayat", icon: Briefcase },
-                    { id: "karakter", label: "4. Minat", icon: Compass },
-                    { id: "keamanan", label: "5. Keamanan", icon: Lock }
-                  ].map((tab) => {
-                    const isActive = activeTab === tab.id;
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => changeTab(tab.id as any)}
-                        className={`py-3 cursor-pointer border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                          isActive
-                            ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
-                            : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  })}
+              {/* Profile Card Action Toolbar */}
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                    Informasi Profil Kader
+                  </span>
+                  {isEditing ? (
+                    <Badge variant="outline" className="h-5 px-2 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border-amber-500/20 bg-amber-500/10 shrink-0">
+                      Mode Edit
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="h-5 px-2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/20 bg-emerald-500/10 shrink-0">
+                      Mode Baca
+                    </Badge>
+                  )}
                 </div>
 
-                {/* Edit Button / Mode Badge in Header */}
-                <div className="shrink-0 py-2 pl-2">
+                <div className="flex items-center gap-2 shrink-0">
                   {activeTab === "keamanan" ? (
                     <Badge variant="outline" className="h-6 text-[10px] font-semibold text-blue-600 dark:text-blue-400 border-blue-500/20 bg-blue-500/5">
                       Sandi Mandiri
@@ -1095,17 +989,68 @@ export default function ProfilPage() {
                       type="button"
                       size="sm"
                       onClick={() => setIsEditing(true)}
-                      className="h-7.5 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                      className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors font-medium"
                     >
                       <Pencil className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Edit Data</span>
-                      <span className="sm:hidden">Edit</span>
+                      <span>Edit Profil</span>
                     </Button>
                   ) : (
-                    <Badge variant="outline" className="h-6 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border-amber-500/20 bg-amber-500/5">
-                      Mode Edit
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelEdit}
+                        className="h-8 px-2.5 text-xs rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={isSaving}
+                        size="sm"
+                        className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                      >
+                        {isSaving ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Save className="w-3.5 h-3.5" />
+                        )}
+                        <span>Simpan</span>
+                      </Button>
+                    </div>
                   )}
+                </div>
+              </div>
+
+              {/* Full-width Responsive Tabs Strip */}
+              <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-950/20 px-3 sm:px-4">
+                <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-1.5">
+                  {[
+                    { id: "diri", label: "Data Diri", icon: User },
+                    { id: "akademik", label: "Akademik", icon: GraduationCap },
+                    { id: "riwayat", label: "Riwayat", icon: Briefcase },
+                    { id: "karakter", label: "Minat & Karakter", icon: Compass },
+                    { id: "keamanan", label: "Keamanan", icon: Lock }
+                  ].map((tab, idx) => {
+                    const isActive = activeTab === tab.id;
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => changeTab(tab.id as any)}
+                        className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                          isActive
+                            ? "bg-white dark:bg-zinc-850 text-blue-600 dark:text-blue-400 font-semibold shadow-2xs border border-zinc-200/80 dark:border-zinc-700/80"
+                            : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-850/40 border border-transparent"
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        <span>{idx + 1}. {tab.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1118,8 +1063,8 @@ export default function ProfilPage() {
                     setName={setName}
                     gender={gender}
                     setGender={setGender}
-                    nik={nik}
-                    setNik={setNik}
+                    nim={nim}
+                    setNim={setNim}
                     tempatLahir={tempatLahir}
                     setTempatLahir={setTempatLahir}
                     tanggalLahir={tanggalLahir}
@@ -1132,10 +1077,6 @@ export default function ProfilPage() {
                     setGolonganDarah={setGolonganDarah}
                     riwayatPenyakit={riwayatPenyakit}
                     setRiwayatPenyakit={setRiwayatPenyakit}
-                    ktpName={ktpName}
-                    ktpFileUrl={ktpFileUrl}
-                    onKtpUpload={handleKtpUpload}
-                    onRemoveKtp={handleRemoveKtp}
                   />
                 )}
 
@@ -1216,10 +1157,10 @@ export default function ProfilPage() {
                 )}
               </div>
 
-              {/* Tab Navigation Footer (for tabs 1-4) */}
+              {/* Tab Navigation Footer */}
               {activeTab !== "keamanan" && (
-                <div className="p-3.5 sm:p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-zinc-50/50 dark:bg-zinc-950/50">
-                  <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
+                <div className="p-3.5 sm:p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-50/50 dark:bg-zinc-950/50">
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -1267,7 +1208,7 @@ export default function ProfilPage() {
                       <Button
                         type="submit"
                         disabled={isSaving}
-                        className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-8.5 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors"
+                        className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-8.5 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
                       >
                         {isSaving ? (
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1281,10 +1222,10 @@ export default function ProfilPage() {
                     <Button
                       type="button"
                       onClick={() => setIsEditing(true)}
-                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-8.5 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
+                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-8.5 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-4.5 shrink-0 transition-colors shadow-xs"
                     >
                       <Pencil className="w-3.5 h-3.5" />
-                      <span>Edit Data Profil</span>
+                      <span>Edit Profil</span>
                     </Button>
                   )}
                 </div>

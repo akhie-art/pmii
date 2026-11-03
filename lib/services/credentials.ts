@@ -49,6 +49,7 @@ export function getUserPassword(userOrCadre?: any): string | undefined {
       userOrCadre.user_id,
       userOrCadre.email?.trim().toLowerCase(),
       userOrCadre.email?.trim(),
+      userOrCadre.nim?.trim(),
       userOrCadre.nik?.trim(),
       userOrCadre.name?.trim().toLowerCase(),
       userOrCadre.name?.trim()

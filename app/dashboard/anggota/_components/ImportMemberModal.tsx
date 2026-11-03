@@ -26,7 +26,7 @@ import type { Member } from "./types";
 
 export interface ImportAccountSettings {
   createAccounts: boolean;
-  passwordType: "custom" | "nik" | "birthdate";
+  passwordType: "custom" | "nim" | "nik" | "birthdate";
   customPassword: string;
 }
 
@@ -58,7 +58,7 @@ const TEMPLATE_HEADERS = [
   "Jabatan",
   "Email",
   "No HP",
-  "NIK",
+  "NIM",
   "Tempat Lahir",
   "Tanggal Lahir",
   "Perguruan Tinggi",
@@ -79,7 +79,7 @@ const SAMPLE_ROWS = [
     Jabatan: "Anggota",
     Email: "fauzi@pmii.id",
     "No HP": "081234567890",
-    NIK: "3324011234560001",
+    NIM: "21010123",
     "Tempat Lahir": "Kendal",
     "Tanggal Lahir": "2003-05-14",
     "Perguruan Tinggi": "Universitas Sains Al-Qur'an",
@@ -98,7 +98,7 @@ const SAMPLE_ROWS = [
     Jabatan: "Kader",
     Email: "siti.nur@pmii.id",
     "No HP": "089876543210",
-    NIK: "3324015678900002",
+    NIM: "20010456",
     "Tempat Lahir": "Semarang",
     "Tanggal Lahir": "2002-11-20",
     "Perguruan Tinggi": "Universitas Sains Al-Qur'an",
@@ -158,7 +158,7 @@ export default function ImportMemberModal({
 
   // Settings Pembuatan Akun Login Otomatis
   const [createAccounts, setCreateAccounts] = useState<boolean>(true);
-  const [passwordType, setPasswordType] = useState<"custom" | "nik" | "birthdate">("custom");
+  const [passwordType, setPasswordType] = useState<"custom" | "nim" | "nik" | "birthdate">("custom");
   const [customPassword, setCustomPassword] = useState<string>("pmii1960");
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
@@ -213,11 +213,11 @@ export default function ImportMemberModal({
         return;
       }
 
-      // Cari baris header (baris yang memiliki kata 'nama', 'name', 'nik', atau 'gender')
+      // Cari baris header (baris yang memiliki kata 'nama', 'name', 'nim', 'nik', atau 'gender')
       let headerRowIndex = 0;
       for (let r = 0; r < Math.min(sheetData.length, 6); r++) {
         const rowStr = sheetData[r].map((c) => String(c).toLowerCase()).join(" ");
-        if (rowStr.includes("nama") || rowStr.includes("name") || rowStr.includes("nik")) {
+        if (rowStr.includes("nama") || rowStr.includes("name") || rowStr.includes("nim") || rowStr.includes("nik")) {
           headerRowIndex = r;
           break;
         }
@@ -250,7 +250,13 @@ export default function ImportMemberModal({
           "j_k",
           "jenis-kelamin"
         ],
-        nik: [
+        nim: [
+          "nim",
+          "nomor induk mahasiswa",
+          "no mahasiswa",
+          "no mhs",
+          "no. mahasiswa",
+          "no. mhs",
           "nik",
           "no ktp",
           "nomor ktp",
@@ -259,9 +265,7 @@ export default function ImportMemberModal({
           "nomor identitas",
           "no identitas",
           "ktp",
-          "nik/ktp",
-          "nik / no ktp",
-          "no. identitas"
+          "nik/ktp"
         ],
         nipa: [
           "nipa",
@@ -495,8 +499,8 @@ export default function ImportMemberModal({
         let phone = String(getColVal("phone") || "").trim().replace(/[^\d+]/g, "");
         if (phone.startsWith("62")) phone = "0" + phone.slice(2);
 
-        // NIK & NIPA
-        const nik = String(getColVal("nik") || "").trim().replace(/\D/g, "");
+        // NIM & NIPA
+        const nim = String(getColVal("nim") || getColVal("nik") || "").trim();
         const nipa = String(getColVal("nipa") || "").trim();
 
         // TTL Parsing
@@ -543,7 +547,8 @@ export default function ImportMemberModal({
           jabatan,
           email,
           phone,
-          nik,
+          nim,
+          nik: nim,
           nipa,
           tempatLahir,
           tanggalLahir,
@@ -659,7 +664,7 @@ export default function ImportMemberModal({
                       Gunakan Format Spreadsheet Resmi PMII
                     </p>
                     <p className="text-[11px] text-blue-700/80 dark:text-blue-400 leading-relaxed">
-                      Unduh template resmi agar seluruh kolom (NIK, No HP, Kampus, TTL, Jurusan) langsung terbaca utuh oleh sistem.
+                      Unduh template resmi agar seluruh kolom (NIM, No HP, Kampus, TTL, Jurusan) langsung terbaca utuh oleh sistem.
                     </p>
                   </div>
                 </div>
@@ -708,7 +713,7 @@ export default function ImportMemberModal({
                     Pilih atau seret berkas spreadsheet Anda ke sini
                   </p>
                   <p className="text-[11px] text-zinc-500">
-                    Sistem otomatis mendeteksi kolom Nama, NIK, No WA, Kampus, TTL, dan lainnya secara cerdas.
+                    Sistem otomatis mendeteksi kolom Nama, NIM, No WA, Kampus, TTL, dan lainnya secara cerdas.
                   </p>
                 </div>
 
@@ -853,19 +858,19 @@ export default function ImportMemberModal({
 
                         <button
                           type="button"
-                          onClick={() => setPasswordType("nik")}
+                          onClick={() => setPasswordType("nim")}
                           className={`p-2.5 rounded-lg text-left border text-xs cursor-pointer transition-all ${
-                            passwordType === "nik"
+                            passwordType === "nim" || passwordType === "nik"
                               ? "bg-white dark:bg-zinc-900 border-blue-600 text-blue-700 dark:text-blue-300 shadow-2xs"
                               : "bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400"
                           }`}
                         >
                           <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                            <span className={`w-2 h-2 rounded-full ${passwordType === "nik" ? "bg-blue-600" : "bg-zinc-400"}`} />
-                            <span>Nomor NIK KTP</span>
+                            <span className={`w-2 h-2 rounded-full ${passwordType === "nim" || passwordType === "nik" ? "bg-blue-600" : "bg-zinc-400"}`} />
+                            <span>Nomor NIM Mahasiswa</span>
                           </div>
                           <span className="text-[10px] text-zinc-400 block">
-                            Password = 16 digit NIK kader
+                            Password = NIM kader
                           </span>
                         </button>
 
@@ -916,7 +921,7 @@ export default function ImportMemberModal({
                     <div className="p-2.5 rounded-lg bg-blue-100/50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200 flex items-start gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                       <span>
-                        Kader dapat login melalui halaman <strong>/login</strong> menggunakan <strong>Email</strong>, <strong>NIPA</strong>, <strong>NIK</strong>, ataupun <strong>No HP/WA</strong>.
+                        Kader dapat login melalui halaman <strong>/login</strong> menggunakan <strong>Email</strong>, <strong>NIPA</strong>, <strong>NIM</strong>, ataupun <strong>No HP/WA</strong>.
                       </span>
                     </div>
                   </div>
@@ -942,7 +947,7 @@ export default function ImportMemberModal({
                           <th className="px-3 py-2 text-center w-10">#</th>
                           <th className="px-3 py-2">Nama Lengkap</th>
                           <th className="px-3 py-2">Gender</th>
-                          <th className="px-3 py-2">NIK</th>
+                          <th className="px-3 py-2">NIM</th>
                           <th className="px-3 py-2">No HP / WA</th>
                           <th className="px-3 py-2">Perguruan Tinggi</th>
                           <th className="px-3 py-2">Jurusan</th>
@@ -974,7 +979,7 @@ export default function ImportMemberModal({
                               {r.data.gender}
                             </td>
                             <td className="px-3 py-2 font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
-                              {r.data.nik || "-"}
+                              {r.data.nim || r.data.nik || "-"}
                             </td>
                             <td className="px-3 py-2 font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
                               {r.data.phone || "-"}

@@ -9,8 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import NikInput from "@/app/dashboard/anggota/_components/NikInput";
-import { DocumentAttachment } from "@/components/ui/document-attachment";
 import { BiodataTabProps } from "./types";
 
 export function BiodataTab({
@@ -19,8 +17,8 @@ export function BiodataTab({
   setName,
   gender,
   setGender,
-  nik,
-  setNik,
+  nim,
+  setNim,
   tempatLahir,
   setTempatLahir,
   tanggalLahir,
@@ -33,11 +31,6 @@ export function BiodataTab({
   setGolonganDarah,
   riwayatPenyakit,
   setRiwayatPenyakit,
-  ktpName,
-  setKtpName,
-  ktpFileUrl,
-  onKtpUpload,
-  onRemoveKtp,
 }: BiodataTabProps) {
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -72,12 +65,18 @@ export function BiodataTab({
         </div>
       </div>
 
-      {/* NIK Input */}
+      {/* NIM Input */}
       <div className="space-y-1">
         <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-          Nomor Induk Kependudukan (NIK 16 Digit)
+          Nomor Induk Mahasiswa (NIM)
         </label>
-        <NikInput value={nik} onChange={setNik} disabled={!isEditing} />
+        <Input
+          disabled={!isEditing}
+          placeholder="Masukkan NIM (contoh: 21010123)"
+          value={nim}
+          onChange={(e) => setNim(e.target.value)}
+          className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-100 disabled:text-zinc-800 dark:disabled:text-zinc-200 disabled:bg-zinc-50/70 dark:disabled:bg-zinc-950/70 disabled:border-zinc-200/80 dark:disabled:border-zinc-800/80 disabled:cursor-default"
+        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -168,30 +167,6 @@ export function BiodataTab({
           />
         </div>
       </div>
-
-      {/* Lampiran Berkas KTP */}
-      <DocumentAttachment
-        label="Lampiran Berkas KTP (Asli / Scan)"
-        badgeLabel="Identitas Kependudukan Resmi"
-        fileName={ktpName}
-        fileUrl={ktpFileUrl}
-        isEditing={isEditing}
-        onUpload={(file) => {
-          if (onKtpUpload) {
-            onKtpUpload(file);
-          } else {
-            setKtpName(file.name);
-          }
-        }}
-        onRemove={() => {
-          if (onRemoveKtp) {
-            onRemoveKtp();
-          } else {
-            setKtpName("");
-          }
-        }}
-        accentColor="blue"
-      />
     </div>
   );
 }

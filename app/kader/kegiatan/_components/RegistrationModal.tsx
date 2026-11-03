@@ -64,8 +64,8 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
           const l = (f.label || "").toLowerCase();
           if (l.includes("nama lengkap") && activeCadre.name) {
             initialAnswers[f.id] = activeCadre.name;
-          } else if (l.includes("nik") && f.type === "text" && activeCadre.nik) {
-            initialAnswers[f.id] = activeCadre.nik;
+          } else if ((l.includes("nim") || l.includes("nik")) && f.type === "text" && (activeCadre.nim || activeCadre.nik)) {
+            initialAnswers[f.id] = activeCadre.nim || activeCadre.nik;
           } else if (l.includes("kelamin")) {
             const g = activeCadre.gender || activeCadre.jenisKelamin;
             if (g === "L" || g === "Laki-laki") initialAnswers[f.id] = "Laki-laki";

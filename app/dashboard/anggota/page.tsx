@@ -15,7 +15,11 @@ import {
   Share2,
   RotateCcw,
   Users,
-  RefreshCw
+  RefreshCw,
+  UserCheck,
+  Award,
+  AlertCircle,
+  FileText
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,6 +69,57 @@ import ShareMemberLinkModal from "./_components/ShareMemberLinkModal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MemberBulkActionBar } from "./_components/MemberBulkActionBar";
 import { MemberBulkDeleteDialog } from "./_components/MemberBulkDeleteDialog";
+import {
+  generateMemberCvPdf,
+  resolveMemberPhotoUrl,
+  getBase64Image,
+  generateFallbackFormalPhoto
+} from "./_components/generateCvPdf";
+import { CvTemplateModal, CV_TEMPLATE_STORAGE_KEY } from "./_components/CvTemplateModal";
+import { base64ToArrayBuffer, fillDocxTemplate } from "@/app/dashboard/surat/component/docx-template-helper";
+
+/**
+ * Pemetaan kode resmi komisariat se-Cabang Grobogan untuk penomoran NIPA Nasional:
+ * 00 = Pengurus Cabang Grobogan
+ * 01 = PK PMII Ki Ageng Getas Pendawa (Universitas An Nuur)
+ * 02 = PK PMII Ajisaka (STAI Grobogan)
+ * 03 = PK PMII Al Fath (Institut Islam Mambaul Falah)
+ * 04 = PK PMII An-Nawawi (STIT Annawawi)
+ * 05 = Komisariat Lainnya / Penugasan Khusus
+ */
+export function getKomisariatNipaCode(commName: string): string {
+  const c = (commName || "").toLowerCase();
+  if (c.includes("cabang") || c.includes("pc pmii") || c.includes("pc ")) return "00";
+  if (c.includes("getas") || c.includes("pendawa") || c.includes("annuur") || c.includes("an nuur")) return "01";
+  if (c.includes("ajisaka") || c.includes("stai")) return "02";
+  if (c.includes("al fath") || c.includes("alfath") || c.includes("mambaul")) return "03";
+  if (c.includes("nawawi") || c.includes("stit")) return "04";
+  return "05";
+}
+
+/**
+ * Generator NIPA unik dengan nomor urut tertinggi (mencegah duplikasi).
+ */
+export function generateMemberNipa(targetAngkatan: string, targetKomisariat: string, existingMembers: Member[]): string {
+  const commCode = getKomisariatNipaCode(targetKomisariat);
+  const prefix = `PMII.${targetAngkatan}.11.${commCode}.`;
+
+  let maxSeq = 0;
+  existingMembers.forEach((m) => {
+    if (m.nipa) {
+      const parts = m.nipa.split(".");
+      if (parts.length >= 5) {
+        const num = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+  });
+
+  const nextSeq = Math.max(maxSeq + 1, existingMembers.length + 1);
+  return `${prefix}${String(nextSeq).padStart(4, "0")}`;
+}
 
 export default function AnggotaPage() {
   const [mounted, setMounted] = useState(false);
@@ -89,6 +144,7 @@ export default function AnggotaPage() {
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [komisariatFilter, setKomisariatFilter] = useState<string>("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
@@ -105,6 +161,7 @@ export default function AnggotaPage() {
   const [deletingMember, setDeletingMember] = useState<Member | null>(null);
 
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCvTemplateModal, setShowCvTemplateModal] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [sharingMember, setSharingMember] = useState<Member | null>(null);
 
@@ -217,7 +274,34 @@ export default function AnggotaPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, levelFilter, komisariatFilter, activeTenant]);
+  }, [searchTerm, levelFilter, statusFilter, komisariatFilter, activeTenant]);
+
+  // Scoped members for stats (sebelum search/filter, menghormati hak akses tenant user)
+  const scopedMembers = useMemo(() => {
+    return members.filter((member) => {
+      if (!member) return false;
+      const memberScoped: TenantScoped = {
+        tenant_id: member.tenant_id || member.komisariat_id,
+        komisariat_id: member.tenant_id || member.komisariat_id,
+        commissariat: member.komisariat,
+        komisariat: member.komisariat,
+        campus: member.perguruanTinggi,
+        perguruanTinggi: member.perguruanTinggi
+      };
+      if (!isCabangOrAdmin(currentUser)) {
+        return isRecordInTenant(currentUser, memberScoped);
+      }
+      return isRecordInTenant(currentUser, memberScoped, activeTenant);
+    });
+  }, [members, currentUser, activeTenant]);
+
+  const stats = useMemo(() => {
+    const total = scopedMembers.length;
+    const active = scopedMembers.filter((m) => m.status === "Aktif").length;
+    const graduated = scopedMembers.filter((m) => m.status === "Alumni" || (m as any).isGraduated).length;
+    const incomplete = scopedMembers.filter((m) => (!m.nim && !m.nik) || !m.phone || !m.email).length;
+    return { total, active, graduated, incomplete };
+  }, [scopedMembers]);
 
   // Daftar unik komisariat untuk filter dropdown
   const availableKomisariats = useMemo(() => {
@@ -257,6 +341,13 @@ export default function AnggotaPage() {
 
     const matchesLevel = !levelFilter || levelFilter === "ALL" || member.level === levelFilter;
 
+    const matchesStatus =
+      !statusFilter ||
+      statusFilter === "ALL" ||
+      (statusFilter === "INCOMPLETE"
+        ? ((!member.nim && !member.nik) || !member.phone || !member.email)
+        : member.status === statusFilter);
+
     // Tenant Scoping
     const memberScoped: TenantScoped = {
       tenant_id: member.tenant_id || member.komisariat_id,
@@ -292,6 +383,7 @@ export default function AnggotaPage() {
     return (
       matchesSearch &&
       matchesLevel &&
+      matchesStatus &&
       matchesTenant
     );
   });
@@ -476,9 +568,10 @@ export default function AnggotaPage() {
 
     const targetLevel = data.level || "MAPABA";
 
-    const newNipa = `PMII.${targetAngkatan}.11.${
-      targetKomisariat.includes("Walisongo") ? "05" : targetKomisariat.includes("Diponegoro") ? "02" : "03"
-    }.${String(members.length + 1).padStart(4, "0")}`;
+    const newNipa =
+      data.nipa && data.nipa.trim() !== ""
+        ? data.nipa.trim()
+        : generateMemberNipa(targetAngkatan, targetKomisariat, members);
 
     const newHistory: CadreHistory[] = [
       {
@@ -504,11 +597,7 @@ export default function AnggotaPage() {
       nipa: newNipa,
       gender: data.gender || "Laki-laki",
       history: newHistory,
-      provinsi: data.provinsi || "",
-      kabupaten: data.kabupaten || "",
-      kecamatan: data.kecamatan || "",
-      nik: data.nik || "",
-      ktpName: data.ktpName || "",
+      nim: data.nim || data.nik || "",
       tempatLahir: data.tempatLahir || "",
       tanggalLahir: data.tanggalLahir || "",
       alamatRumah: data.alamatRumah || "",
@@ -523,11 +612,9 @@ export default function AnggotaPage() {
       instagram: data.instagram || "",
       twitter: data.twitter || "",
       facebook: data.facebook || "",
-      pasFotoName: data.pasFotoName || "",
       avatar: data.avatar || "",
       riwayatPenyakit: data.riwayatPenyakit || "",
       golonganDarah: data.golonganDarah || "O",
-      organisasiSD: data.organisasiSD || "",
       organisasiSMP: data.organisasiSMP || "",
       organisasiSMA: data.organisasiSMA || "",
       organisasiPT: data.organisasiPT || "",
@@ -606,6 +693,9 @@ export default function AnggotaPage() {
 
     const createdMembers: Member[] = [];
     const newUsers: UserAccount[] = [];
+    const existingBatchEmails = new Set(
+      members.map((m) => (m.email || "").toLowerCase().trim()).filter(Boolean)
+    );
 
     newMembersData.forEach((data, idx) => {
       currentCount++;
@@ -628,14 +718,8 @@ export default function AnggotaPage() {
 
       const newNipa =
         data.nipa && data.nipa.trim() !== ""
-          ? data.nipa
-          : `PMII.${targetAngkatan}.11.${
-              targetKomisariat.includes("Walisongo")
-                ? "05"
-                : targetKomisariat.includes("Diponegoro")
-                ? "02"
-                : "03"
-            }.${String(currentCount).padStart(4, "0")}`;
+          ? data.nipa.trim()
+          : generateMemberNipa(targetAngkatan, targetKomisariat, [...createdMembers, ...members]);
 
       const newHistory: CadreHistory[] = [
         {
@@ -646,22 +730,31 @@ export default function AnggotaPage() {
         }
       ];
 
-      const cleanNik = data.nik ? data.nik.replace(/\D/g, "") : "";
+      const cleanNim = data.nim ? data.nim.trim() : (data.nik ? data.nik.replace(/\D/g, "") : "");
       const memberId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `cadre-${now}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
 
-      // Tentukan email login unik
+      // Tentukan email login unik bebas duplikasi
       let memberEmail = data.email ? data.email.trim().toLowerCase() : "";
       if (!memberEmail || !memberEmail.includes("@")) {
         const fallbackSlug = (newNipa.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()) ||
-          cleanNik ||
+          cleanNim ||
           (data.name || "kader").toLowerCase().replace(/\s+/g, ".");
         memberEmail = `${fallbackSlug}@pmii.id`;
       }
 
+      let baseEmail = memberEmail;
+      let emailCounter = 1;
+      while (existingBatchEmails.has(memberEmail)) {
+        const [userPart, domainPart] = baseEmail.split("@");
+        memberEmail = `${userPart}.${emailCounter}@${domainPart || "pmii.id"}`;
+        emailCounter++;
+      }
+      existingBatchEmails.add(memberEmail);
+
       // Tentukan password
       let assignedPassword = accountSettings.customPassword || "pmii1960";
-      if (accountSettings.passwordType === "nik") {
-        assignedPassword = cleanNik || accountSettings.customPassword || "pmii1960";
+      if (accountSettings.passwordType === "nim" || accountSettings.passwordType === "nik") {
+        assignedPassword = cleanNim || accountSettings.customPassword || "pmii1960";
       } else if (accountSettings.passwordType === "birthdate") {
         const cleanBdate = (data.tanggalLahir || "").replace(/\D/g, "");
         assignedPassword = cleanBdate.length >= 6 ? cleanBdate : accountSettings.customPassword || "pmii1960";
@@ -682,11 +775,7 @@ export default function AnggotaPage() {
         nipa: newNipa,
         gender: data.gender || "Laki-laki",
         history: newHistory,
-        provinsi: data.provinsi || "",
-        kabupaten: data.kabupaten || "",
-        kecamatan: data.kecamatan || "",
-        nik: cleanNik,
-        ktpName: data.ktpName || "",
+        nim: cleanNim,
         tempatLahir: data.tempatLahir || "",
         tanggalLahir: data.tanggalLahir || "",
         alamatRumah: data.alamatRumah || "",
@@ -701,11 +790,9 @@ export default function AnggotaPage() {
         instagram: data.instagram || "",
         twitter: data.twitter || "",
         facebook: data.facebook || "",
-        pasFotoName: data.pasFotoName || "",
         avatar: data.avatar || "",
         riwayatPenyakit: data.riwayatPenyakit || "",
         golonganDarah: data.golonganDarah || "O",
-        organisasiSD: data.organisasiSD || "",
         organisasiSMP: data.organisasiSMP || "",
         organisasiSMA: data.organisasiSMA || "",
         organisasiPT: data.organisasiPT || "",
@@ -824,7 +911,7 @@ export default function AnggotaPage() {
           "Jabatan": m.jabatan || "-",
           "Email": m.email || "-",
           "Phone": m.phone || "-",
-          "NIK": m.nik || "-",
+          "NIM": m.nim || m.nik || "-",
           "Tempat Lahir": m.tempatLahir || "-",
           "Tanggal Lahir": m.tanggalLahir || "-",
           "Alamat Rumah": m.alamatRumah || "-",
@@ -1055,7 +1142,9 @@ export default function AnggotaPage() {
     ctx.fillText("PC PMII OFFICIAL", 0, 14);
     ctx.restore();
 
-    setTimeout(() => {
+    const photoSrc = member.avatar || "";
+
+    const executeDownload = () => {
       try {
         const link = document.createElement("a");
         link.download = `KTA_PMII_${member.name.replace(/\s+/g, "_")}.png`;
@@ -1066,7 +1155,121 @@ export default function AnggotaPage() {
         console.error(err);
         showToast("Gagal mengunduh KTA digital.");
       }
-    }, 600);
+    };
+
+    if (photoSrc) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(avatarX, avatarY, avatarR, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+
+          const aspect = img.width / img.height;
+          let drawW = avatarR * 2;
+          let drawH = avatarR * 2;
+          let drawX = avatarX - avatarR;
+          let drawY = avatarY - avatarR;
+
+          if (aspect > 1) {
+            drawW = drawH * aspect;
+            drawX = avatarX - drawW / 2;
+          } else {
+            drawH = drawW / aspect;
+            drawY = avatarY - drawH / 2;
+          }
+
+          ctx.drawImage(img, drawX, drawY, drawW, drawH);
+          ctx.restore();
+        } catch (e) {
+          console.warn("Could not draw member photo to KTA canvas:", e);
+        }
+        executeDownload();
+      };
+      img.onerror = () => {
+        executeDownload();
+      };
+      img.src = photoSrc;
+    } else {
+      setTimeout(executeDownload, 200);
+    }
+  };
+
+  // Unduh Curriculum Vitae (CV) Resmi Kader (Mendukung Dokumen Word Kustom / PDF Bawaan)
+  const handleDownloadCV = async (member: Member) => {
+    try {
+      showToast(`Menyiapkan Curriculum Vitae untuk ${member.name}...`);
+      const customTemplateBase64 = typeof window !== "undefined"
+        ? localStorage.getItem(CV_TEMPLATE_STORAGE_KEY)
+        : null;
+
+      if (customTemplateBase64) {
+        // Gunakan template docx kustom pengurus
+        const buffer = base64ToArrayBuffer(customTemplateBase64);
+        const data = {
+          nama: member.name || "-",
+          nim: member.nim || member.nik || "-",
+          ttl: [member.tempatLahir, member.tanggalLahir].filter(Boolean).join(", ") || "-",
+          alamat: member.alamatRumah || member.alamatDomisili || "-",
+          phone: member.phone || "-",
+          pendidikan: [
+            member.pendidikanSD ? `SD: ${member.pendidikanSD}` : "",
+            member.pendidikanSMP ? `SMP: ${member.pendidikanSMP}` : "",
+            member.pendidikanSMA ? `SMA: ${member.pendidikanSMA}` : "",
+            member.perguruanTinggi ? `PT: ${member.perguruanTinggi}${member.jurusan ? ` (${member.jurusan})` : ""}` : ""
+          ].filter(Boolean).join("\n") || "-",
+          organisasi: [
+            member.organisasiSMP ? `SMP: ${member.organisasiSMP}` : "",
+            member.organisasiSMA ? `SMA: ${member.organisasiSMA}` : "",
+            member.organisasiPT ? `PT/Umum: ${member.organisasiPT}` : ""
+          ].filter(Boolean).join("\n") || "-",
+          motto: member.orientasiProfetik || member.motivasiMapaba || member.minatPassion || "-",
+          nipa: member.nipa || "-",
+          komisariat: member.komisariat || "-"
+        };
+
+        // Siapkan foto kader (foto asli atau foto resmi PMII)
+        const photoUrl = resolveMemberPhotoUrl(member);
+        let photoDataUrl = "";
+        if (photoUrl) {
+          try {
+            const imgObj = await getBase64Image(photoUrl);
+            if (imgObj?.dataUrl) photoDataUrl = imgObj.dataUrl;
+          } catch (e) {
+            console.warn("Gagal mengambil foto kader:", e);
+          }
+        }
+        if (!photoDataUrl) {
+          photoDataUrl = generateFallbackFormalPhoto(member.name || "Kader PMII");
+        }
+
+        const result = fillDocxTemplate(buffer, data, photoDataUrl);
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const cleanName = (member.name || "Kader").replace(/[^a-zA-Z0-9_\-]/g, "_");
+        a.download = `CV_${cleanName}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`CV resmi untuk ${member.name} berhasil diunduh (.docx).`);
+      } else {
+        // Gunakan template default PDF resmi PMII dengan Kop Surat
+        await generateMemberCvPdf(member);
+        showToast(`CV resmi untuk ${member.name} berhasil diunduh (PDF).`);
+      }
+    } catch (err) {
+      console.error("Gagal membuat CV:", err);
+      showToast("Gagal mengunduh berkas CV.");
+    }
   };
 
   const getLevelBadge = (level: string) => {
@@ -1171,6 +1374,16 @@ export default function AnggotaPage() {
 
           <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto order-2">
             <Button
+              onClick={() => setShowCvTemplateModal(true)}
+              variant="outline"
+              className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer text-zinc-700 dark:text-zinc-300 shadow-2xs"
+              title="Kelola & Unggah Template Word (.docx) untuk CV Anggota"
+            >
+              <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="truncate">Template CV</span>
+            </Button>
+
+            <Button
               onClick={() => setShowImportModal(true)}
               variant="outline"
               className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer text-zinc-700 dark:text-zinc-300 shadow-2xs"
@@ -1188,6 +1401,97 @@ export default function AnggotaPage() {
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span className="truncate">{isExporting ? "Mengekspor..." : "Ekspor Excel"}</span>
             </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* QUICK STATS CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div 
+          onClick={() => setStatusFilter("ALL")}
+          className={`cursor-pointer transition-all p-3.5 rounded-xl border bg-white dark:bg-zinc-900 ${
+            statusFilter === "ALL" 
+              ? "border-blue-500/50 ring-1 ring-blue-500/20 shadow-xs" 
+              : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Total Anggota</span>
+            <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{stats.total}</span>
+            <span className="text-[11px] text-zinc-500">Kader</span>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setStatusFilter(statusFilter === "Aktif" ? "ALL" : "Aktif")}
+          className={`cursor-pointer transition-all p-3.5 rounded-xl border bg-white dark:bg-zinc-900 ${
+            statusFilter === "Aktif" 
+              ? "border-emerald-500/50 ring-1 ring-emerald-500/20 shadow-xs" 
+              : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Anggota Aktif</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <UserCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{stats.active}</span>
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+              {stats.total > 0 ? `${Math.round((stats.active / stats.total) * 100)}%` : "0%"}
+            </span>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setStatusFilter(statusFilter === "Alumni" ? "ALL" : "Alumni")}
+          className={`cursor-pointer transition-all p-3.5 rounded-xl border bg-white dark:bg-zinc-900 ${
+            statusFilter === "Alumni" 
+              ? "border-indigo-500/50 ring-1 ring-indigo-500/20 shadow-xs" 
+              : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Alumni / Terkader</span>
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Award className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{stats.graduated}</span>
+            <span className="text-[11px] text-zinc-500">Sahabat</span>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setStatusFilter(statusFilter === "INCOMPLETE" ? "ALL" : "INCOMPLETE")}
+          className={`cursor-pointer transition-all p-3.5 rounded-xl border bg-white dark:bg-zinc-900 ${
+            statusFilter === "INCOMPLETE" 
+              ? "border-amber-500/50 ring-1 ring-amber-500/20 shadow-xs" 
+              : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Perlu Dilengkapi</span>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+              stats.incomplete > 0 
+                ? "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400" 
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+            }`}>
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{stats.incomplete}</span>
+            <span className={`text-[11px] font-medium ${stats.incomplete > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"}`}>
+              {stats.incomplete > 0 ? "Belum Lengkap" : "Lengkap"}
+            </span>
           </div>
         </div>
       </div>
@@ -1220,6 +1524,19 @@ export default function AnggotaPage() {
               </SelectContent>
             </Select>
 
+            <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val ?? "ALL")}>
+              <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[130px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                <SelectItem value="ALL">Semua Status</SelectItem>
+                <SelectItem value="Aktif">Aktif</SelectItem>
+                <SelectItem value="Alumni">Alumni</SelectItem>
+                <SelectItem value="Pasif">Pasif</SelectItem>
+                <SelectItem value="INCOMPLETE">Perlu Dilengkapi</SelectItem>
+              </SelectContent>
+            </Select>
+
             {isCabangOrAdmin(currentUser) && (
               <Select
                 value={activeTenant !== "ALL" ? activeTenant : komisariatFilter}
@@ -1245,12 +1562,13 @@ export default function AnggotaPage() {
               </Select>
             )}
 
-            {(levelFilter !== "ALL" || komisariatFilter !== "ALL" || searchTerm !== "") && (
+            {(levelFilter !== "ALL" || statusFilter !== "ALL" || komisariatFilter !== "ALL" || searchTerm !== "") && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setLevelFilter("ALL");
+                  setStatusFilter("ALL");
                   setKomisariatFilter("ALL");
                   setSearchTerm("");
                 }}
@@ -1325,17 +1643,10 @@ export default function AnggotaPage() {
                 .join("")
                 .toUpperCase();
 
-              const photoSrc =
-                member.avatar ||
-                (member.pasFotoName &&
-                (member.pasFotoName.startsWith("data:") ||
-                  member.pasFotoName.startsWith("http") ||
-                  member.pasFotoName.startsWith("/"))
-                  ? member.pasFotoName
-                  : "");
+              const photoSrc = resolveMemberPhotoUrl(member);
 
               const isSelected = selectedMemberIds.includes(member.id);
-              const isIncomplete = !member.nik || !member.phone || !member.email;
+              const isIncomplete = (!member.nim && !member.nik) || !member.phone || !member.email;
 
               return (
                 <div
@@ -1423,6 +1734,17 @@ export default function AnggotaPage() {
                     >
                       <Share2 className="w-3.5 h-3.5 shrink-0" />
                       <span>Kirim WA</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadCV(member)}
+                      className="h-8 px-2.5 text-[11px] font-medium border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 gap-1 rounded-lg"
+                      title="Unduh CV Kader (PDF)"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">CV</span>
                     </Button>
 
                     <Button
@@ -1555,14 +1877,7 @@ export default function AnggotaPage() {
                     .join("")
                     .toUpperCase();
 
-                  const photoSrc =
-                    member.avatar ||
-                    (member.pasFotoName &&
-                    (member.pasFotoName.startsWith("data:") ||
-                      member.pasFotoName.startsWith("http") ||
-                      member.pasFotoName.startsWith("/"))
-                      ? member.pasFotoName
-                      : "");
+                  const photoSrc = resolveMemberPhotoUrl(member);
 
                   const isSelected = selectedMemberIds.includes(member.id);
 
@@ -1609,7 +1924,7 @@ export default function AnggotaPage() {
                               <span className="text-[10px] font-mono text-zinc-400 block">
                                 {member.nipa || "-"}
                               </span>
-                              {(!member.nik || !member.phone || !member.email) && (
+                              {((!member.nim && !member.nik) || !member.phone || !member.email) && (
                                 <span className="inline-block text-[9px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900/40">
                                   Perlu Dilengkapi
                                 </span>
@@ -1671,6 +1986,16 @@ export default function AnggotaPage() {
                             title="Detail Profil & KTA"
                           >
                             <Eye className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownloadCV(member)}
+                            className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
+                            title="Unduh CV Kader Resmi (PDF)"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
                           </Button>
 
                           <Button
@@ -1779,6 +2104,7 @@ export default function AnggotaPage() {
           setDetailMember(null);
         }}
         onDownloadKTA={handleDownloadKTA}
+        onDownloadCV={handleDownloadCV}
       />
 
       <DeleteMemberModal
@@ -1811,6 +2137,11 @@ export default function AnggotaPage() {
         }}
         member={sharingMember}
         onShowToast={showToast}
+      />
+
+      <CvTemplateModal
+        isOpen={showCvTemplateModal}
+        onClose={() => setShowCvTemplateModal(false)}
       />
 
       {/* FLOATING BULK ACTION BAR */}

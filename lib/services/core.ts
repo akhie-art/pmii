@@ -85,6 +85,13 @@ export function extractMissingColumn(errorMessage: string): string | null {
   return null;
 }
 
+// Global cache for remote schema columns that do not exist on PostgreSQL
+const missingColumnsCache: Record<string, Set<string>> = {
+  pengurus: new Set(["avatar", "rayon", "order", "phoneNumber"]),
+  anggota: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"]),
+  kader: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"])
+};
+
 export const TABLES_WITHOUT_COMMISSARIAT = [
   "kegiatan",
   "pengurus",
@@ -346,12 +353,11 @@ export async function deleteTableRow(
       if (effectiveTable === "anggota" || effectiveTable === "kader") {
         const { data: c } = await supabase
           .from(effectiveTable)
-          .select('id, avatar, "ktpFileUrl", "ktmFileUrl"')
+          .select('id, avatar, "ktmFileUrl"')
           .eq("id", id)
           .single();
         if (c) {
           if (c.avatar) await deleteStorageFile(c.avatar);
-          if (c.ktpFileUrl) await deleteStorageFile(c.ktpFileUrl);
           if (c.ktmFileUrl) await deleteStorageFile(c.ktmFileUrl);
         }
       } else if (effectiveTable === "arsip") {
@@ -492,13 +498,12 @@ export async function saveTableData<T extends { id: string | number }>(
           try {
             const { data: toDeleteCadres } = await supabase
               .from(effectiveTable)
-              .select('id, avatar, "ktpFileUrl", "ktmFileUrl"')
+              .select('id, avatar, "ktmFileUrl"')
               .not("id", "in", formattedIds);
 
             if (toDeleteCadres && toDeleteCadres.length > 0) {
               for (const c of toDeleteCadres) {
                 if (c.avatar) await deleteStorageFile(c.avatar);
-                if (c.ktpFileUrl) await deleteStorageFile(c.ktpFileUrl);
                 if (c.ktmFileUrl) await deleteStorageFile(c.ktmFileUrl);
               }
             }
@@ -590,6 +595,10 @@ export async function saveTableData<T extends { id: string | number }>(
             delete copy.role_detail;
             delete copy.needsOnboarding;
             delete copy.password;
+            delete copy.provinsi;
+            delete copy.kabupaten;
+            delete copy.kecamatan;
+            delete copy.organisasiSD;
           } else if (effectiveTable === "evaluations") {
             if (copy.sessionScores && typeof copy.sessionScores === "object") {
               const cleanedScores = { ...copy.sessionScores };
@@ -606,6 +615,16 @@ export async function saveTableData<T extends { id: string | number }>(
             if (copy.establishedDate === "" || (typeof copy.establishedDate === "string" && !copy.establishedDate.trim())) {
               copy.establishedDate = null;
             }
+          } else if (effectiveTable === "pengurus") {
+            // Skema PostgreSQL remote 'pengurus' tidak memiliki kolom 'avatar', 'rayon', 'order', atau 'phoneNumber'
+            // Data ini tetap tersimpan utuh di LocalStorage
+            delete copy.avatar;
+            delete copy.rayon;
+            delete copy.order;
+            if (copy.phoneNumber && !copy.phone) {
+              copy.phone = copy.phoneNumber;
+            }
+            delete copy.phoneNumber;
           }
 
           // 2. General date sanitization: convert empty date strings to null
@@ -663,6 +682,13 @@ export async function saveTableData<T extends { id: string | number }>(
             }
           }
 
+          // 6. Hapus kolom yang tercatat di missingColumnsCache sebelum kirim ke remote
+          if (missingColumnsCache[effectiveTable]) {
+            for (const col of missingColumnsCache[effectiveTable]) {
+              delete copy[col];
+            }
+          }
+
           return copy;
         });
 
@@ -686,6 +712,10 @@ export async function saveTableData<T extends { id: string | number }>(
           if (isSchemaError) {
             const missingColumn = extractMissingColumn(upsertError.message);
             if (missingColumn) {
+              if (!missingColumnsCache[effectiveTable]) {
+                missingColumnsCache[effectiveTable] = new Set();
+              }
+              missingColumnsCache[effectiveTable].add(missingColumn);
               console.warn(`[Schema Healing] ${effectiveTable}: Kolom '${missingColumn}' tidak ada di skema remote, mencoba ulang tanpa kolom ini...`);
               currentList = currentList.map((item) => {
                 const copy = { ...item };
