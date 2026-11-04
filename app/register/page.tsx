@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { db, Kaderisasi, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserRole, UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { getKomisariatSlug } from "@/lib/tenancy";
 import { exportCardAsImage } from "@/lib/cardExporter";
 import QRCode from "qrcode";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,7 +41,10 @@ import {
   Users,
   CreditCard,
   ClipboardCheck,
-  Sparkles
+  Sparkles,
+  RefreshCw,
+  Trash2,
+  ExternalLink
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -179,6 +183,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [redirectParam, setRedirectParam] = useState("");
+  const [previousKomisariatUrl, setPreviousKomisariatUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -188,6 +193,19 @@ export default function RegisterPage() {
         setDarkMode(savedTheme === "dark");
       } else {
         setDarkMode(document.documentElement.classList.contains("dark"));
+      }
+
+      // Deteksi jika user datang dari halaman landing komisariat
+      if (document.referrer && document.referrer.includes("/komisariat/")) {
+        try {
+          const refUrl = new URL(document.referrer);
+          if (refUrl.pathname.startsWith("/komisariat/")) {
+            setPreviousKomisariatUrl(refUrl.pathname);
+          }
+        } catch {
+          const match = document.referrer.match(/\/komisariat\/[a-zA-Z0-9_-]+/);
+          if (match) setPreviousKomisariatUrl(match[0]);
+        }
       }
     }
   }, []);
@@ -447,10 +465,28 @@ export default function RegisterPage() {
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
   const [fileNames, setFileNames] = useState<Record<string, string>>({});
+  const [isDragging, setIsDragging] = useState<Record<string, boolean>>({});
   const [kaderisasiData, setKaderisasiData] = useState<Kaderisasi | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState("");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const isImageFile = (url: string, fileName?: string) => {
+    if (!url) return false;
+    if (url.startsWith("data:image/")) return true;
+    const n = (fileName || url).toLowerCase();
+    return (
+      n.endsWith(".jpg") ||
+      n.endsWith(".jpeg") ||
+      n.endsWith(".png") ||
+      n.endsWith(".webp") ||
+      n.endsWith(".gif") ||
+      url.includes(".jpg") ||
+      url.includes(".jpeg") ||
+      url.includes(".png") ||
+      url.includes(".webp")
+    );
+  };
 
   const handlePreviewFile = (url: string, title: string) => {
     setPreviewUrl(url);
@@ -595,20 +631,6 @@ export default function RegisterPage() {
     if (l.includes("kampus") || l.includes("perguruan") || l.includes("jurusan") || l.includes("fakultas")) return <GraduationCap className="w-4 h-4 text-blue-500" />;
     if (l.includes("alamat") || l.includes("domisili") || l.includes("kota")) return <MapPin className="w-4 h-4 text-blue-500" />;
     return <FileText className="w-4 h-4 text-blue-500" />;
-  };
-
-  const isAutoSyncedField = (label: string) => {
-    const l = (label || "").toLowerCase();
-    return (
-      (l.includes("nama") && !!name) ||
-      ((l.includes("whatsapp") || l.includes("hp") || l.includes("telepon")) && !!phone) ||
-      (l.includes("email") && !!email) ||
-      (existingCadreObj && (
-        ((l.includes("nik") || l.includes("nim")) && !!(existingCadreObj.nik || existingCadreObj.nim)) ||
-        (l.includes("kelamin") && !!(existingCadreObj.gender || existingCadreObj.jenisKelamin)) ||
-        ((l.includes("tempat") || l.includes("lahir") || l.includes("ttl")) && !!(existingCadreObj.ttl || existingCadreObj.tempatLahir))
-      ))
-    );
   };
 
   useEffect(() => {
@@ -1108,17 +1130,31 @@ export default function RegisterPage() {
     );
   }
 
+  const activeComm = eventDetails?.commissariat || commissariat;
+  const commSlug = activeComm && !activeComm.toLowerCase().includes("cabang")
+    ? getKomisariatSlug(activeComm)
+    : "";
+  const derivedKomisariatUrl = commSlug ? `/komisariat/${commSlug}` : null;
+  const backUrl = previousKomisariatUrl || derivedKomisariatUrl || (redirectParam ? `/login?redirect=${encodeURIComponent(redirectParam)}` : "/login");
+  const isFromKomisariat = !!(previousKomisariatUrl || derivedKomisariatUrl);
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col justify-between p-4 sm:p-6 font-sans transition-colors duration-200">
       
       {/* TOP BAR */}
       <div className="w-full max-w-2xl mx-auto flex items-center justify-between py-2">
         <Link
-          href={redirectParam ? `/login?redirect=${encodeURIComponent(redirectParam)}` : "/login"}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors"
+          href={backUrl}
+          onClick={(e) => {
+            if (typeof window !== "undefined" && window.history.length > 1 && document.referrer && document.referrer.includes("/komisariat/")) {
+              e.preventDefault();
+              router.back();
+            }
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Login</span>
+          <span>{isFromKomisariat ? "Kembali ke Halaman Sebelumnya" : "Kembali ke Login"}</span>
         </Link>
 
         {/* Theme Toggle Button */}
@@ -1142,89 +1178,79 @@ export default function RegisterPage() {
           
           <div className="space-y-5">
             
-            {/* 1. HEADER */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3.5 gap-2">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                    {eventDetails ? "Formulir Pendaftaran Kegiatan" : "Daftar Akun Kader"}
+            {/* 1. HEADER & EVENT CONTEXT */}
+            {eventDetails ? (
+              <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                    Pendaftaran Kegiatan
+                  </span>
+                  <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200/70 dark:border-blue-900/60 text-[10px] font-bold uppercase py-0.5 px-2">
+                    {eventDetails.level}
+                  </Badge>
+                </div>
+
+                <div>
+                  <h1 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                    {eventDetails.name}
                   </h1>
-                  {eventDetails && (
-                    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200/70 dark:border-blue-900/60 text-[10px] font-bold uppercase py-0.5 px-2">
-                      {eventDetails.level}
-                    </Badge>
+                  {eventDetails.description && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2 leading-relaxed">
+                      {eventDetails.description}
+                    </p>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {eventDetails 
-                    ? `Silakan lengkapi formulir pendaftaran untuk mengikuti ${eventDetails.name}` 
-                    : "Lengkapi data keanggotaan Anda secara lengkap"}
-                </p>
-              </div>
-            </div>
 
-            {/* 2. EVENT CONTEXT HERO BANNER (JIKA MENDAFTAR KEGIATAN) */}
-            {eventDetails && (
-              <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-br from-blue-50/60 via-zinc-50 to-white dark:from-zinc-950/80 dark:via-zinc-900 dark:to-zinc-900 border border-blue-200/60 dark:border-zinc-800 space-y-2.5 shadow-2xs">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1 min-w-0">
-                    <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider block">
-                      Agenda Terpilih:
-                    </span>
-                    <h3 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-zinc-100 leading-snug break-words">
-                      {eventDetails.name}
-                    </h3>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                      {eventDetails.description || "Pelatihan kaderisasi resmi untuk mengasah kapasitas intelektual dan kepemimpinan."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/90 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                    <Building className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[200px]">
-                      {eventDetails.commissariat || commissariat}
-                    </span>
+                <div className="flex flex-wrap items-center gap-3 pt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="inline-flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="truncate max-w-[200px]">{eventDetails.commissariat || commissariat}</span>
                   </div>
                   {eventDetails.date && (
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/90 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div className="inline-flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                       <span>{eventDetails.date}</span>
                     </div>
                   )}
                   {(eventDetails as any).location && (
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/90 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                      <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <div className="inline-flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                       <span className="truncate max-w-[160px]">{(eventDetails as any).location}</span>
                     </div>
                   )}
+                  {kaderisasiData && (kaderisasiData.syllabus || kaderisasiData.modul) && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                      {kaderisasiData.syllabus && (
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewFile(kaderisasiData.syllabus!.fileUrl, `Silabus ${kaderisasiData.nama}`)}
+                          className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          Silabus
+                        </button>
+                      )}
+                      {kaderisasiData.modul && (
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewFile(kaderisasiData.modul!.fileUrl, `Modul ${kaderisasiData.nama}`)}
+                          className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          Modul
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-
-                {/* Optional Modul & Silabus Section */}
-                {kaderisasiData && (kaderisasiData.syllabus || kaderisasiData.modul) && (
-                  <div className="flex items-center gap-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50 flex-wrap text-xs">
-                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold uppercase">Materi:</span>
-                    {kaderisasiData.syllabus && (
-                      <button
-                        type="button"
-                        onClick={() => handlePreviewFile(kaderisasiData.syllabus!.fileUrl, `Silabus ${kaderisasiData.nama}`)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> Silabus
-                      </button>
-                    )}
-                    {kaderisasiData.modul && (
-                      <button
-                        type="button"
-                        onClick={() => handlePreviewFile(kaderisasiData.modul!.fileUrl, `Modul ${kaderisasiData.nama}`)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-1"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> Modul
-                      </button>
-                    )}
-                  </div>
-                )}
+              </div>
+            ) : (
+              <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3.5 space-y-1">
+                <h1 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                  Daftar Akun Kader
+                </h1>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Lengkapi data keanggotaan Anda secara lengkap
+                </p>
               </div>
             )}
 
@@ -1366,22 +1392,20 @@ export default function RegisterPage() {
               </div>
             ) : (
               <>
-            {/* 3. SLEEK STEPPER (JIKA MULTI-STEP) */}
+            {/* 3. MINIMALIST STEPPER (JIKA MULTI-STEP) */}
             {eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 && (
-              <div className="grid grid-cols-2 gap-1.5 bg-zinc-100 dark:bg-zinc-800/60 p-1 rounded-xl select-none">
+              <div className="grid grid-cols-2 gap-1 bg-zinc-100 dark:bg-zinc-800/50 p-1 rounded-xl text-xs select-none">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
                   className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     step === 1
-                      ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs font-bold"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs font-bold"
+                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
                 >
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                    step > 1
-                      ? "bg-emerald-500 text-white"
-                      : "bg-blue-600 text-white"
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    step > 1 ? "bg-emerald-500 text-white" : "bg-blue-600 text-white"
                   }`}>
                     {step > 1 ? "✓" : "1"}
                   </span>
@@ -1395,18 +1419,16 @@ export default function RegisterPage() {
                   }}
                   className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     step === 2
-                      ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs font-bold"
-                      : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs font-bold"
+                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
                 >
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                    step === 2
-                      ? "bg-blue-600 text-white"
-                      : "bg-zinc-200 dark:bg-zinc-700 text-zinc-500"
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    step === 2 ? "bg-blue-600 text-white" : "bg-zinc-300 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
                   }`}>
                     2
                   </span>
-                  <span className="truncate">Formulir & Persyaratan</span>
+                  <span className="truncate">Berkas & Persyaratan</span>
                 </button>
               </div>
             )}
@@ -1535,27 +1557,24 @@ export default function RegisterPage() {
                           </span>
                         ) : null}
                       </div>
-                      <div className="relative">
-                        <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
-                        <Input
-                          type="email"
-                          required
-                          disabled={loading || isGoogleAuthUser}
-                          value={email}
-                          onChange={(e) => {
-                            setEmail(e.target.value);
-                            if (isExistingAccount) {
-                              setIsExistingAccount(false);
-                              setExistingAccountName("");
-                              setExistingCadreObj(null);
-                              setIsExistingPasswordVerified(false);
-                            }
-                          }}
-                          onBlur={() => checkExistingAccount(email, false)}
-                          placeholder="sahabat@domain.com"
-                          className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors disabled:opacity-80 disabled:cursor-not-allowed"
-                        />
-                      </div>
+                      <Input
+                        type="email"
+                        required
+                        disabled={loading || isGoogleAuthUser}
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (isExistingAccount) {
+                            setIsExistingAccount(false);
+                            setExistingAccountName("");
+                            setExistingCadreObj(null);
+                            setIsExistingPasswordVerified(false);
+                          }
+                        }}
+                        onBlur={() => checkExistingAccount(email, false)}
+                        placeholder="sahabat@domain.com"
+                        className="text-sm px-3.5 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors disabled:opacity-80 disabled:cursor-not-allowed"
+                      />
                     </div>
 
                     <div className="space-y-2">
@@ -1567,34 +1586,28 @@ export default function RegisterPage() {
                           </span>
                         )}
                       </div>
-                      <div className="relative">
-                        <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
-                        <Input
-                          required
-                          disabled={loading}
-                          value={name}
-                          onChange={(e) => handleNameChange(e.target.value)}
-                          placeholder="Ahmad Fudholi"
-                          className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
-                        />
-                      </div>
+                      <Input
+                        required
+                        disabled={loading}
+                        value={name}
+                        onChange={(e) => handleNameChange(e.target.value)}
+                        placeholder="Ahmad Fudholi"
+                        className="text-sm px-3.5 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Nomor WhatsApp</label>
-                      <div className="relative">
-                        <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
-                        <Input
-                          required
-                          disabled={loading}
-                          value={phone}
-                          onChange={(e) => handlePhoneChange(e.target.value)}
-                          placeholder="081234567890"
-                          className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
-                        />
-                      </div>
+                      <Input
+                        required
+                        disabled={loading}
+                        value={phone}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                        placeholder="081234567890"
+                        className="text-sm px-3.5 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                      />
                     </div>
 
                     {!isGoogleAuthUser && isExistingAccount ? (
@@ -1604,7 +1617,6 @@ export default function RegisterPage() {
                           <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Verifikasi Anggota</span>
                         </div>
                         <div className="relative">
-                          <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                           <Input
                             type={showPassword ? "text" : "password"}
                             required
@@ -1612,7 +1624,7 @@ export default function RegisterPage() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Masukkan kata sandi akun Anda"
-                            className="text-sm pl-10 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                            className="text-sm px-3.5 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
                           />
                           <button
                             type="button"
@@ -1631,7 +1643,6 @@ export default function RegisterPage() {
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Kata Sandi Baru</label>
                         <div className="relative">
-                          <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                           <Input
                             type={showPassword ? "text" : "password"}
                             required
@@ -1639,7 +1650,7 @@ export default function RegisterPage() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Minimal 6 karakter"
-                            className="text-sm pl-10 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                            className="text-sm px-3.5 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
                           />
                           <button
                             type="button"
@@ -1654,7 +1665,6 @@ export default function RegisterPage() {
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Konfirmasi Sandi</label>
                         <div className="relative">
-                          <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
                           <Input
                             type={showConfirmPassword ? "text" : "password"}
                             required
@@ -1662,7 +1672,7 @@ export default function RegisterPage() {
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             placeholder="Ulangi kata sandi"
-                            className="text-sm pl-10 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                            className="text-sm px-3.5 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
                           />
                           <button
                             type="button"
@@ -1704,166 +1714,198 @@ export default function RegisterPage() {
               )}
 
               {/* STEP 2: DYNAMIC PERSYARATAN */}
-              {step === 2 && eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 && (
-                <div className="space-y-6">
-                  {/* Section Header */}
-                  <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                        <ClipboardCheck className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
-                          Formulir & Dokumen Persyaratan
-                        </h3>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                          Lengkapi data screening dan berkas persyaratan untuk kegiatan ini.
-                        </p>
-                      </div>
+              {step === 2 && eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 && (() => {
+                const requiredFields = eventDetails.formFields.filter((f) => f.required);
+                const totalRequired = requiredFields.length;
+                const completedRequiredCount = requiredFields.filter(
+                  (f) => !!(customAnswers[f.id] && customAnswers[f.id].trim())
+                ).length;
+
+                return (
+                  <div className="space-y-4">
+                    {/* Ringkasan Akun Minimalis */}
+                    <div className="flex items-center justify-between text-xs py-2 px-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                      <span className="truncate">
+                        Mendaftar sebagai: <strong className="text-zinc-900 dark:text-white font-semibold">{name || "Peserta"}</strong> ({email})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline font-semibold ml-2 shrink-0 cursor-pointer text-xs"
+                      >
+                        Ubah
+                      </button>
                     </div>
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 shrink-0">
-                      {eventDetails.formFields.length} Kolom
-                    </span>
-                  </div>
 
-                  {/* Form Fields Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {eventDetails.formFields.map((field) => {
-                      const value = customAnswers[field.id] || "";
-                      const handleChange = (val: string | null) =>
-                        setCustomAnswers((prev) => ({ ...prev, [field.id]: val || "" }));
-                      const isFullWidth = field.type === "textarea" || field.type === "file";
-                      const autoSynced = isAutoSyncedField(field.label);
+                    {/* Subtitle & Status */}
+                    <div className="flex items-center justify-between pt-1 pb-0.5">
+                      <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                        Berkas & Formulir Persyaratan
+                      </span>
+                      {totalRequired > 0 && (
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          {completedRequiredCount}/{totalRequired} Wajib Terisi
+                        </span>
+                      )}
+                    </div>
 
-                      return (
-                        <div
-                          key={field.id}
-                          className={`space-y-2 ${isFullWidth ? "md:col-span-2" : "md:col-span-1"}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider block">
-                              {field.label} {field.required && <span className="text-rose-500">*</span>}
-                            </label>
-                            {autoSynced && value && (
-                              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-1">
-                                ✓ Sesuai Akun
+                    {/* Form Fields Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {eventDetails.formFields.map((field) => {
+                        const value = customAnswers[field.id] || "";
+                        const handleChange = (val: string | null) =>
+                          setCustomAnswers((prev) => ({ ...prev, [field.id]: val || "" }));
+                        const isFullWidth = field.type === "textarea" || field.type === "file";
+
+                        return (
+                          <div
+                            key={field.id}
+                            className={`space-y-1.5 ${isFullWidth ? "md:col-span-2" : "md:col-span-1"}`}
+                          >
+                            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+                              <span>
+                                {field.label} {field.required ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-zinc-400 font-normal">(opsional)</span>}
                               </span>
-                            )}
-                          </div>
+                            </label>
 
-                          {field.type === "textarea" ? (
-                            <div className="relative">
+                            {field.type === "textarea" ? (
                               <textarea
                                 required={field.required}
                                 disabled={loading}
                                 value={value}
                                 onChange={(e) => handleChange(e.target.value)}
-                                placeholder={`Ketik ${field.label.toLowerCase()}...`}
-                                className="w-full text-sm p-3.5 bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800/80 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl h-24 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 resize-none transition-colors"
+                                placeholder={`Tuliskan ${field.label.toLowerCase()}...`}
+                                className="w-full text-xs sm:text-sm p-3 bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl min-h-[75px] text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 resize-none transition-colors"
                               />
-                            </div>
-                          ) : field.type === "select" ? (
-                            <Select value={value} onValueChange={handleChange}>
-                              <SelectTrigger className="text-sm bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors">
-                                <div className="flex items-center gap-2.5 truncate">
-                                  <span className="text-zinc-400 dark:text-zinc-500 shrink-0">
-                                    {getFieldIcon(field.label, field.type)}
-                                  </span>
-                                  <SelectValue placeholder={`Pilih ${field.label}...`} />
-                                </div>
-                              </SelectTrigger>
-                              <SelectContent className="bg-white dark:bg-[#090d16] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow-xl">
-                                {((field.options && field.options.length > 0)
-                                  ? field.options
-                                  : (field.label || "").toLowerCase().includes("kelamin")
-                                  ? ["Laki-laki", "Perempuan"]
-                                  : []
-                                ).map((opt) => (
-                                  <SelectItem key={opt} value={opt}>
-                                    {opt}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : field.type === "file" ? (
-                            <div className="space-y-2">
-                              {value ? (
-                                <div className="flex items-center justify-between p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/60 rounded-xl">
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 text-emerald-600 dark:text-emerald-400">
-                                      <FileText className="w-5 h-5" />
-                                    </div>
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
-                                        {fileNames[field.id] || "Berkas Terunggah"}
-                                      </span>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Siap Dikirim</span>
-                                        <span className="text-zinc-300 dark:text-zinc-700">•</span>
-                                        <a
-                                          href={value}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
-                                        >
-                                          Lihat Berkas ↗
-                                        </a>
+                            ) : field.type === "select" ? (
+                              <Select value={value} onValueChange={handleChange}>
+                                <SelectTrigger className="text-xs sm:text-sm bg-zinc-50/60 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800 rounded-xl h-10 text-zinc-900 dark:text-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors">
+                                  <SelectValue placeholder={`Pilih ${field.label.toLowerCase()}...`} />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow-xl rounded-xl">
+                                  {((field.options && field.options.length > 0)
+                                    ? field.options
+                                    : (field.label || "").toLowerCase().includes("kelamin")
+                                    ? ["Laki-laki", "Perempuan"]
+                                    : []
+                                  ).map((opt) => (
+                                    <SelectItem key={opt} value={opt} className="text-xs cursor-pointer">
+                                      {opt}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : field.type === "file" ? (
+                              (() => {
+                                const isImg = isImageFile(value, fileNames[field.id]);
+                                const isUploading = !!uploadingFields[field.id];
+                                const isDraggingOver = !!isDragging[field.id];
+
+                                return (
+                                  <div>
+                                    {value ? (
+                                      <div className="flex items-center justify-between p-2.5 bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          {isImg ? (
+                                            <img
+                                              src={value}
+                                              alt={fileNames[field.id] || field.label}
+                                              className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer"
+                                              onClick={() => handlePreviewFile(value, field.label)}
+                                            />
+                                          ) : (
+                                            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-900/50 flex items-center justify-center shrink-0 text-blue-600 dark:text-blue-400">
+                                              <FileText className="w-4 h-4" />
+                                            </div>
+                                          )}
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                                              {fileNames[field.id] || "Berkas Terunggah"}
+                                            </p>
+                                            <button
+                                              type="button"
+                                              onClick={() => handlePreviewFile(value, field.label)}
+                                              className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer inline-flex items-center gap-1"
+                                            >
+                                              <span>Lihat berkas</span>
+                                              <ExternalLink className="w-2.5 h-2.5" />
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                                          <label
+                                            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
+                                            title="Ganti berkas"
+                                          >
+                                            <input
+                                              type="file"
+                                              className="hidden"
+                                              disabled={isUploading || loading}
+                                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                              onChange={(e) => e.target.files?.[0] && handleFileUpload(field.id, e.target.files[0])}
+                                            />
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                          </label>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleChange("");
+                                              setFileNames((prev) => ({ ...prev, [field.id]: "" }));
+                                            }}
+                                            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors"
+                                            title="Hapus berkas"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
                                       </div>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      handleChange("");
-                                      setFileNames((prev) => ({ ...prev, [field.id]: "" }));
-                                    }}
-                                    className="h-9 w-9 p-0 rounded-lg text-rose-500 hover:bg-rose-500/10 cursor-pointer"
-                                    title="Hapus dan unggah ulang"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <label className="flex flex-col items-center justify-center w-full py-6 px-4 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-blue-500 dark:hover:border-blue-500 bg-zinc-50/60 dark:bg-zinc-950/30 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 rounded-xl cursor-pointer transition-all group">
-                                  <div className="flex flex-col items-center justify-center space-y-2 text-center">
-                                    {uploadingFields[field.id] ? (
-                                      <>
-                                        <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                        <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">Mengunggah berkas...</p>
-                                      </>
                                     ) : (
-                                      <>
-                                        <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                          <UploadCloud className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                          <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                                            Pilih atau Tarik Dokumen / File ke Sini
-                                          </p>
-                                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5">
-                                            Format PDF, JPG, PNG, atau DOCX (Maksimal 2 MB)
-                                          </p>
-                                        </div>
-                                      </>
+                                      <label
+                                        onDragOver={(e) => {
+                                          e.preventDefault();
+                                          setIsDragging((prev) => ({ ...prev, [field.id]: true }));
+                                        }}
+                                        onDragLeave={() => {
+                                          setIsDragging((prev) => ({ ...prev, [field.id]: false }));
+                                        }}
+                                        onDrop={(e) => {
+                                          e.preventDefault();
+                                          setIsDragging((prev) => ({ ...prev, [field.id]: false }));
+                                          const file = e.dataTransfer.files?.[0];
+                                          if (file) handleFileUpload(field.id, file);
+                                        }}
+                                        className={`flex items-center justify-center gap-2 w-full py-3.5 px-3 border border-dashed rounded-xl cursor-pointer transition-colors ${
+                                          isUploading
+                                            ? "border-blue-400 bg-blue-50/20"
+                                            : isDraggingOver
+                                            ? "border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20"
+                                            : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/40 dark:bg-zinc-950/20"
+                                        }`}
+                                      >
+                                        {isUploading ? (
+                                          <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                            <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                            <span>Mengunggah...</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                                            Pilih atau seret berkas (PDF, Gambar, atau Dokumen, maks 5MB)
+                                          </span>
+                                        )}
+                                        <input
+                                          type="file"
+                                          disabled={isUploading || loading}
+                                          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                          onChange={(e) => e.target.files?.[0] && handleFileUpload(field.id, e.target.files[0])}
+                                          className="hidden"
+                                        />
+                                      </label>
                                     )}
                                   </div>
-                                  <input
-                                    type="file"
-                                    disabled={uploadingFields[field.id] || loading}
-                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                    onChange={(e) => e.target.files?.[0] && handleFileUpload(field.id, e.target.files[0])}
-                                    className="hidden"
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="relative">
-                              <div className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500">
-                                {getFieldIcon(field.label, field.type)}
-                              </div>
+                                );
+                              })()
+                            ) : (
                               <Input
                                 required={field.required}
                                 disabled={loading}
@@ -1871,54 +1913,48 @@ export default function RegisterPage() {
                                 value={value}
                                 onChange={(e) => handleChange(e.target.value)}
                                 placeholder={`Masukkan ${field.label.toLowerCase()}...`}
-                                className="text-sm pl-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                                className="text-xs sm:text-sm px-3.5 bg-zinc-50/60 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800 rounded-xl h-10 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
                               />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                  {/* Notice Info */}
-                  <div className="p-3.5 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 rounded-xl flex items-start gap-2.5 text-xs text-zinc-600 dark:text-zinc-400">
-                    <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                    <span>
-                      Data formulir dan berkas yang Anda kirimkan akan diverifikasi oleh panitia dan pengurus pada tahap <strong>Screening Berkas</strong> kegiatan ini.
-                    </span>
-                  </div>
+                    {/* Footnote */}
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center pt-1">
+                      Data dan berkas pendaftaran akan diverifikasi oleh panitia kegiatan.
+                    </p>
 
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setStep(1)}
-                      className="h-11 sm:h-12 text-xs sm:text-sm font-semibold rounded-xl cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"
-                    >
-                      <ArrowLeft className="w-4 h-4 mr-1.5" /> Kembali ke Akun
-                    </Button>
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setStep(1)}
+                        className="h-10 px-4 text-xs font-semibold rounded-xl border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Sebelumnya
+                      </Button>
 
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="h-11 sm:h-12 text-xs sm:text-sm font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
-                    >
-                      {loading ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Menyimpan...</span>
-                        </div>
-                      ) : (
-                        <>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className="flex-1 h-10 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-none transition-colors"
+                      >
+                        {loading ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Memproses...</span>
+                          </div>
+                        ) : (
                           <span>Kirim Pendaftaran</span>
-                          <CheckCircle className="w-4 h-4 ml-1" />
-                        </>
-                      )}
-                    </Button>
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
             </form>
             </>

@@ -880,24 +880,6 @@ export default function DashboardLayout({
                       <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span>Profil Saya</span>
                     </DropdownMenuItem>
-                    {isMenuAllowed(`${staffPrefix}/pengguna`, currentUser, staffPrefix) && (
-                      <DropdownMenuItem
-                        onClick={() => router.push(`${staffPrefix}/pengguna`)}
-                        className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Manajemen Pengguna</span>
-                      </DropdownMenuItem>
-                    )}
-                    {isMenuAllowed(`${staffPrefix}/pengaturan`, currentUser, staffPrefix) && (
-                      <DropdownMenuItem
-                        onClick={() => router.push(`${staffPrefix}/pengaturan`)}
-                        className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
-                      >
-                        <Settings className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Pengaturan Sistem</span>
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuSeparator className="my-1 bg-zinc-100 dark:bg-zinc-800" />
                     <DropdownMenuItem
                       onClick={async () => {

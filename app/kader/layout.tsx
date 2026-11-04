@@ -23,13 +23,17 @@ import {
   AlertCircle,
   Check,
   ChevronRight,
-  Trash2
+  Trash2,
+  User,
+  ChevronDown
 } from "lucide-react";
 
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 
 import { normalizeTenantName } from "@/lib/tenancy";
@@ -538,17 +542,6 @@ export default function KaderLayout({
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-
-          <SidebarFooter className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/40">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-600 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer transition-colors duration-150 group-data-[collapsible=icon]:p-2"
-              title="Keluar"
-            >
-              <LogOut className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">Keluar</span>
-            </button>
-          </SidebarFooter>
         </Sidebar>
 
         {/* MAIN INSET */}
@@ -739,30 +732,61 @@ export default function KaderLayout({
 
               <div className="h-5 w-px bg-zinc-200 dark:border-zinc-800 hidden sm:block" />
 
-              {/* USER INFO IN NAVBAR */}
-              <Link
-                href={`${rolePrefix}/profil`}
-                className="flex items-center gap-2.5 p-1 -mr-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-                title="Lihat Profil Saya"
-              >
-                <Avatar className="w-8 h-8 border border-zinc-200 dark:border-zinc-800 flex-shrink-0">
-                  {activeCadre?.avatar && (
-                    <AvatarImage src={activeCadre.avatar} alt={activeCadre.name || "Kader"} />
-                  )}
-                  <AvatarFallback className="bg-blue-600 dark:bg-blue-700 text-white font-bold text-xs">
-                    {cadreInitials}
-                  </AvatarFallback>
-                </Avatar>
-                
-                <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold truncate max-w-[160px] text-zinc-900 dark:text-zinc-100">
-                    {activeCadre?.name || "Sahabat"}
-                  </span>
-                  <span className="text-[10px] uppercase font-semibold text-blue-600 dark:text-amber-400">
-                    {activeCadre?.role || userRole || "Peserta"}
-                  </span>
-                </div>
-              </Link>
+              {/* USER INFO DROPDOWN IN NAVBAR */}
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <button className="flex items-center gap-2.5 p-1 -mr-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors group cursor-pointer border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800">
+                      <Avatar className="w-8 h-8 border border-zinc-200 dark:border-zinc-800 flex-shrink-0">
+                        {activeCadre?.avatar ? (
+                          <AvatarImage src={activeCadre.avatar} alt={activeCadre.name || "Kader"} />
+                        ) : null}
+                        <AvatarFallback className="bg-blue-600 dark:bg-blue-700 text-white font-bold text-xs">
+                          {cadreInitials}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <div className="hidden sm:flex flex-col text-left">
+                        <span className="text-xs font-bold truncate max-w-[130px] text-zinc-900 dark:text-zinc-100">
+                          {activeCadre?.name || "Sahabat"}
+                        </span>
+                        <span className="text-[10px] uppercase font-semibold text-blue-600 dark:text-amber-400">
+                          {activeCadre?.role || userRole || "Peserta"}
+                        </span>
+                      </div>
+                      <ChevronDown className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors ml-0.5 shrink-0 hidden sm:block" />
+                    </button>
+                  }
+                />
+                <DropdownMenuContent
+                  align="end"
+                  className="w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg p-1.5 z-50"
+                >
+                  <div className="px-2.5 py-2 border-b border-zinc-100 dark:border-zinc-800 mb-1">
+                    <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                      {activeCadre?.name || "Sahabat PMII"}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                      {activeCadre?.email || "anggota@pmii.id"}
+                    </p>
+                  </div>
+                  <DropdownMenuItem
+                    onClick={() => router.push(`${rolePrefix}/profil`)}
+                    className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
+                  >
+                    <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Profil Saya</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1 bg-zinc-100 dark:bg-zinc-800" />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="cursor-pointer text-xs font-medium gap-2 p-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                    <span>Keluar Sistem</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
 
