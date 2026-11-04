@@ -137,19 +137,6 @@ export default function DashboardLayout({
         });
       });
 
-      // Recent cadres registered
-      if (cadres.length > 0) {
-        const latestCadre = cadres[cadres.length - 1];
-        const id = `notif-cadre-${latestCadre.id}`;
-        items.push({
-          id,
-          text: `Kader baru terdaftar: ${latestCadre.name} (${latestCadre.commissariat || "PMII"}).`,
-          time: latestCadre.startDate || "Database Anggota",
-          link: "/dashboard/anggota",
-          unread: !readIds.includes(id)
-        });
-      }
-
       setDashboardNotifications(items.filter(item => !deletedIds.includes(item.id)));
     } catch (e) {
       console.warn("Failed to load dashboard notifications", e);

@@ -197,22 +197,6 @@ export default function KaderLayout({
           });
         });
 
-      // 3. KTA Digital untuk anggota resmi
-      if (isAnggota) {
-        const id = "notif-kta-ready";
-        items.push({
-          id,
-          title: "KTA Digital Tersedia",
-          message: "Kartu Tanda Anggota (KTA) Digital Anda telah aktif dan dapat diakses di menu Profil.",
-          time: "Permanen",
-          timestamp: Date.now() - 86400000,
-          unread: !readIds.includes(id),
-          type: "profile",
-          link: `${rolePrefix}/profil`,
-          iconType: "profile"
-        });
-      }
-
       items.sort((a, b) => {
         if (a.unread !== b.unread) return a.unread ? -1 : 1;
         return b.timestamp - a.timestamp;
