@@ -205,7 +205,8 @@ export async function getTableData<T>(
             "persyaratan",
             "board_members",
             "pengurus",
-            "galeri"
+            "galeri",
+            "pengajuan_sk"
           ];
           if (authoritativeTables.includes(effectiveTable) || authoritativeTables.includes(tableName)) {
             // Database Supabase adalah sumber data tunggal yang otoritatif.
@@ -276,6 +277,17 @@ export async function getTableData<T>(
     if (stored) {
       try {
         let parsed = JSON.parse(stored) as any[];
+        if (tableName === "pengajuan_sk" && Array.isArray(parsed)) {
+          const cleaned = parsed.filter((item: any) => {
+            const id = String(item.id || "");
+            return !id.startsWith("sk-001") && !id.startsWith("sk-002");
+          });
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(localStorageKey, JSON.stringify(cleaned));
+            parsed = cleaned;
+          }
+        }
+
         if (tableName === "articles" && Array.isArray(parsed)) {
           const ghostTitles = [
             "meneguhkan aswaja",

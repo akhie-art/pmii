@@ -668,9 +668,12 @@ export default function PengajuanSKPage() {
   };
 
   // Load User & Submissions
-  const loadData = async () => {
+  const loadData = async (forceRemote: boolean = false) => {
     setIsLoading(true);
     try {
+      if (forceRemote && typeof window !== "undefined") {
+        localStorage.removeItem("PMII_PENGAJUAN_SK");
+      }
       const [skData, commData] = await Promise.all([
         db.getPengajuanSK(),
         db.getCommissariats()
@@ -1082,8 +1085,24 @@ export default function PengajuanSKPage() {
           )}
         </nav>
 
-        {!isAdmin && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              loadData(true);
+              toast.info("Menyinkronkan data pengajuan SK dari database...");
+            }}
+            disabled={isLoading}
+            className="h-8.5 px-3 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center gap-1.5 cursor-pointer text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            title="Segarkan dan sinkronkan data dari database"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-blue-600" : ""}`} />
+            <span className="hidden sm:inline">Segarkan</span>
+          </Button>
+
+          {!isAdmin && (
             <Button
               size="sm"
               onClick={handleOpenCreate}
@@ -1092,8 +1111,8 @@ export default function PengajuanSKPage() {
               <Plus className="w-3.5 h-3.5" />
               <span>Ajukan SK Baru</span>
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* KPI Stats Cards (Hanya Tampil untuk Pengurus Cabang / Admin) */}
