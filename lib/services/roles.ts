@@ -108,10 +108,18 @@ export async function getRoles(): Promise<Role[]> {
         .order("created_at", { ascending: true });
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        if (typeof window !== "undefined") {
-          localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(data));
+        // Gabungkan dengan DEFAULT_ROLES agar peran standar (Ketua Komisariat, Pengurus, dll.) selalu lengkap
+        const existingCodes = new Set(data.map((r: any) => (r.code || "").toLowerCase().trim()));
+        const merged = [...data];
+        for (const def of DEFAULT_ROLES) {
+          if (!existingCodes.has(def.code.toLowerCase().trim())) {
+            merged.push(def);
+          }
         }
-        return data as Role[];
+        if (typeof window !== "undefined") {
+          localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(merged));
+        }
+        return merged as Role[];
       }
     }
   } catch (err) {
@@ -124,7 +132,16 @@ export async function getRoles(): Promise<Role[]> {
       const cached = localStorage.getItem(ROLES_STORAGE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingCodes = new Set(parsed.map((r: any) => (r.code || "").toLowerCase().trim()));
+          const merged = [...parsed];
+          for (const def of DEFAULT_ROLES) {
+            if (!existingCodes.has(def.code.toLowerCase().trim())) {
+              merged.push(def);
+            }
+          }
+          return merged;
+        }
       }
     } catch {}
   }

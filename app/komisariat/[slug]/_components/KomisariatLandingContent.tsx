@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2,
   GraduationCap,
@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ArrowRight,
   ChevronLeft,
+  ChevronRight,
   UserPlus,
   LogIn,
   Sun,
@@ -29,11 +30,17 @@ import {
   Image as ImageIcon,
   Camera,
   ZoomIn,
-  X
+  X,
+  Network,
+  LayoutGrid,
+  Search,
+  Crown,
+  UserCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { db, DEFAULT_ARTICLES, formatArticleDate } from "@/lib/db";
 import type { Article, EventActivity } from "@/lib/db";
 import { getKomisariatSlug, normalizeTenantName } from "@/lib/tenancy";
@@ -58,6 +65,11 @@ export function KomisariatLandingContent({ slug }: Props) {
   const [boardMembers, setBoardMembers] = useState<any[]>([]);
   const [cadres, setCadres] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [structureViewMode, setStructureViewMode] = useState<"tree" | "directory">("tree");
+  const [searchDirectoryQuery, setSearchDirectoryQuery] = useState("");
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("Semua");
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -257,6 +269,17 @@ export function KomisariatLandingContent({ slug }: Props) {
     });
   }, [boardMembers]);
 
+  const wakilKetuaList = useMemo(() => {
+    return boardMembers.filter((b) => {
+      const pos = (b.position || "").toLowerCase();
+      return (
+        (pos.includes("wakil ketua") || pos.includes("waka") || pos.includes("wakil mandataris")) &&
+        !pos.includes("sekretaris") &&
+        !pos.includes("bendahara")
+      );
+    });
+  }, [boardMembers]);
+
   const secretaryMember = useMemo(() => {
     return boardMembers.find((b) => {
       const pos = (b.position || "").toLowerCase();
@@ -286,9 +309,25 @@ export function KomisariatLandingContent({ slug }: Props) {
 
   // Pemisahan Fungsionaris Bidang dan Biro
   const { bidangGroups, biroGroups } = useMemo(() => {
-    const nonBph = boardMembers.filter(
-      (m) => m && m.department && m.department !== "BPH" && m.department !== "PIMPINAN"
-    );
+    const nonBph = boardMembers.filter((m) => {
+      if (!m) return false;
+      const dept = (m.department || "").toUpperCase();
+      const pos = (m.position || "").toLowerCase();
+
+      // Leadership exclusion so they don't leak into Bidang
+      const isLeadership =
+        (pos.includes("ketua") && !pos.includes("bidang") && !pos.includes("biro")) ||
+        pos.includes("mandataris") ||
+        pos.includes("wakil ketua") ||
+        pos.includes("waka") ||
+        (pos.includes("sekretaris") && !pos.includes("bidang")) ||
+        (pos.includes("bendahara") && !pos.includes("bidang"));
+
+      if (dept === "BPH" || dept === "PIMPINAN") return false;
+      if (isLeadership && !m.biro && (!m.department || m.department === "BPH")) return false;
+
+      return true;
+    });
 
     const bidangMap = new Map<string, any[]>();
     const biroMap = new Map<string, { dept: string; members: any[] }>();
@@ -307,13 +346,14 @@ export function KomisariatLandingContent({ slug }: Props) {
         }
 
         if (!biroMap.has(bName)) {
-          biroMap.set(bName, { dept: m.department, members: [] });
+          biroMap.set(bName, { dept: m.department || "", members: [] });
         }
         biroMap.get(bName)!.members.push(m);
       } else {
-        const dName = m.department.toLowerCase().startsWith("bidang")
-          ? m.department.trim()
-          : `Bidang ${m.department.trim()}`;
+        const rawDept = (m.department || "Lainnya").trim();
+        const dName = rawDept.toLowerCase().startsWith("bidang")
+          ? rawDept
+          : `Bidang ${rawDept}`;
 
         if (!bidangMap.has(dName)) {
           bidangMap.set(dName, []);
@@ -336,6 +376,213 @@ export function KomisariatLandingContent({ slug }: Props) {
     return { bidangGroups: bGroups, biroGroups: rGroups };
   }, [boardMembers]);
 
+  // Direktori Lengkap Fungsionaris
+  const allDirectoryMembers = useMemo(() => {
+    const list: Array<{
+      id: string;
+      name: string;
+      position: string;
+      department: string;
+      biro?: string;
+      gender: "Sahabat" | "Sahabati";
+      avatar?: string;
+      category: "Pimpinan" | "Bidang" | "Biro";
+    }> = [];
+
+    const addedNames = new Set<string>();
+
+    if (chairmanName) {
+      list.push({
+        id: chairmanMember?.id || "chairman",
+        name: chairmanName,
+        position: chairmanMember?.position || "Ketua Mandataris / Ketua Komisariat",
+        department: "BPH (Badan Pengurus Harian)",
+        gender: getGender(chairmanName, chairmanMember?.anggota_id),
+        avatar: getAvatar(chairmanName, chairmanMember?.anggota_id, chairmanMember?.avatar),
+        category: "Pimpinan",
+      });
+      addedNames.add(chairmanName.toLowerCase().trim());
+    }
+
+    wakilKetuaList.forEach((wk, i) => {
+      const key = wk.name?.toLowerCase().trim();
+      if (key && !addedNames.has(key)) {
+        list.push({
+          id: wk.id || `wk-${i}`,
+          name: wk.name,
+          position: wk.position || "Wakil Ketua",
+          department: wk.department || "BPH (Pimpinan Harian)",
+          gender: getGender(wk.name, wk.anggota_id),
+          avatar: getAvatar(wk.name, wk.anggota_id, wk.avatar),
+          category: "Pimpinan",
+        });
+        addedNames.add(key);
+      }
+    });
+
+    if (secretaryName) {
+      const key = secretaryName.toLowerCase().trim();
+      if (!addedNames.has(key)) {
+        list.push({
+          id: secretaryMember?.id || "secretary",
+          name: secretaryName,
+          position: secretaryMember?.position || "Sekretaris",
+          department: "BPH (Sekretariat)",
+          gender: getGender(secretaryName, secretaryMember?.anggota_id),
+          avatar: getAvatar(secretaryName, secretaryMember?.anggota_id, secretaryMember?.avatar),
+          category: "Pimpinan",
+        });
+        addedNames.add(key);
+      }
+    }
+
+    wakilSekretaris.forEach((ws, i) => {
+      const key = ws.name?.toLowerCase().trim();
+      if (key && !addedNames.has(key)) {
+        list.push({
+          id: ws.id || `ws-${i}`,
+          name: ws.name,
+          position: ws.position || "Wakil Sekretaris",
+          department: "BPH (Sekretariat)",
+          gender: getGender(ws.name, ws.anggota_id),
+          avatar: getAvatar(ws.name, ws.anggota_id, ws.avatar),
+          category: "Pimpinan",
+        });
+        addedNames.add(key);
+      }
+    });
+
+    if (treasurerName) {
+      const key = treasurerName.toLowerCase().trim();
+      if (!addedNames.has(key)) {
+        list.push({
+          id: treasurerMember?.id || "treasurer",
+          name: treasurerName,
+          position: treasurerMember?.position || "Bendahara",
+          department: "BPH (Kebendaharaan)",
+          gender: getGender(treasurerName, treasurerMember?.anggota_id),
+          avatar: getAvatar(treasurerName, treasurerMember?.anggota_id, treasurerMember?.avatar),
+          category: "Pimpinan",
+        });
+        addedNames.add(key);
+      }
+    }
+
+    wakilBendahara.forEach((wb, i) => {
+      const key = wb.name?.toLowerCase().trim();
+      if (key && !addedNames.has(key)) {
+        list.push({
+          id: wb.id || `wb-${i}`,
+          name: wb.name,
+          position: wb.position || "Wakil Bendahara",
+          department: "BPH (Kebendaharaan)",
+          gender: getGender(wb.name, wb.anggota_id),
+          avatar: getAvatar(wb.name, wb.anggota_id, wb.avatar),
+          category: "Pimpinan",
+        });
+        addedNames.add(key);
+      }
+    });
+
+    bidangGroups.forEach((group) => {
+      group.members.forEach((m, i) => {
+        const key = m.name?.toLowerCase().trim();
+        if (key && !addedNames.has(key)) {
+          list.push({
+            id: m.id || `bidang-${group.name}-${i}`,
+            name: m.name,
+            position: m.position || "Fungsionaris Bidang",
+            department: group.name,
+            gender: getGender(m.name, m.anggota_id),
+            avatar: getAvatar(m.name, m.anggota_id, m.avatar),
+            category: "Bidang",
+          });
+          addedNames.add(key);
+        }
+      });
+    });
+
+    biroGroups.forEach((group) => {
+      group.members.forEach((m, i) => {
+        const key = m.name?.toLowerCase().trim();
+        if (key && !addedNames.has(key)) {
+          list.push({
+            id: m.id || `biro-${group.name}-${i}`,
+            name: m.name,
+            position: m.position || "Fungsionaris Biro",
+            department: group.name,
+            biro: group.department ? `Naungan Bidang ${group.department}` : undefined,
+            gender: getGender(m.name, m.anggota_id),
+            avatar: getAvatar(m.name, m.anggota_id, m.avatar),
+            category: "Biro",
+          });
+          addedNames.add(key);
+        }
+      });
+    });
+
+    boardMembers.forEach((bm) => {
+      const key = bm?.name?.toLowerCase().trim();
+      if (key && !addedNames.has(key)) {
+        list.push({
+          id: bm.id,
+          name: bm.name,
+          position: bm.position || "Pengurus",
+          department: bm.department || "Pengurus Harian",
+          gender: getGender(bm.name, bm.anggota_id),
+          avatar: getAvatar(bm.name, bm.anggota_id, bm.avatar),
+          category: "Bidang",
+        });
+        addedNames.add(key);
+      }
+    });
+
+    return list;
+  }, [
+    chairmanName,
+    chairmanMember,
+    wakilKetuaList,
+    secretaryName,
+    secretaryMember,
+    wakilSekretaris,
+    treasurerName,
+    treasurerMember,
+    wakilBendahara,
+    bidangGroups,
+    biroGroups,
+    boardMembers,
+    cadres,
+  ]);
+
+  const filteredDirectoryMembers = useMemo(() => {
+    return allDirectoryMembers.filter((m) => {
+      const q = searchDirectoryQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        m.name.toLowerCase().includes(q) ||
+        m.position.toLowerCase().includes(q) ||
+        m.department.toLowerCase().includes(q) ||
+        (m.biro && m.biro.toLowerCase().includes(q));
+
+      const matchesCategory =
+        selectedDeptFilter === "Semua" || m.category === selectedDeptFilter;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [allDirectoryMembers, searchDirectoryQuery, selectedDeptFilter]);
+
+  const hasAnyBphData = Boolean(
+    chairmanName ||
+    secretaryName ||
+    treasurerName ||
+    wakilKetuaList.length > 0 ||
+    wakilSekretaris.length > 0 ||
+    wakilBendahara.length > 0 ||
+    bidangGroups.length > 0 ||
+    biroGroups.length > 0 ||
+    boardMembers.length > 0
+  );
+
   const toggleTheme = () => {
     const nextDark = !darkMode;
     setDarkMode(nextDark);
@@ -346,6 +593,121 @@ export function KomisariatLandingContent({ slug }: Props) {
       document.documentElement.classList.remove("dark");
       localStorage.setItem("PMII_THEME", "light");
     }
+  };
+
+  const registerUrl = komisariat ? `/register?commissariat=${encodeURIComponent(komisariat.name)}` : "/register";
+  const campusName = komisariat?.university || (komisariat as any)?.campusName || "Perguruan Tinggi";
+
+  // Carousel Slides Data
+  const heroSlides = useMemo(() => {
+    if (!komisariat) return [];
+    const campus = komisariat.university || (komisariat as any).campusName || "Perguruan Tinggi";
+    const period = bphData?.period || komisariat.structure?.period || "2026 - 2027";
+
+    const defaultImg1 = "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=1600&q=80";
+    const defaultImg2 = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1600&q=80";
+    const defaultImg3 = "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1600&q=80";
+
+    const img1 = gallery[0]?.imageUrl || defaultImg1;
+    const img2 = gallery[1]?.imageUrl || defaultImg2;
+    const img3 = gallery[2]?.imageUrl || defaultImg3;
+
+    return [
+      {
+        id: "slide-1",
+        badge: "Portal Resmi Komisariat",
+        badgeIcon: Sparkles,
+        badgeStyle: "bg-blue-500/20 text-blue-300 border-blue-400/30",
+        headline: komisariat.name,
+        subHeadline: campus,
+        description: `Wadah pembinaan mahasiswa Islam berlandaskan Ahlussunnah wal Jama'ah — mengasah intelektualitas kritis, militansi gerakan, dan kepemimpinan transformatif di lingkungan ${campus}.`,
+        image: img1,
+        primaryCta: {
+          label: "Daftar MAPABA Sekarang",
+          href: registerUrl,
+          icon: UserPlus,
+        },
+        secondaryCta: {
+          label: "Jelajahi Profil & Visi",
+          href: "#sejarah",
+          icon: BookOpen,
+        },
+        metric: {
+          value: cadresCount > 0 ? cadresCount : "Aktif",
+          label: "Kader Terdata",
+          sub: "Sahabat & Sahabati",
+        },
+      },
+      {
+        id: "slide-2",
+        badge: "Kaderisasi & Pembinaan Anggota",
+        badgeIcon: GraduationCap,
+        badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
+        headline: "Masa Penerimaan Anggota Baru",
+        subHeadline: "MAPABA PMII " + campus,
+        description: `Langkah awal menapaki proses pembentukan karakter, integritas intelektual, dan dialektika kritis mahasiswa. Bersiaplah menjadi bagian dari agen perubahan bangsa.`,
+        image: img2,
+        primaryCta: {
+          label: "Registrasi Calon Peserta",
+          href: registerUrl,
+          icon: ArrowRight,
+        },
+        secondaryCta: {
+          label: "Lihat Agenda Kegiatan",
+          href: "#kaderisasi",
+          icon: Calendar,
+        },
+        metric: {
+          value: events.length > 0 ? `${events.length} Agenda` : "Terbuka",
+          label: "Kegiatan Terjadwal",
+          sub: "Kaderisasi & Forum",
+        },
+      },
+      {
+        id: "slide-3",
+        badge: `Masa Khidmat ${period}`,
+        badgeIcon: Crown,
+        badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-400/30",
+        headline: "Badan Pengurus Harian",
+        subHeadline: "Hierarki & Basis Rayon Terpadu",
+        description: `Menjalankan amanah roda organisasi secara profesional dan transparan, menaungi ${(komisariat.rayons || []).length || "seluruh"} rayon fakultas di lingkungan ${campus}.`,
+        image: img3,
+        primaryCta: {
+          label: "Bagan Struktur BPH",
+          href: "#struktur",
+          icon: Network,
+        },
+        secondaryCta: {
+          label: "Galeri & Dokumentasi",
+          href: "#galeri",
+          icon: ImageIcon,
+        },
+        metric: {
+          value: (komisariat.rayons || []).length > 0 ? `${(komisariat.rayons || []).length} Rayon` : "1 Komando",
+          label: "Basis Rayon Aktif",
+          sub: "Tingkat Fakultas",
+        },
+      },
+    ];
+  }, [komisariat, bphData, cadresCount, events, gallery, registerUrl]);
+
+  // Auto-play interval
+  useEffect(() => {
+    if (!heroSlides.length || isCarouselPaused) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 5500);
+    return () => clearInterval(interval);
+  }, [heroSlides.length, isCarouselPaused]);
+
+  const nextSlide = () => {
+    if (!heroSlides.length) return;
+    setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+  };
+
+  const prevSlide = () => {
+    if (!heroSlides.length) return;
+    setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
   };
 
   if (loading) {
@@ -382,9 +744,6 @@ export function KomisariatLandingContent({ slug }: Props) {
       </div>
     );
   }
-
-  const registerUrl = `/register?commissariat=${encodeURIComponent(komisariat.name)}`;
-  const campusName = komisariat.university || (komisariat as any).campusName || "Perguruan Tinggi";
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white">
@@ -482,23 +841,215 @@ export function KomisariatLandingContent({ slug }: Props) {
         </div>
       </header>
 
-      {/* 2. HERO SECTION BRANDING KOMISARIAT */}
-      <section className="relative pt-8 pb-12 sm:pt-16 sm:pb-20 overflow-hidden">
-        {/* Glow Accent */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-blue-500/10 dark:bg-blue-600/10 blur-[130px] rounded-full pointer-events-none -z-10" />
+      {/* 2. HERO SECTION CAROUSEL */}
+      <section className="relative pt-4 sm:pt-6 pb-6 sm:pb-8 overflow-hidden">
+        <div className="container mx-auto px-3 sm:px-6 max-w-6xl">
+          <div
+            className="relative rounded-3xl overflow-hidden border border-zinc-200/80 dark:border-zinc-800 shadow-xl bg-zinc-950 text-white min-h-[500px] sm:min-h-[540px] md:min-h-[580px] flex flex-col justify-between"
+            onMouseEnter={() => setIsCarouselPaused(true)}
+            onMouseLeave={() => setIsCarouselPaused(false)}
+          >
+            {/* Background Slides with AnimatePresence */}
+            <div className="absolute inset-0 z-0">
+              <AnimatePresence mode="wait">
+                {heroSlides[currentSlide] && (
+                  <motion.div
+                    key={heroSlides[currentSlide].id}
+                    initial={{ opacity: 0, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.7, ease: "easeOut" }}
+                    className="absolute inset-0"
+                  >
+                    <img
+                      src={heroSlides[currentSlide].image}
+                      alt={heroSlides[currentSlide].headline}
+                      className="w-full h-full object-cover object-center"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-        <div className="container mx-auto px-4 sm:px-6 max-w-6xl">
-          <div className="text-center space-y-4 sm:space-y-6">
-            <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100 leading-[1.15]">
-              {komisariat.name}
-              <span className="block mt-2 text-xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 dark:from-blue-400 dark:via-indigo-400 dark:to-blue-300 bg-clip-text text-transparent">
-                {campusName}
-              </span>
-            </h1>
+              {/* Layered Gradient Overlays for High Contrast Readability */}
+              <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/85 to-zinc-950/40" />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent" />
+              <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-600/25 blur-3xl rounded-full pointer-events-none" />
+              <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-600/20 blur-3xl rounded-full pointer-events-none" />
+            </div>
 
-            <p className="text-xs sm:text-base text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Wadah pembinaan mahasiswa Islam berlandaskan Ahlussunnah wal Jama&apos;ah, mengasah intelektualitas, militansi, dan kepemimpinan transformatif di lingkungan {campusName}.
-            </p>
+            {/* Top Bar inside Carousel: Campus Badge & Slide Count */}
+            <div className="relative z-10 px-5 sm:px-8 md:px-12 pt-6 sm:pt-8 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] sm:text-xs font-semibold text-zinc-300 tracking-wider uppercase">
+                  Portal Resmi PMII {campusName}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-xs font-mono font-medium text-zinc-300">
+                <span className="text-white font-bold">0{currentSlide + 1}</span>
+                <span className="text-zinc-500">/</span>
+                <span className="text-zinc-400">0{heroSlides.length}</span>
+              </div>
+            </div>
+
+            {/* Main Slide Content */}
+            <div className="relative z-10 px-5 sm:px-8 md:px-12 py-8 sm:py-12 my-auto">
+              <AnimatePresence mode="wait">
+                {heroSlides[currentSlide] && (
+                  <motion.div
+                    key={heroSlides[currentSlide].id}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
+                  >
+                    {/* Left Column: Headlines & CTA */}
+                    <div className="lg:col-span-8 space-y-4 sm:space-y-6">
+                      {/* Badge */}
+                      {(() => {
+                        const BadgeIcon = heroSlides[currentSlide].badgeIcon;
+                        return (
+                          <div
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border backdrop-blur-md shadow-xs ${heroSlides[currentSlide].badgeStyle}`}
+                          >
+                            <BadgeIcon className="w-3.5 h-3.5" />
+                            <span>{heroSlides[currentSlide].badge}</span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Title */}
+                      <div className="space-y-1.5">
+                        <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-[1.15]">
+                          {heroSlides[currentSlide].headline}
+                        </h1>
+                        <span className="block text-lg sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-blue-200 bg-clip-text text-transparent">
+                          {heroSlides[currentSlide].subHeadline}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-xs sm:text-base text-zinc-300 max-w-2xl leading-relaxed">
+                        {heroSlides[currentSlide].description}
+                      </p>
+
+                      {/* CTA Buttons */}
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        {(() => {
+                          const PrimaryIcon = heroSlides[currentSlide].primaryCta.icon;
+                          const SecondaryIcon = heroSlides[currentSlide].secondaryCta.icon;
+                          return (
+                            <>
+                              <Link
+                                href={heroSlides[currentSlide].primaryCta.href}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 transition-all cursor-pointer group"
+                              >
+                                <PrimaryIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                <span>{heroSlides[currentSlide].primaryCta.label}</span>
+                              </Link>
+
+                              <a
+                                href={heroSlides[currentSlide].secondaryCta.href}
+                                className="inline-flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 text-white text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                              >
+                                <SecondaryIcon className="w-4 h-4 text-blue-300" />
+                                <span>{heroSlides[currentSlide].secondaryCta.label}</span>
+                              </a>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Featured Floating Card (Desktop & Tablet) */}
+                    <div className="hidden lg:flex lg:col-span-4 justify-end">
+                      <div className="p-5 rounded-2xl bg-white/10 dark:bg-zinc-900/60 backdrop-blur-xl border border-white/15 shadow-2xl space-y-4 max-w-xs w-full">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-white p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+                            {komisariat.logo ? (
+                              <img
+                                src={komisariat.logo}
+                                alt={komisariat.name}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <div className="w-full h-full rounded bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                                {komisariat.logoInitial || "PK"}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-white truncate">
+                              {komisariat.name}
+                            </h4>
+                            <p className="text-[10px] text-zinc-300 truncate">
+                              {campusName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-black/30 border border-white/10 space-y-1">
+                          <span className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider block">
+                            {heroSlides[currentSlide].metric.label}
+                          </span>
+                          <span className="text-2xl font-extrabold text-white font-mono block">
+                            {heroSlides[currentSlide].metric.value}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 block">
+                            {heroSlides[currentSlide].metric.sub}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-300">
+                          <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                          <span>Terdaftar Resmi PC PMII Grobogan</span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Bottom Controls: Navigation Arrows & Indicator Pills */}
+            <div className="relative z-10 px-5 sm:px-8 md:px-12 pb-6 sm:pb-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/10 pt-4">
+              {/* Slide Indicator Pills */}
+              <div className="flex items-center gap-2">
+                {heroSlides.map((slide, idx) => (
+                  <button
+                    key={slide.id}
+                    onClick={() => setCurrentSlide(idx)}
+                    className={`transition-all duration-300 rounded-full h-2 ${
+                      currentSlide === idx
+                        ? "w-8 sm:w-10 bg-gradient-to-r from-blue-500 to-indigo-500"
+                        : "w-2 sm:w-2.5 bg-white/30 hover:bg-white/60"
+                    }`}
+                    aria-label={`Buka slide ${idx + 1}`}
+                  />
+                ))}
+              </div>
+
+              {/* Prev / Next Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={prevSlide}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 flex items-center justify-center text-white transition-all cursor-pointer"
+                  aria-label="Slide sebelumnya"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={nextSlide}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 flex items-center justify-center text-white transition-all cursor-pointer"
+                  aria-label="Slide berikutnya"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -537,7 +1088,7 @@ export function KomisariatLandingContent({ slug }: Props) {
 
       {/* 4. SUSUNAN BPH (BADAN PENGURUS HARIAN) & BAGAN STRUKTUR */}
       <section id="struktur" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 max-w-5xl scroll-mt-20">
-        <div className="text-center space-y-2.5 mb-12 sm:mb-16">
+        <div className="text-center space-y-2.5 mb-8 sm:mb-12">
           <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-1 px-3 tracking-wider inline-flex items-center gap-1.5">
             <GitFork className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             Bagan Struktur Organisasi
@@ -551,364 +1102,612 @@ export function KomisariatLandingContent({ slug }: Props) {
               {bphData?.period || komisariat.structure?.period || "2026 - 2027"}
             </span>.
           </p>
+
+          {/* View Mode Switcher */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setStructureViewMode("tree")}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                structureViewMode === "tree"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200/60 dark:border-zinc-700/60"
+              }`}
+            >
+              <Network className="w-3.5 h-3.5" />
+              Bagan Struktur (Hierarki)
+            </button>
+            <button
+              type="button"
+              onClick={() => setStructureViewMode("directory")}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                structureViewMode === "directory"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200/60 dark:border-zinc-700/60"
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Direktori Fungsionaris ({allDirectoryMembers.length})
+            </button>
+          </div>
         </div>
 
-        <div className="relative max-w-xl mx-auto">
-          {/* LEVEL 1: KETUA KOMISARIAT */}
-          <div className="w-60 sm:w-64 mx-auto">
-            <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur-xs opacity-20 group-hover:opacity-30 transition duration-300" />
-              <Card className="relative p-4 sm:p-4.5 bg-white dark:bg-zinc-900 border border-blue-500/30 rounded-2xl shadow-xs text-center">
-                {/* Avatar */}
-                <div className="relative w-14 h-14 mx-auto mb-2">
-                  {getAvatar(chairmanName, chairmanMember?.anggota_id) ? (
-                    <img
-                      src={getAvatar(chairmanName, chairmanMember?.anggota_id)}
-                      alt={chairmanName}
-                      className="w-14 h-14 rounded-full object-cover ring-2 ring-blue-500/30 shadow-xs"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-bold text-base ring-2 ring-blue-500/30 shadow-xs">
-                      {getInitials(chairmanName)}
-                    </div>
-                  )}
-                  <span className="absolute -bottom-0.5 right-0 px-1.5 py-0.2 rounded-full text-[8px] font-bold bg-blue-600 text-white shadow-xs">
-                    {getGender(chairmanName, chairmanMember?.anggota_id)}
-                  </span>
+        {/* MODE 1: BAGAN STRUKTUR (HIERARKI) */}
+        {structureViewMode === "tree" && (
+          <div>
+            {!hasAnyBphData && !chairmanName && !secretaryName && !treasurerName ? (
+              <Card className="p-8 sm:p-12 text-center max-w-xl mx-auto bg-zinc-50/50 dark:bg-zinc-900/50 border border-dashed border-zinc-300 dark:border-zinc-800 rounded-2xl">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
+                  <Users className="w-7 h-7" />
                 </div>
-
-                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
-                  Ketua Komisariat
-                </span>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
-                  {chairmanName || "Belum Ditetapkan"}
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Susunan Fungsionaris Sedang Dimutakhirkan
                 </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 max-w-md mx-auto leading-relaxed">
+                  Data pengurus dan bagan hierarki organisasi untuk masa khidmat ini sedang dalam proses digitalisasi oleh BPH terpilih.
+                </p>
               </Card>
-            </div>
-          </div>
-
-          {/* CONNECTOR LINE: KETUA -> SEKRETARIS & BENDAHARA */}
-          <div className="hidden sm:flex flex-col items-center">
-            {/* Vertical stem from Ketua */}
-            <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
-            {/* Horizontal branch */}
-            <div className="w-[52%] h-0.5 bg-zinc-300 dark:bg-zinc-700" />
-            {/* Drop pins */}
-            <div className="w-[52%] flex justify-between">
-              <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
-              <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
-            </div>
-          </div>
-
-          {/* Mobile spacing line */}
-          <div className="sm:hidden flex justify-center my-3">
-            <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
-          </div>
-
-          {/* LEVEL 2: SEKRETARIS & BENDAHARA */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-            {/* SEKRETARIS */}
-            <Card className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-none hover:border-indigo-500/40 transition-all text-center flex flex-col justify-between">
-              <div>
-                <div className="relative w-12 h-12 mx-auto mb-2">
-                  {getAvatar(secretaryName, secretaryMember?.anggota_id) ? (
-                    <img
-                      src={getAvatar(secretaryName, secretaryMember?.anggota_id)}
-                      alt={secretaryName}
-                      className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500/20"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm border border-indigo-200 dark:border-indigo-900">
-                      {getInitials(secretaryName)}
-                    </div>
-                  )}
-                  <span className="absolute -bottom-0.5 right-0 px-1.5 py-0.2 rounded-full text-[8px] font-semibold bg-indigo-600 text-white">
-                    {getGender(secretaryName, secretaryMember?.anggota_id)}
-                  </span>
-                </div>
-
-                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block">
-                  Sekretaris
-                </span>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
-                  {secretaryName || "Belum Ditetapkan"}
-                </h3>
-              </div>
-
-              {wakilSekretaris.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-                  <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-                    Wakil Sekretaris:
-                  </span>
-                  <div className="flex flex-wrap justify-center gap-1.5">
-                    {wakilSekretaris.map((ws, i) => {
-                      const avatar = getAvatar(ws.name, ws.anggota_id, ws.avatar);
-                      return (
-                        <div
-                          key={i}
-                          className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800/90 border border-zinc-200/70 dark:border-zinc-700/70 shadow-2xs"
-                        >
-                          {avatar ? (
-                            <img
-                              src={avatar}
-                              alt={ws.name}
-                              className="w-5 h-5 rounded-full object-cover ring-1 ring-indigo-500/30 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[9px] font-bold shrink-0">
-                              {getInitials(ws.name)}
-                            </div>
-                          )}
-                          <span className="text-[10px] font-medium text-zinc-700 dark:text-zinc-300">
-                            {ws.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </Card>
-
-            {/* BENDAHARA */}
-            <Card className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-none hover:border-emerald-500/40 transition-all text-center flex flex-col justify-between">
-              <div>
-                <div className="relative w-12 h-12 mx-auto mb-2">
-                  {getAvatar(treasurerName, treasurerMember?.anggota_id) ? (
-                    <img
-                      src={getAvatar(treasurerName, treasurerMember?.anggota_id)}
-                      alt={treasurerName}
-                      className="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-500/20"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm border border-emerald-200 dark:border-emerald-900">
-                      {getInitials(treasurerName)}
-                    </div>
-                  )}
-                  <span className="absolute -bottom-0.5 right-0 px-1.5 py-0.2 rounded-full text-[8px] font-semibold bg-emerald-600 text-white">
-                    {getGender(treasurerName, treasurerMember?.anggota_id)}
-                  </span>
-                </div>
-
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
-                  Bendahara
-                </span>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
-                  {treasurerName || "Belum Ditetapkan"}
-                </h3>
-              </div>
-
-              {wakilBendahara.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-                  <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-                    Wakil Bendahara:
-                  </span>
-                  <div className="flex flex-wrap justify-center gap-1.5">
-                    {wakilBendahara.map((wb, i) => {
-                      const avatar = getAvatar(wb.name, wb.anggota_id, wb.avatar);
-                      return (
-                        <div
-                          key={i}
-                          className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800/90 border border-zinc-200/70 dark:border-zinc-700/70 shadow-2xs"
-                        >
-                          {avatar ? (
-                            <img
-                              src={avatar}
-                              alt={wb.name}
-                              className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-500/30 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[9px] font-bold shrink-0">
-                              {getInitials(wb.name)}
-                            </div>
-                          )}
-                          <span className="text-[10px] font-medium text-zinc-700 dark:text-zinc-300">
-                            {wb.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </Card>
-          </div>
-        </div>
-
-        <div>
-
-          {/* LEVEL 3A: JAJARAN BIDANG */}
-          {bidangGroups.length > 0 && (
-            <div className="mt-12">
-              <div className="flex items-center justify-center mb-6">
-                <span className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1" />
-                <span className="px-3 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5" /> Jajaran Bidang Kepengurusan
-                </span>
-                <span className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1" />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {bidangGroups.map((dept, idx) => (
-                  <Card
-                    key={idx}
-                    className="p-4 bg-white dark:bg-zinc-900 border border-blue-200/70 dark:border-blue-900/40 rounded-xl shadow-none"
-                  >
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
-                      <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
-                        {dept.name}
-                      </h4>
-                      <Badge className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] py-0 px-2 font-normal border border-blue-200/50 dark:border-blue-900/50">
-                        {dept.members.length} Fungsionaris
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-2">
-                      {dept.members.map((m, mIdx) => {
-                        const avatar = getAvatar(m.name, m.anggota_id, m.avatar);
-                        return (
-                          <div key={mIdx} className="flex items-center gap-2.5">
-                            {avatar ? (
-                              <img
-                                src={avatar}
-                                alt={m.name}
-                                className="w-7 h-7 rounded-full object-cover ring-1 ring-blue-500/30 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                {getInitials(m.name)}
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                                {m.name}
-                              </p>
-                              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                                {m.position || "Anggota Bidang"}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* LEVEL 3B: JAJARAN BIRO PELAKSANA */}
-          {biroGroups.length > 0 && (
-            <div className="mt-8">
-              <div className="flex items-center justify-center mb-6">
-                <span className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1" />
-                <span className="px-3 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                  <GitFork className="w-3.5 h-3.5" /> Jajaran Biro Pelaksana
-                </span>
-                <span className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1" />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {biroGroups.map((biro, idx) => (
-                  <Card
-                    key={idx}
-                    className="p-4 bg-white dark:bg-zinc-900 border border-indigo-200/70 dark:border-indigo-900/40 rounded-xl shadow-none"
-                  >
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
-                      <div>
-                        <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
-                          {biro.name}
-                        </h4>
-                        {biro.department && (
-                          <span className="text-[9.5px] text-zinc-400 block mt-0.5">
-                            Naungan Bidang {biro.department}
-                          </span>
-                        )}
+            ) : (
+              <div className="relative">
+                {/* LEVEL 1: KETUA KOMISARIAT */}
+                <div className="w-72 max-w-full mx-auto">
+                  <div className="relative group">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-2xl blur-xs opacity-25 group-hover:opacity-40 transition duration-300" />
+                    <Card className="relative p-5 bg-white dark:bg-zinc-900 border border-blue-500/40 rounded-2xl shadow-xs text-center">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-bold uppercase tracking-wider mb-3">
+                        <Crown className="w-3 h-3 text-amber-500" />
+                        Ketua Mandataris
                       </div>
-                      <Badge className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] py-0 px-2 font-normal border border-indigo-200/50 dark:border-indigo-900/50 shrink-0">
-                        {biro.members.length} Fungsionaris
-                      </Badge>
-                    </div>
 
-                    <div className="space-y-2">
-                      {biro.members.map((m, mIdx) => {
-                        const avatar = getAvatar(m.name, m.anggota_id, m.avatar);
+                      {/* Avatar */}
+                      <div className="relative w-16 h-16 mx-auto mb-2.5">
+                        {getAvatar(chairmanName, chairmanMember?.anggota_id) ? (
+                          <img
+                            src={getAvatar(chairmanName, chairmanMember?.anggota_id)}
+                            alt={chairmanName}
+                            className="w-16 h-16 rounded-full object-cover ring-2 ring-blue-500/40 shadow-xs"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-bold text-lg ring-2 ring-blue-500/40 shadow-xs">
+                            {getInitials(chairmanName)}
+                          </div>
+                        )}
+                        <span className="absolute -bottom-1 right-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-600 text-white shadow-2xs">
+                          {getGender(chairmanName, chairmanMember?.anggota_id)}
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                        {chairmanName || "Belum Ditetapkan"}
+                      </h3>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
+                        Ketua Mandataris / Pimpinan Tertinggi
+                      </p>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* CONNECTOR STEM FROM KETUA */}
+                <div className="flex flex-col items-center">
+                  <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
+                </div>
+
+                {/* LEVEL 2: WAKIL-WAKIL KETUA (JIKA ADA) */}
+                {wakilKetuaList.length > 0 && (
+                  <div className="mb-6">
+                    {/* Horizontal distributor bar across Wakil Ketua */}
+                    {wakilKetuaList.length > 1 && (
+                      <div className="hidden sm:block relative max-w-2xl mx-auto h-3">
+                        <div className="absolute top-0 left-12 right-12 h-0.5 bg-zinc-300 dark:bg-zinc-700" />
+                      </div>
+                    )}
+                    <div
+                      className={`grid gap-3.5 mx-auto ${
+                        wakilKetuaList.length === 1
+                          ? "max-w-xs"
+                          : wakilKetuaList.length === 2
+                          ? "grid-cols-1 sm:grid-cols-2 max-w-xl"
+                          : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 max-w-3xl"
+                      }`}
+                    >
+                      {wakilKetuaList.map((wk, idx) => {
+                        const av = getAvatar(wk.name, wk.anggota_id, wk.avatar);
+                        const g = getGender(wk.name, wk.anggota_id);
                         return (
-                          <div key={mIdx} className="flex items-center gap-2.5">
-                            {avatar ? (
-                              <img
-                                src={avatar}
-                                alt={m.name}
-                                className="w-7 h-7 rounded-full object-cover ring-1 ring-indigo-500/30 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                {getInitials(m.name)}
-                              </div>
+                          <div key={idx} className="flex flex-col items-center">
+                            {wakilKetuaList.length > 1 && (
+                              <div className="hidden sm:block w-0.5 h-3 bg-zinc-300 dark:bg-zinc-700 mb-1" />
                             )}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                                {m.name}
-                              </p>
-                              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                                {m.position || "Anggota Biro"}
-                              </p>
-                            </div>
+                            <Card className="w-full p-3.5 bg-white dark:bg-zinc-900 border border-blue-200/80 dark:border-blue-900/50 rounded-xl shadow-none text-center hover:border-blue-500/40 transition-colors">
+                              <div className="relative w-11 h-11 mx-auto mb-2">
+                                {av ? (
+                                  <img
+                                    src={av}
+                                    alt={wk.name}
+                                    className="w-11 h-11 rounded-full object-cover ring-2 ring-blue-500/20"
+                                  />
+                                ) : (
+                                  <div className="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
+                                    {getInitials(wk.name)}
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-0.5 right-0 px-1.5 py-0.2 rounded-full text-[8px] font-semibold bg-blue-600 text-white">
+                                  {g}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+                                {wk.position || `Wakil Ketua ${idx + 1}`}
+                              </span>
+                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-0.5 truncate">
+                                {wk.name}
+                              </h4>
+                              {wk.department && wk.department !== "BPH" && (
+                                <span className="text-[9.5px] text-zinc-400 dark:text-zinc-500 block mt-0.5">
+                                  {wk.department}
+                                </span>
+                              )}
+                            </Card>
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* Stem down to Sekretaris & Bendahara */}
+                    <div className="flex flex-col items-center mt-3">
+                      <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
+                    </div>
+                  </div>
+                )}
+
+                {/* CONNECTOR LINE TO SEKRETARIS & BENDAHARA */}
+                <div className="hidden sm:block relative max-w-2xl mx-auto h-6">
+                  {/* Stem from above into junction */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-zinc-300 dark:bg-zinc-700" />
+                  {/* Horizontal bar linking col 1 (25%) and col 2 (75%) */}
+                  <div className="absolute top-3 left-[25%] right-[25%] h-0.5 bg-zinc-300 dark:bg-zinc-700" />
+                  {/* Drop pin to Sekretaris */}
+                  <div className="absolute top-3 left-[25%] w-0.5 h-3 bg-zinc-300 dark:bg-zinc-700" />
+                  {/* Drop pin to Bendahara */}
+                  <div className="absolute top-3 right-[25%] w-0.5 h-3 bg-zinc-300 dark:bg-zinc-700" />
+                </div>
+
+                {/* Mobile drop line */}
+                <div className="sm:hidden flex justify-center my-2">
+                  <div className="w-0.5 h-4 bg-zinc-300 dark:bg-zinc-700" />
+                </div>
+
+                {/* LEVEL 3: SEKRETARIS & BENDAHARA */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                  {/* SEKRETARIS */}
+                  <Card className="p-4.5 bg-white dark:bg-zinc-900 border border-indigo-200/80 dark:border-indigo-900/50 rounded-2xl shadow-none hover:border-indigo-500/40 transition-all text-center flex flex-col justify-between">
+                    <div>
+                      <div className="relative w-13 h-13 mx-auto mb-2.5">
+                        {getAvatar(secretaryName, secretaryMember?.anggota_id) ? (
+                          <img
+                            src={getAvatar(secretaryName, secretaryMember?.anggota_id)}
+                            alt={secretaryName}
+                            className="w-13 h-13 rounded-full object-cover ring-2 ring-indigo-500/20"
+                          />
+                        ) : (
+                          <div className="w-13 h-13 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm border border-indigo-200 dark:border-indigo-900">
+                            {getInitials(secretaryName)}
+                          </div>
+                        )}
+                        <span className="absolute -bottom-0.5 right-0 px-1.5 py-0.2 rounded-full text-[8px] font-semibold bg-indigo-600 text-white">
+                          {getGender(secretaryName, secretaryMember?.anggota_id)}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block">
+                        Sekretaris Komisariat
+                      </span>
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
+                        {secretaryName || "Belum Ditetapkan"}
+                      </h3>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        Tata Kelola Administrasi & Kesekretariatan
+                      </p>
+                    </div>
+
+                    {wakilSekretaris.length > 0 && (
+                      <div className="mt-3.5 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                          Wakil Sekretaris ({wakilSekretaris.length})
+                        </span>
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                          {wakilSekretaris.map((ws, i) => {
+                            const avatar = getAvatar(ws.name, ws.anggota_id, ws.avatar);
+                            return (
+                              <div
+                                key={i}
+                                className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-200/50 dark:border-indigo-900/40"
+                              >
+                                {avatar ? (
+                                  <img
+                                    src={avatar}
+                                    alt={ws.name}
+                                    className="w-5 h-5 rounded-full object-cover ring-1 ring-indigo-500/30 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[9px] font-bold shrink-0">
+                                    {getInitials(ws.name)}
+                                  </div>
+                                )}
+                                <span className="text-[10px] font-medium text-zinc-700 dark:text-zinc-300">
+                                  {ws.name}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* BENDAHARA */}
+                  <Card className="p-4.5 bg-white dark:bg-zinc-900 border border-emerald-200/80 dark:border-emerald-900/50 rounded-2xl shadow-none hover:border-emerald-500/40 transition-all text-center flex flex-col justify-between">
+                    <div>
+                      <div className="relative w-13 h-13 mx-auto mb-2.5">
+                        {getAvatar(treasurerName, treasurerMember?.anggota_id) ? (
+                          <img
+                            src={getAvatar(treasurerName, treasurerMember?.anggota_id)}
+                            alt={treasurerName}
+                            className="w-13 h-13 rounded-full object-cover ring-2 ring-emerald-500/20"
+                          />
+                        ) : (
+                          <div className="w-13 h-13 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm border border-emerald-200 dark:border-emerald-900">
+                            {getInitials(treasurerName)}
+                          </div>
+                        )}
+                        <span className="absolute -bottom-0.5 right-0 px-1.5 py-0.2 rounded-full text-[8px] font-semibold bg-emerald-600 text-white">
+                          {getGender(treasurerName, treasurerMember?.anggota_id)}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+                        Bendahara Komisariat
+                      </span>
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
+                        {treasurerName || "Belum Ditetapkan"}
+                      </h3>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        Manajemen Anggaran & Kebendaharaan
+                      </p>
+                    </div>
+
+                    {wakilBendahara.length > 0 && (
+                      <div className="mt-3.5 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                          Wakil Bendahara ({wakilBendahara.length})
+                        </span>
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                          {wakilBendahara.map((wb, i) => {
+                            const avatar = getAvatar(wb.name, wb.anggota_id, wb.avatar);
+                            return (
+                              <div
+                                key={i}
+                                className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200/50 dark:border-emerald-900/40"
+                              >
+                                {avatar ? (
+                                  <img
+                                    src={avatar}
+                                    alt={wb.name}
+                                    className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-500/30 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[9px] font-bold shrink-0">
+                                    {getInitials(wb.name)}
+                                  </div>
+                                )}
+                                <span className="text-[10px] font-medium text-zinc-700 dark:text-zinc-300">
+                                  {wb.name}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+
+                {/* CONNECTOR STEM TO JAJARAN BIDANG */}
+                {bidangGroups.length > 0 && (
+                  <div className="flex flex-col items-center my-10">
+                    <div className="w-0.5 h-8 bg-gradient-to-b from-zinc-300 via-blue-400 to-blue-500 dark:from-zinc-700 dark:via-blue-600 dark:to-blue-500" />
+                    <div className="px-3.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5 shadow-2xs">
+                      <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      Jajaran Bidang Kepengurusan ({bidangGroups.length})
+                    </div>
+                    <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
+                  </div>
+                )}
+
+                {/* LEVEL 4: JAJARAN BIDANG */}
+                {bidangGroups.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {bidangGroups.map((dept, idx) => (
+                      <Card
+                        key={idx}
+                        className="p-4 bg-white dark:bg-zinc-900 border border-blue-200/70 dark:border-blue-900/40 rounded-xl shadow-none hover:border-blue-500/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                          <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                            {dept.name}
+                          </h4>
+                          <Badge className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] py-0 px-2 font-normal border border-blue-200/50 dark:border-blue-900/50">
+                            {dept.members.length} Fungsionaris
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2">
+                          {dept.members.map((m, mIdx) => {
+                            const avatar = getAvatar(m.name, m.anggota_id, m.avatar);
+                            return (
+                              <div key={mIdx} className="flex items-center gap-2.5">
+                                {avatar ? (
+                                  <img
+                                    src={avatar}
+                                    alt={m.name}
+                                    className="w-7 h-7 rounded-full object-cover ring-1 ring-blue-500/30 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                    {getInitials(m.name)}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                                    {m.name}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                                    {m.position || "Anggota Bidang"}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* CONNECTOR STEM TO JAJARAN BIRO */}
+                {biroGroups.length > 0 && (
+                  <div className="flex flex-col items-center my-10">
+                    <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
+                    <div className="px-3.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 shadow-2xs">
+                      <GitFork className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      Jajaran Biro Pelaksana Teknis ({biroGroups.length})
+                    </div>
+                    <div className="w-0.5 h-6 bg-zinc-300 dark:bg-zinc-700" />
+                  </div>
+                )}
+
+                {/* LEVEL 5: JAJARAN BIRO PELAKSANA */}
+                {biroGroups.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {biroGroups.map((biro, idx) => (
+                      <Card
+                        key={idx}
+                        className="p-4 bg-white dark:bg-zinc-900 border border-indigo-200/70 dark:border-indigo-900/40 rounded-xl shadow-none hover:border-indigo-500/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                          <div>
+                            <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                              {biro.name}
+                            </h4>
+                            {biro.department && (
+                              <span className="text-[9.5px] text-zinc-400 block mt-0.5">
+                                Naungan Bidang {biro.department}
+                              </span>
+                            )}
+                          </div>
+                          <Badge className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] py-0 px-2 font-normal border border-indigo-200/50 dark:border-indigo-900/50 shrink-0">
+                            {biro.members.length} Fungsionaris
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2">
+                          {biro.members.map((m, mIdx) => {
+                            const avatar = getAvatar(m.name, m.anggota_id, m.avatar);
+                            return (
+                              <div key={mIdx} className="flex items-center gap-2.5">
+                                {avatar ? (
+                                  <img
+                                    src={avatar}
+                                    alt={m.name}
+                                    className="w-7 h-7 rounded-full object-cover ring-1 ring-indigo-500/30 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                    {getInitials(m.name)}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                                    {m.name}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                                    {m.position || "Anggota Biro"}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* LEVEL 6: RAYON DI BAWAH NAUNGAN */}
+                {komisariat.rayons && komisariat.rayons.length > 0 && (
+                  <div className="mt-12 p-6 bg-gradient-to-br from-zinc-50 to-blue-50/20 dark:from-zinc-900/50 dark:to-blue-950/10 rounded-2xl border border-zinc-200/80 dark:border-zinc-800">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                            Rayon di Bawah Naungan Komisariat
+                          </h4>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            Basis kaderisasi tingkat fakultas / kejuruan di {campusName}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="self-start sm:self-auto bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 text-xs py-0.5 px-2.5">
+                        {komisariat.rayons.length} Rayon Aktif
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {komisariat.rayons.map((r, i) => (
+                        <div
+                          key={i}
+                          className="p-3 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60 flex items-center gap-2.5 shadow-2xs hover:border-blue-500/40 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
+                            {i + 1}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                              {r.name}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                              {r.memberCount ? `${r.memberCount} Kader Terdata` : "Basis Rayon Aktif"}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODE 2: DIREKTORI FUNGSIONARIS LENGKAP */}
+        {structureViewMode === "directory" && (
+          <div className="space-y-6">
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 sm:p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  type="text"
+                  placeholder="Cari fungsionaris, nama, posisi, atau bidang..."
+                  value={searchDirectoryQuery}
+                  onChange={(e) => setSearchDirectoryQuery(e.target.value)}
+                  className="pl-9 h-9 text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700"
+                />
+              </div>
+
+              {/* Filter pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                {(["Semua", "Pimpinan", "Bidang", "Biro"] as const).map((cat) => {
+                  const count =
+                    cat === "Semua"
+                      ? allDirectoryMembers.length
+                      : allDirectoryMembers.filter((m) => m.category === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedDeptFilter(cat)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                        selectedDeptFilter === cat
+                          ? "bg-blue-600 text-white shadow-2xs"
+                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      {cat} <span className="opacity-70 text-[10px]">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Cadres Grid */}
+            {filteredDirectoryMembers.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {filteredDirectoryMembers.map((member) => (
+                  <Card
+                    key={member.id}
+                    className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl hover:border-blue-500/40 transition-all flex items-center gap-3.5 group shadow-2xs"
+                  >
+                    <div className="relative w-12 h-12 shrink-0">
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name}
+                          className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500/20 group-hover:ring-blue-500/50 transition-all"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-200/60 dark:border-blue-900/60">
+                          {getInitials(member.name)}
+                        </div>
+                      )}
+                      <span className="absolute -bottom-1 -right-0.5 px-1.5 py-0.2 rounded-full text-[8px] font-bold bg-blue-600 text-white shadow-2xs">
+                        {member.gender}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider ${
+                            member.category === "Pimpinan"
+                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
+                              : member.category === "Biro"
+                              ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300"
+                          }`}
+                        >
+                          {member.category}
+                        </span>
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-1 truncate">
+                        {member.name}
+                      </h4>
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate font-medium">
+                        {member.position}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+                        {member.department}
+                      </p>
+                    </div>
                   </Card>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* LEVEL 4: RAYON DI BAWAH NAUNGAN */}
-          {komisariat.rayons && komisariat.rayons.length > 0 && (
-            <div className="mt-12 p-6 bg-gradient-to-br from-zinc-50 to-blue-50/20 dark:from-zinc-900/50 dark:to-blue-950/10 rounded-2xl border border-zinc-200/80 dark:border-zinc-800">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                      Rayon di Bawah Naungan Komisariat
-                    </h4>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Basis kaderisasi tingkat fakultas / kejuruan di {campusName}
-                    </p>
-                  </div>
-                </div>
-                <Badge className="self-start sm:self-auto bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 text-xs py-0.5 px-2.5">
-                  {komisariat.rayons.length} Rayon Aktif
-                </Badge>
+            ) : (
+              <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                <Search className="w-8 h-8 text-zinc-400 mx-auto mb-2 opacity-60" />
+                <h4 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
+                  Tidak Ada Fungsionaris yang Cocok
+                </h4>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Coba kata kunci lain atau bersihkan filter pencarian Anda.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setSearchDirectoryQuery("");
+                    setSelectedDeptFilter("Semua");
+                  }}
+                  className="mt-3 text-xs"
+                >
+                  Reset Filter
+                </Button>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {komisariat.rayons.map((r, i) => (
-                  <div
-                    key={i}
-                    className="p-3 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60 flex items-center gap-2.5 shadow-2xs hover:border-blue-500/40 transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
-                      {i + 1}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                        {r.name}
-                      </p>
-                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                        {r.memberCount ? `${r.memberCount} Kader Terdata` : "Basis Rayon Aktif"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* 5. AGENDA KADERISASI & EVENT TERBUKA */}

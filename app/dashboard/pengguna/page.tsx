@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { ShieldCheck, AlertCircle } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import { ChevronRight, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { db, createAuthUser, updateAuthUser, normalizeKomisariat } from "@/lib/db";
 import type { UserAccount, UserRole, Role } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -17,6 +19,7 @@ import {
   isCabangOrAdmin,
 } from "@/lib/tenancy";
 import { generateUUID, isValidUUID } from "@/lib/utils";
+import { DEFAULT_ROLES } from "@/lib/services/roles";
 import { AVAILABLE_MENUS, isMasterAdmin } from "./_components/types";
 import { UserStats } from "./_components/UserStats";
 import { UserFilters } from "./_components/UserFilters";
@@ -181,11 +184,46 @@ export default function UserManagementPage() {
   const isSuper = isUserSuperAdmin(currentUser?.role, currentUser?.email) || (currentUser?.role && currentUser.role.toLowerCase() === "superadmin");
   const isCabang = isCabangOrAdmin(currentUser);
 
-  const allowedRolesForCurrent = roles.filter((r) => {
-    if (!currentUser || isCabang) return true;
-    const code = r.code.toLowerCase();
-    return code === "pengurus" || code === "anggota" || code === "peserta";
-  });
+  const allowedRolesForCurrent = useMemo(() => {
+    // Gabungkan roles dari database dengan DEFAULT_ROLES agar peran selalu lengkap
+    const combined = [...roles];
+    DEFAULT_ROLES.forEach((def) => {
+      if (!combined.some((r) => r.code.toLowerCase() === def.code.toLowerCase())) {
+        combined.push(def);
+      }
+    });
+
+    const ROLE_PRIORITY: Record<string, number> = {
+      superadmin: 1,
+      ketua_cabang: 2,
+      admin: 3,
+      pengurus_cabang: 4,
+      ketua_komisariat: 5,
+      pengurus_komisariat: 6,
+      pengurus: 7,
+      instruktur: 8,
+      anggota: 9,
+      peserta: 10,
+    };
+
+    return combined
+      .filter((r) => {
+        if (!currentUser || isCabang || isSuper) return true;
+        const code = r.code.toLowerCase();
+        return (
+          code === "ketua_komisariat" ||
+          code === "pengurus_komisariat" ||
+          code === "pengurus" ||
+          code === "anggota" ||
+          code === "peserta"
+        );
+      })
+      .sort((a, b) => {
+        const orderA = ROLE_PRIORITY[a.code.toLowerCase()] ?? 99;
+        const orderB = ROLE_PRIORITY[b.code.toLowerCase()] ?? 99;
+        return orderA - orderB;
+      });
+  }, [roles, currentUser, isCabang, isSuper]);
 
   const tenantScopedUsers = users.filter((u) => {
     // Superadmin & Cabang admin melihat seluruh pengguna saat activeTenant === 'ALL'
@@ -249,6 +287,15 @@ export default function UserManagementPage() {
       setSelectedIds([]);
     } else {
       setSelectedIds(selectableUsers.map((u) => u.id));
+    }
+  };
+
+  const handleSelectPage = (pageUserIds: string[], select: boolean) => {
+    if (select) {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageUserIds])));
+    } else {
+      const set = new Set(pageUserIds);
+      setSelectedIds((prev) => prev.filter((id) => !set.has(id)));
     }
   };
 
@@ -345,6 +392,11 @@ export default function UserManagementPage() {
     e.preventDefault();
     if (!formName.trim() || !formEmail.trim() || !formPassword.trim()) {
       showToast("Nama, Email, dan Password wajib diisi!");
+      return;
+    }
+
+    if (formPassword.trim().length < 6) {
+      showToast("Password minimal 6 karakter!");
       return;
     }
 
@@ -476,6 +528,11 @@ export default function UserManagementPage() {
     if (!selectedUser) return;
     if (!formName.trim() || !formEmail.trim()) {
       showToast("Nama dan Email wajib diisi!");
+      return;
+    }
+
+    if (formPassword.trim() && formPassword.trim().length < 6) {
+      showToast("Password baru minimal 6 karakter!");
       return;
     }
 
@@ -627,17 +684,26 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+      {/* BREADCRUMB */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <Link
+            href="/dashboard"
+            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
+            Dashboard
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
             Manajemen Pengguna
-          </h1>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Kelola akun, peran pengurus, dan konfigurasi izin akses menu dashboard.
-          </p>
-        </div>
+          </span>
+          <Badge
+            variant="outline"
+            className="ml-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-normal"
+          >
+            {tenantScopedUsers.length} Pengguna
+          </Badge>
+        </nav>
       </div>
 
       {/* Stats Cards */}
@@ -666,6 +732,7 @@ export default function UserManagementPage() {
         selectedIds={selectedIds}
         onToggleSelect={handleToggleSelect}
         onSelectAll={handleSelectAll}
+        onSelectPage={handleSelectPage}
         isAllSelected={isAllSelected}
         isSomeSelected={isSomeSelected}
         onOpenEdit={handleOpenEdit}

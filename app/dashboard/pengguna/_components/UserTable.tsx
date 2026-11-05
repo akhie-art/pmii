@@ -1,10 +1,27 @@
 "use client";
 
-import React from "react";
-import { UserCheck, Mail, Building, Trash2 } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  UserCheck,
+  Mail,
+  Building,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import {
   Table,
   TableHeader,
@@ -22,6 +39,7 @@ interface UserTableProps {
   selectedIds: string[];
   onToggleSelect: (userId: string) => void;
   onSelectAll: () => void;
+  onSelectPage?: (pageUserIds: string[], select: boolean) => void;
   isAllSelected: boolean;
   isSomeSelected: boolean;
   onOpenEdit: (user: UserAccount) => void;
@@ -34,11 +52,48 @@ export const UserTable: React.FC<UserTableProps> = ({
   selectedIds,
   onToggleSelect,
   onSelectAll,
+  onSelectPage,
   isAllSelected,
   isSomeSelected,
   onOpenEdit,
   onOpenDelete,
 }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset ke halaman 1 saat daftar users berubah (karena filter/pencarian)
+  const usersSignature = useMemo(() => users.map((u) => u.id).join(","), [users]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [usersSignature]);
+
+  const totalPages = Math.ceil(users.length / pageSize) || 1;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, users.length);
+  const paginatedUsers = users.slice(startIndex, startIndex + pageSize);
+
+  const selectablePageUsers = paginatedUsers.filter((u) => !isMasterAdmin(u));
+  const isPageAllSelected =
+    selectablePageUsers.length > 0 && selectablePageUsers.every((u) => selectedIds.includes(u.id));
+  const isPageSomeSelected =
+    selectablePageUsers.some((u) => selectedIds.includes(u.id)) && !isPageAllSelected;
+
+  const handleHeaderCheckboxChange = () => {
+    if (onSelectPage) {
+      const pageIds = selectablePageUsers.map((u) => u.id);
+      onSelectPage(pageIds, !isPageAllSelected);
+    } else {
+      onSelectAll();
+    }
+  };
+
   if (users.length === 0) {
     return (
       <Card className="p-8 text-center bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl">
@@ -58,9 +113,13 @@ export const UserTable: React.FC<UserTableProps> = ({
               <TableHead className="w-10 px-4 py-3">
                 <div className="flex items-center justify-center">
                   <Checkbox
-                    checked={isAllSelected ? true : isSomeSelected ? "indeterminate" : false}
-                    onCheckedChange={onSelectAll}
-                    title="Pilih Semua Pengguna"
+                    checked={isPageAllSelected ? true : isPageSomeSelected ? "indeterminate" : false}
+                    onCheckedChange={handleHeaderCheckboxChange}
+                    title={
+                      isPageAllSelected
+                        ? "Batalkan pilihan pengguna di halaman ini"
+                        : "Pilih semua pengguna di halaman ini"
+                    }
                   />
                 </div>
               </TableHead>
@@ -74,7 +133,7 @@ export const UserTable: React.FC<UserTableProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-            {users.map((u, idx) => {
+            {paginatedUsers.map((u, idx) => {
               const roleKey = (u.role || "").toLowerCase();
               const isMaster = isMasterAdmin(u);
               const isSelected = selectedIds.includes(u.id);
@@ -202,6 +261,96 @@ export const UserTable: React.FC<UserTableProps> = ({
             })}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start flex-wrap">
+          <div>
+            Menampilkan{" "}
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+              {users.length > 0 ? startIndex + 1 : 0}
+            </span>
+            –
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{endIndex}</span>{" "}
+            dari{" "}
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{users.length}</span> pengguna
+          </div>
+
+          <div className="flex items-center gap-1.5 pl-2 sm:border-l border-zinc-200 dark:border-zinc-800">
+            <span className="text-[11px] text-zinc-400">Tampilkan:</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(val) => {
+                if (val) {
+                  setPageSize(Number(val));
+                  setCurrentPage(1);
+                }
+              }}
+            >
+              <SelectTrigger className="h-7 text-xs w-[72px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 min-w-[72px]">
+                <SelectItem value="10" className="text-xs">10</SelectItem>
+                <SelectItem value="25" className="text-xs">25</SelectItem>
+                <SelectItem value="50" className="text-xs">50</SelectItem>
+                <SelectItem value="100" className="text-xs">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-[11px] text-zinc-400 hidden sm:inline">per hal.</span>
+          </div>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-end">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(1)}
+              className="h-7 w-7 rounded-lg cursor-pointer"
+              title="Halaman Pertama"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="h-7 w-7 rounded-lg cursor-pointer"
+              title="Halaman Sebelumnya"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </Button>
+
+            <span className="px-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 select-none">
+              Hal. {currentPage} / {totalPages}
+            </span>
+
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="h-7 w-7 rounded-lg cursor-pointer"
+              title="Halaman Selanjutnya"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+              className="h-7 w-7 rounded-lg cursor-pointer"
+              title="Halaman Terakhir"
+            >
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   );
