@@ -7,7 +7,6 @@ import { db, Kaderisasi, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserRole, UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { getKomisariatSlug } from "@/lib/tenancy";
-import { exportCardAsImage } from "@/lib/cardExporter";
 import QRCode from "qrcode";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -86,6 +85,7 @@ interface EventActivity {
   description: string;
   status: "OPEN" | "CLOSED";
   formFields?: FormField[];
+  waGroupLink?: string;
 }
 
 interface ParticipantRegistration {
@@ -101,6 +101,22 @@ interface ParticipantRegistration {
   attendance?: string[];
   isGraduated?: boolean;
   registrationNumber?: string;
+}
+
+interface RegistrationSuccessInfo {
+  registrationNumber: string;
+  name: string;
+  email: string;
+  phone: string;
+  commissariat: string;
+  eventName: string;
+  level: string;
+  dateApplied: string;
+  role: string;
+  isExistingAccount: boolean;
+  isGoogleAuthUser: boolean;
+  targetEventId?: string;
+  waGroupLink?: string;
 }
 
 interface CadreSubmission {
@@ -227,11 +243,11 @@ export default function RegisterPage() {
   // Status flags
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [registeredNumber, setRegisteredNumber] = useState("");
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [isGoogleAuthUser, setIsGoogleAuthUser] = useState(false);
   const [googleAvatar, setGoogleAvatar] = useState("");
+  const [registrationSuccessData, setRegistrationSuccessData] = useState<RegistrationSuccessInfo | null>(null);
 
   // Existing account detection states
   const [isExistingAccount, setIsExistingAccount] = useState(false);
@@ -1099,23 +1115,32 @@ export default function RegisterPage() {
       }
 
       setLoading(false);
-      setIsSuccessOpen(true);
+      const effectiveRole = (existingCadreObj?.role || (level !== "MAPABA" ? "anggota" : "peserta")).toLowerCase();
+      const waLink = eventDetails?.waGroupLink || (eventDetails as any)?.whatsappGroupUrl || (eventDetails as any)?.wa_group_link || (eventDetails as any)?.whatsapp;
+
+      setRegistrationSuccessData({
+        registrationNumber: regNo || registeredNumber || "REG-TERCATAT",
+        name: formattedName,
+        email: email.trim().toLowerCase(),
+        phone: phone || "-",
+        commissariat: existingCadreObj?.commissariat || commissariat,
+        eventName: eventDetails?.name || "Kegiatan Kaderisasi",
+        level: eventDetails?.level || level,
+        dateApplied: newRegistration.dateApplied,
+        role: effectiveRole,
+        isExistingAccount: Boolean(isExistingAccount),
+        isGoogleAuthUser: Boolean(isGoogleAuthUser),
+        targetEventId: effectiveEventId || targetEventId || undefined,
+        waGroupLink: waLink
+      });
+
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch (err) {
       console.error("Failed to register", err);
       setError("Terjadi kesalahan koneksi database.");
       setLoading(false);
-    }
-  };
-
-  const handleSuccessClose = () => {
-    setIsSuccessOpen(false);
-    const effectiveRole = (existingCadreObj?.role || (level !== "MAPABA" ? "anggota" : "peserta")).toLowerCase();
-    const defaultTarget = `/${effectiveRole}/kegiatan`;
-    if (isGoogleAuthUser || isExistingAccount) {
-      router.push(redirectParam || defaultTarget);
-    } else {
-      const target = redirectParam ? `/login?redirect=${encodeURIComponent(redirectParam)}` : `/login?redirect=${encodeURIComponent(defaultTarget)}`;
-      router.push(target);
     }
   };
 
@@ -1178,6 +1203,143 @@ export default function RegisterPage() {
           
           <div className="space-y-5">
             
+            {/* JIKA BARU SAJA BERHASIL MENDAFTAR: TAMPILKAN STATUS REGISTRASI BERHASIL */}
+            {registrationSuccessData ? (
+              <div className="space-y-6 py-2 animate-in fade-in-50 duration-300">
+                {/* 1. CLEAN STATUS HEADER */}
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-1">
+                    <CheckCircle2 className="w-6 h-6 stroke-[2.2]" />
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                    Registrasi Berhasil
+                  </h2>
+                  <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                    Data pendaftaran Anda telah tercatat ke dalam sistem panitia kegiatan.
+                  </p>
+                </div>
+
+                {/* 2. MINIMALIST PARTICIPANT DATA CARD */}
+                <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-4 sm:p-5 space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/80">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        No. Registrasi
+                      </span>
+                      <p className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm tracking-wide">
+                        {registrationSuccessData.registrationNumber}
+                      </p>
+                    </div>
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold px-2.5 py-0.5 rounded-full shadow-none">
+                      Terdaftar Resmi
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3.5 text-xs">
+                    <div>
+                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 block">Nama Lengkap</span>
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm mt-0.5">
+                        {registrationSuccessData.name}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 block">Kegiatan & Jenjang</span>
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm mt-0.5">
+                        {registrationSuccessData.eventName} <span className="text-zinc-400 font-normal">({registrationSuccessData.level})</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 block">Komisariat</span>
+                      <p className="font-medium text-zinc-800 dark:text-zinc-200 mt-0.5 truncate">
+                        PMII {registrationSuccessData.commissariat}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 block">WhatsApp / No. HP</span>
+                      <p className="font-medium text-zinc-800 dark:text-zinc-200 mt-0.5">
+                        {registrationSuccessData.phone}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 block">Email Terdaftar</span>
+                      <p className="font-medium text-zinc-700 dark:text-zinc-300 mt-0.5 truncate">
+                        {registrationSuccessData.email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. ACTION BUTTONS */}
+                <div className="space-y-2.5 pt-1">
+                  {/* TOMBOL MASUK GRUP WHATSAPP */}
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const wa = registrationSuccessData.waGroupLink;
+                      if (wa && typeof wa === "string" && wa.trim()) {
+                        const targetUrl = wa.trim().startsWith("http") ? wa.trim() : `https://${wa.trim()}`;
+                        window.open(targetUrl, "_blank", "noopener,noreferrer");
+                      } else {
+                        alert("Link grup WhatsApp kegiatan belum dicantumkan oleh panitia. Silakan hubungi admin komisariat.");
+                      }
+                    }}
+                    className="w-full h-11 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-colors border-none"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                    <span>Masuk Grup WhatsApp</span>
+                  </Button>
+
+                  {/* TOMBOL LOGIN / KEGIATAN */}
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const targetDestination = registrationSuccessData.targetEventId
+                        ? `/${registrationSuccessData.role}/kegiatan?event=${registrationSuccessData.targetEventId}`
+                        : `/${registrationSuccessData.role}/kegiatan`;
+                      if (registrationSuccessData.isGoogleAuthUser || registrationSuccessData.isExistingAccount) {
+                        router.push(redirectParam || targetDestination);
+                      } else {
+                        const target = redirectParam
+                          ? `/login?redirect=${encodeURIComponent(redirectParam)}`
+                          : `/login?redirect=${encodeURIComponent(targetDestination)}`;
+                        router.push(target);
+                      }
+                    }}
+                    className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-colors"
+                  >
+                    <span>
+                      {registrationSuccessData.isGoogleAuthUser || registrationSuccessData.isExistingAccount
+                        ? "Buka Halaman Alur Kegiatan"
+                        : "Masuk / Login Sekarang"}
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* FOOTER DAFTAR PESERTA LAIN */}
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDisconnectGoogle();
+                      setRegistrationSuccessData(null);
+                      setAlreadyRegisteredData(null);
+                      setStep(1);
+                    }}
+                    className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                  >
+                    Ingin mendaftar untuk peserta lain? <span className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">Daftar Akun Lain</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
             {/* 1. HEADER & EVENT CONTEXT */}
             {eventDetails ? (
               <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 space-y-2.5">
@@ -1341,8 +1503,7 @@ export default function RegisterPage() {
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        setRegisteredNumber(alreadyRegisteredData.registrationNumber || "");
-                        setIsSuccessOpen(true);
+                        router.push(`/${(existingCadreObj?.role || (level !== "MAPABA" ? "anggota" : "peserta")).toLowerCase()}/kegiatan?event=${targetEventId}`);
                       }}
                       className="h-10 sm:h-11 rounded-xl border-zinc-200 dark:border-zinc-800 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
                     >
@@ -1350,9 +1511,12 @@ export default function RegisterPage() {
                       <span>Lihat Kartu Peserta</span>
                     </Button>
 
-                    {(eventDetails as any)?.waGroupLink ? (
+                    {Boolean(eventDetails?.waGroupLink || (eventDetails as any)?.whatsappGroupUrl || (eventDetails as any)?.wa_group_link || (eventDetails as any)?.whatsapp) ? (
                       <a
-                        href={(eventDetails as any).waGroupLink}
+                        href={(() => {
+                          const w = (eventDetails?.waGroupLink || (eventDetails as any)?.whatsappGroupUrl || (eventDetails as any)?.wa_group_link || (eventDetails as any)?.whatsapp) || "";
+                          return w.trim().startsWith("http") ? w.trim() : `https://${w.trim()}`;
+                        })()}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="h-10 sm:h-11 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"
@@ -1959,151 +2123,11 @@ export default function RegisterPage() {
             </form>
             </>
             )}
+            </>
+            )}
           </div>
         </Card>
       </div>
-
-      {/* SUCCESS DIALOG */}
-      <Dialog open={isSuccessOpen} onOpenChange={setIsSuccessOpen}>
-        <DialogContent className="fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl sm:max-w-[420px] w-[95vw] p-6 overflow-hidden flex flex-col items-center">
-          <div className="w-full space-y-6 flex flex-col items-center">
-            
-            {/* Header Text */}
-            <div className="text-center space-y-3 mt-2">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 mx-auto shadow-inner">
-                <CheckCircle className="w-7 h-7 text-emerald-500 dark:text-emerald-400" />
-              </div>
-              <div className="space-y-1">
-                <DialogTitle className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-widest">
-                  Registrasi Berhasil!
-                </DialogTitle>
-                <DialogDescription className="text-xs text-zinc-600 dark:text-zinc-400 font-medium text-center leading-relaxed px-2">
-                  Berkas pendaftaran <span className="text-zinc-900 dark:text-zinc-200 font-bold">{name}</span> telah masuk. Simpan Kartu Peserta di bawah untuk keperluan absensi via QR Code.
-                </DialogDescription>
-              </div>
-            </div>
-
-            {/* PRINTABLE ID CARD - FIXED LAYOUT */}
-            {eventDetails && registeredNumber && (
-              <div className="w-full flex flex-col items-center gap-5">
-                <div 
-                  id="printable-id-card"
-                  className="w-full max-w-[360px] bg-[#0c101a] border border-amber-500/30 rounded-2xl p-5 shadow-xl relative overflow-hidden text-zinc-100"
-                >
-                  {/* Watermark Soft */}
-                  <div className="absolute -bottom-6 -right-4 text-[90px] font-black text-white/[0.02] pointer-events-none font-sans tracking-tighter leading-none select-none">
-                    {level}
-                  </div>
-
-                  {/* Header Kartu */}
-                  <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3 mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-md bg-amber-500 flex items-center justify-center shadow-sm">
-                        <span className="text-[#090d16] font-black text-[10px] tracking-wide">PM</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-white leading-tight">PMII {commissariat}</span>
-                      </div>
-                    </div>
-                    <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 text-[9px] font-black px-2 py-0.5 rounded-md uppercase">
-                      PESERTA
-                    </Badge>
-                  </div>
-
-                  {/* Konten Utama Grid (Fleksibel) */}
-                  <div className="grid grid-cols-[auto_1fr] gap-4 items-center relative z-10">
-                    
-                    {/* Kolom Kiri: QR Code */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="p-1.5 bg-white rounded-xl shadow-sm">
-                        <img 
-                          src={qrCodeDataUrl || `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${registeredNumber}`} 
-                          alt="QR Code Absensi" 
-                          className="w-[72px] h-[72px] object-contain rounded-lg"
-                        />
-                      </div>
-                      <span className="text-[9px] font-mono font-black text-amber-500 tracking-widest">
-                        {registeredNumber}
-                      </span>
-                    </div>
-
-                    {/* Kolom Kanan: Detail Peserta */}
-                    <div className="flex flex-col justify-center space-y-2.5 min-w-0">
-                      <div className="space-y-0.5">
-                        <span className="text-[8px] font-bold uppercase text-zinc-500 tracking-wider">Nama Lengkap</span>
-                        <p className="text-xs font-black text-white leading-tight truncate">
-                          {(name || alreadyRegisteredData?.cadreName || "").replace(/^Sahabat\s+/i, "").trim()}
-                        </p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <span className="text-[8px] font-bold uppercase text-zinc-500 tracking-wider">Kegiatan</span>
-                        <p className="text-[10px] font-bold text-zinc-200 leading-tight line-clamp-1">
-                          {eventDetails.name}
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-0.5">
-                          <span className="text-[8px] font-bold uppercase text-zinc-500 tracking-wider">Jenjang</span>
-                          <span className="text-[10px] font-black text-amber-500 block truncate">
-                            {eventDetails.level}
-                          </span>
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="text-[8px] font-bold uppercase text-zinc-500 tracking-wider">Tanggal</span>
-                          <span className="text-[10px] font-bold text-zinc-300 block truncate">
-                            {eventDetails.date}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Peringatan Bawah */}
-                  <div className="mt-5 border-t border-zinc-800/60 pt-2.5 text-center relative z-10">
-                    <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">
-                      Bawa Kartu Ini Untuk Bukti Absensi Acara
-                    </p>
-                  </div>
-                </div>
-
-                {/* Tombol Aksi ID Card */}
-                <div className="w-full max-w-[360px]">
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      if (eventDetails && registeredNumber) {
-                        await exportCardAsImage({
-                          type: "peserta",
-                          name: (name || alreadyRegisteredData?.cadreName || "Peserta"),
-                          idNumber: registeredNumber,
-                          commissariat: commissariat,
-                          level: eventDetails.level,
-                          eventName: eventDetails.name,
-                          eventDate: eventDetails.date
-                        });
-                      }
-                    }}
-                    className="w-full h-10 text-xs font-bold bg-zinc-100 dark:bg-zinc-900/50 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white rounded-xl transition-colors gap-2 cursor-pointer shadow-xs"
-                  >
-                    <Download className="w-4 h-4" /> Download Kartu
-                  </Button>
-                </div>
-              </div>
-            )}
-            
-            <div className="w-full pt-2">
-              <Button 
-                onClick={handleSuccessClose} 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm h-11 sm:h-12 rounded-xl transition-all shadow-sm cursor-pointer"
-              >
-                Saya Mengerti, Masuk Sekarang
-              </Button>
-            </div>
-          </div>
-
-        </DialogContent>
-      </Dialog>
 
       {/* FILE PREVIEW DIALOG */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
