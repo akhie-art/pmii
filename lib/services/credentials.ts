@@ -82,6 +82,54 @@ export function migrateUserEmail(oldEmail: string | undefined, newEmail: string 
   }
 }
 
+export function recordDeletedUser(identifier: { id?: string; email?: string; user_id?: string } | string) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("PMII_DELETED_USER_IDS");
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    const set = new Set(list.map((s) => s.toLowerCase()));
+    if (typeof identifier === "string") {
+      if (identifier.trim()) set.add(identifier.trim().toLowerCase());
+    } else {
+      if (identifier.id) set.add(identifier.id.trim().toLowerCase());
+      if (identifier.user_id) set.add(identifier.user_id.trim().toLowerCase());
+      if (identifier.email) set.add(identifier.email.trim().toLowerCase());
+    }
+    localStorage.setItem("PMII_DELETED_USER_IDS", JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+export function unrecordDeletedUser(identifier: { id?: string; email?: string } | string) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("PMII_DELETED_USER_IDS");
+    if (!raw) return;
+    const list: string[] = JSON.parse(raw);
+    const toRemove = new Set<string>();
+    if (typeof identifier === "string") {
+      toRemove.add(identifier.trim().toLowerCase());
+    } else {
+      if (identifier.id) toRemove.add(identifier.id.trim().toLowerCase());
+      if (identifier.email) toRemove.add(identifier.email.trim().toLowerCase());
+    }
+    const updated = list.filter((item) => !toRemove.has(item.toLowerCase()));
+    localStorage.setItem("PMII_DELETED_USER_IDS", JSON.stringify(updated));
+  } catch {}
+}
+
+export function isUserDeleted(id?: string, email?: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem("PMII_DELETED_USER_IDS");
+    if (!raw) return false;
+    const list: string[] = JSON.parse(raw);
+    const set = new Set(list.map((s) => s.toLowerCase()));
+    if (id && set.has(id.toLowerCase())) return true;
+    if (email && set.has(email.toLowerCase())) return true;
+  } catch {}
+  return false;
+}
+
 export async function deleteUserFromAuth(identifier: { id?: string; email?: string; user_id?: string } | string): Promise<boolean> {
   const targetEmail = typeof identifier === "string" 
     ? (identifier.includes("@") ? identifier.trim().toLowerCase() : undefined)
@@ -90,6 +138,9 @@ export async function deleteUserFromAuth(identifier: { id?: string; email?: stri
   const targetId = typeof identifier === "string"
     ? (!identifier.includes("@") && isValidUUID(identifier) ? identifier : undefined)
     : (identifier.user_id && isValidUUID(identifier.user_id) ? identifier.user_id : (isValidUUID(identifier.id) ? identifier.id : undefined));
+
+  // Catat identitas pengguna ke store blacklist pengguna yang dihapus
+  recordDeletedUser(identifier);
 
   // Remove from local credentials store
   if (typeof window !== "undefined") {
@@ -128,6 +179,7 @@ export async function deleteUsersFromAuth(users: ({ id?: string; email?: string;
   const emails: string[] = [];
 
   for (const u of users) {
+    recordDeletedUser(u);
     if (typeof u === "string") {
       if (u.includes("@")) emails.push(u.trim().toLowerCase());
       else if (isValidUUID(u)) userIds.push(u);
@@ -180,6 +232,7 @@ export async function createAuthUser(user: {
 }): Promise<UserAccount | null> {
   const cleanEmail = user.email.trim().toLowerCase();
   const pwd = user.password || "pmii1960";
+  unrecordDeletedUser(cleanEmail);
 
   if (isSupabaseConfigured && supabase) {
     try {

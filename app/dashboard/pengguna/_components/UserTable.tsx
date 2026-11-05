@@ -74,14 +74,14 @@ export const UserTable: React.FC<UserTableProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-            {users.map((u) => {
+            {users.map((u, idx) => {
               const roleKey = (u.role || "").toLowerCase();
               const isMaster = isMasterAdmin(u);
               const isSelected = selectedIds.includes(u.id);
 
               return (
                 <TableRow
-                  key={u.id}
+                  key={u.id ? `${u.id}-${idx}` : `user-${idx}`}
                   className={`transition-colors ${
                     isSelected
                       ? "bg-blue-50/70 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-900/30"

@@ -243,12 +243,12 @@ BEGIN
   -- 3. Hapus entri terkait di auth.identities
   DELETE FROM auth.identities WHERE user_id = v_target_id;
 
-  -- 4. Lepaskan relasi user_id dari tabel anggota dan pengurus
-  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'anggota') THEN
-    UPDATE public.anggota SET user_id = NULL WHERE user_id = v_target_id;
-  END IF;
-  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'pengurus') THEN
-    UPDATE public.pengurus SET user_id = NULL WHERE user_id = v_target_id;
+  -- 4. Lepaskan relasi user_id dari tabel anggota secara aman jika kolomnya ada
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'anggota' AND column_name = 'user_id'
+  ) THEN
+    EXECUTE 'UPDATE public.anggota SET user_id = NULL WHERE user_id = $1' USING v_target_id;
   END IF;
 
   -- 5. Hapus akun dari auth.users

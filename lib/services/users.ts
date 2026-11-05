@@ -81,6 +81,35 @@ export async function getUsers(defaultData: UserAccount[] = DEFAULT_USERS): Prom
     } catch (e) {}
   }
 
+  // Deduplikasi users berdasarkan ID atau Email untuk menghindari data ganda
+  const seenUserKeys = new Set<string>();
+  finalUsers = finalUsers.filter(u => {
+    const key = u.id || (u as any).user_id || u.email;
+    if (!key) return true;
+    if (seenUserKeys.has(key)) return false;
+    seenUserKeys.add(key);
+    return true;
+  });
+
+  // Filter keluar akun pengguna yang telah dihapus
+  if (typeof window !== "undefined") {
+    try {
+      const deletedRaw = localStorage.getItem("PMII_DELETED_USER_IDS");
+      if (deletedRaw) {
+        const deletedList: string[] = JSON.parse(deletedRaw);
+        if (Array.isArray(deletedList) && deletedList.length > 0) {
+          const deletedSet = new Set(deletedList.map(s => s.toLowerCase()));
+          finalUsers = finalUsers.filter(u => {
+            if (u.id && deletedSet.has(u.id.toLowerCase())) return false;
+            if ((u as any).user_id && deletedSet.has((u as any).user_id.toLowerCase())) return false;
+            if (u.email && deletedSet.has(u.email.toLowerCase())) return false;
+            return true;
+          });
+        }
+      }
+    } catch {}
+  }
+
   // Perbarui cache offline localStorage
   if (typeof window !== "undefined" && finalUsers.length > 0) {
     try {

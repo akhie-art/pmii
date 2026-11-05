@@ -90,7 +90,15 @@ export default function UserManagementPage() {
       if (isAllowed) {
         try {
           const userList = await db.getUsers();
-          setUsers(userList);
+          const seen = new Set<string>();
+          const uniqueList = (userList || []).filter((u) => {
+            const key = u.id || (u as any).user_id || u.email;
+            if (!key) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setUsers(uniqueList);
         } catch (err) {
           console.error("Failed to load users:", err);
         }
