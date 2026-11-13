@@ -35,8 +35,11 @@ import {
   LayoutGrid,
   Search,
   Crown,
-  UserCheck
+  UserCheck,
+  Menu,
+  Check
 } from "lucide-react";
+import { Floaty } from "@/app/_components/Floaty";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -50,6 +53,13 @@ import { CommissariatList, getKomisariatBph, KomisariatBphData, KomisariatGaller
 interface Props {
   slug: string;
 }
+
+const KOM_NAV_ITEMS = [
+  { id: "struktur", label: "Struktur BPH", href: "#struktur" },
+  { id: "kaderisasi", label: "Agenda Kegiatan", href: "#kaderisasi" },
+  { id: "galeri", label: "Galeri", href: "#galeri" },
+  { id: "artikel", label: "Artikel & Opini", href: "#artikel" },
+];
 
 export function KomisariatLandingContent({ slug }: Props) {
   const [mounted, setMounted] = useState(false);
@@ -68,8 +78,25 @@ export function KomisariatLandingContent({ slug }: Props) {
   const [structureViewMode, setStructureViewMode] = useState<"tree" | "directory">("tree");
   const [searchDirectoryQuery, setSearchDirectoryQuery] = useState("");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("Semua");
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const [logoBroken, setLogoBroken] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  // Navbar: glass background after scrolling + close mobile menu with Escape
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -598,117 +625,26 @@ export function KomisariatLandingContent({ slug }: Props) {
   const registerUrl = komisariat ? `/register?commissariat=${encodeURIComponent(komisariat.name)}` : "/register";
   const campusName = komisariat?.university || (komisariat as any)?.campusName || "Perguruan Tinggi";
 
-  // Carousel Slides Data
-  const heroSlides = useMemo(() => {
-    if (!komisariat) return [];
-    const campus = komisariat.university || (komisariat as any).campusName || "Perguruan Tinggi";
-    const period = bphData?.period || komisariat.structure?.period || "2026 - 2027";
-
-    const defaultImg1 = "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=1600&q=80";
-    const defaultImg2 = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1600&q=80";
-    const defaultImg3 = "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1600&q=80";
-
-    const img1 = gallery[0]?.imageUrl || defaultImg1;
-    const img2 = gallery[1]?.imageUrl || defaultImg2;
-    const img3 = gallery[2]?.imageUrl || defaultImg3;
-
-    return [
-      {
-        id: "slide-1",
-        badge: "Portal Resmi Komisariat",
-        badgeIcon: Sparkles,
-        badgeStyle: "bg-blue-500/20 text-blue-300 border-blue-400/30",
-        headline: komisariat.name,
-        subHeadline: campus,
-        description: `Wadah pembinaan mahasiswa Islam berlandaskan Ahlussunnah wal Jama'ah — mengasah intelektualitas kritis, militansi gerakan, dan kepemimpinan transformatif di lingkungan ${campus}.`,
-        image: img1,
-        primaryCta: {
-          label: "Daftar MAPABA Sekarang",
-          href: registerUrl,
-          icon: UserPlus,
-        },
-        secondaryCta: {
-          label: "Jelajahi Profil & Visi",
-          href: "#sejarah",
-          icon: BookOpen,
-        },
-        metric: {
-          value: cadresCount > 0 ? cadresCount : "Aktif",
-          label: "Kader Terdata",
-          sub: "Sahabat & Sahabati",
-        },
-      },
-      {
-        id: "slide-2",
-        badge: "Kaderisasi & Pembinaan Anggota",
-        badgeIcon: GraduationCap,
-        badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
-        headline: "Masa Penerimaan Anggota Baru",
-        subHeadline: "MAPABA PMII " + campus,
-        description: `Langkah awal menapaki proses pembentukan karakter, integritas intelektual, dan dialektika kritis mahasiswa. Bersiaplah menjadi bagian dari agen perubahan bangsa.`,
-        image: img2,
-        primaryCta: {
-          label: "Registrasi Calon Peserta",
-          href: registerUrl,
-          icon: ArrowRight,
-        },
-        secondaryCta: {
-          label: "Lihat Agenda Kegiatan",
-          href: "#kaderisasi",
-          icon: Calendar,
-        },
-        metric: {
-          value: events.length > 0 ? `${events.length} Agenda` : "Terbuka",
-          label: "Kegiatan Terjadwal",
-          sub: "Kaderisasi & Forum",
-        },
-      },
-      {
-        id: "slide-3",
-        badge: `Masa Khidmat ${period}`,
-        badgeIcon: Crown,
-        badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-400/30",
-        headline: "Badan Pengurus Harian",
-        subHeadline: "Hierarki & Basis Rayon Terpadu",
-        description: `Menjalankan amanah roda organisasi secara profesional dan transparan, menaungi ${(komisariat.rayons || []).length || "seluruh"} rayon fakultas di lingkungan ${campus}.`,
-        image: img3,
-        primaryCta: {
-          label: "Bagan Struktur BPH",
-          href: "#struktur",
-          icon: Network,
-        },
-        secondaryCta: {
-          label: "Galeri & Dokumentasi",
-          href: "#galeri",
-          icon: ImageIcon,
-        },
-        metric: {
-          value: (komisariat.rayons || []).length > 0 ? `${(komisariat.rayons || []).length} Rayon` : "1 Komando",
-          label: "Basis Rayon Aktif",
-          sub: "Tingkat Fakultas",
-        },
-      },
-    ];
-  }, [komisariat, bphData, cadresCount, events, gallery, registerUrl]);
-
-  // Auto-play interval
+  // Scroll spy for active navigation highlight
   useEffect(() => {
-    if (!heroSlides.length || isCarouselPaused) return;
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 5500);
-    return () => clearInterval(interval);
-  }, [heroSlides.length, isCarouselPaused]);
-
-  const nextSlide = () => {
-    if (!heroSlides.length) return;
-    setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-  };
-
-  const prevSlide = () => {
-    if (!heroSlides.length) return;
-    setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-  };
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY + 140;
+      let current = "";
+      for (const item of KOM_NAV_ITEMS) {
+        const el = document.getElementById(item.id);
+        if (el) {
+          const top = el.offsetTop;
+          if (scrollPosition >= top && scrollPosition < top + el.offsetHeight) {
+            current = item.id;
+            break;
+          }
+        }
+      }
+      setActiveSection((prev) => current || (window.scrollY < 400 ? "" : prev));
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   if (loading) {
     return (
@@ -745,355 +681,508 @@ export function KomisariatLandingContent({ slug }: Props) {
     );
   }
 
+  const heroPeriod = bphData?.period || komisariat.structure?.period || "2026 - 2027";
+  const heroRayonCount = (komisariat.rayons || []).length;
+  const heroChairmanAvatar = chairmanName
+    ? getAvatar(chairmanName, chairmanMember?.anggota_id, chairmanMember?.avatar)
+    : "";
+  const openEvent = events.find((e: any) => e.status !== "CLOSED");
+  const latestArticle = articles[0];
+  const heroHighlight: { label: string; title: string; chipA: string; chipB: string; footer: string; href: string } | null =
+    openEvent
+      ? {
+          label: "Agenda Terbuka",
+          title: openEvent.title || (openEvent as any).name || "Agenda Kaderisasi",
+          chipA: openEvent.level || "Kaderisasi",
+          chipB: "Daftar",
+          footer: openEvent.date ? formatIndonesianDate(openEvent.date) : openEvent.location || campusName,
+          href: `/register?event=${openEvent.id}&commissariat=${encodeURIComponent(komisariat.name)}`,
+        }
+      : latestArticle
+      ? {
+          label: "Warta Terbaru",
+          title: latestArticle.title,
+          chipA: latestArticle.category,
+          chipB: "Baca",
+          footer: formatIndonesianDate(
+            latestArticle.createdAt || (latestArticle as any).created_at || (latestArticle as any).date
+          ),
+          href: `/artikel/${latestArticle.slug || latestArticle.id}`,
+        }
+      : null;
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white">
-      {/* 1. TOP NAVBAR */}
-      <header className="w-full border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="container mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link
-              href="/#komisariat"
-              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mr-1 sm:mr-2"
-              title="Kembali ke Portal PC PMII Grobogan"
+      {/* 1. FLOATING PILL NAVBAR */}
+      <header className="sticky top-0 z-50 h-0">
+        <div className="relative px-3 sm:px-6 pt-3 sm:pt-4">
+          <div
+            className={`max-w-6xl mx-auto flex items-center justify-between gap-3 rounded-full pl-3 pr-2 py-2 transition-all duration-300 ${
+              scrolled
+                ? "bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200/80 dark:border-zinc-800 shadow-lg shadow-zinc-900/5"
+                : "bg-transparent border border-transparent"
+            }`}
+          >
+            {/* Brand */}
+            <div className="flex items-center gap-2 min-w-0">
+              <Link
+                href="/#komisariat"
+                title="Kembali ke Portal PC PMII Grobogan"
+                aria-label="Kembali ke Portal PC PMII Grobogan"
+                className="hidden sm:flex w-9 h-9 rounded-full items-center justify-center border border-zinc-200/80 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shrink-0"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Link>
+
+              <a href="#top" className="flex items-center gap-2.5 min-w-0" aria-label={`${komisariat.name} - Beranda`}>
+                {komisariat.logo && !logoBroken ? (
+                  <img
+                    src={komisariat.logo}
+                    alt={komisariat.name}
+                    onError={() => setLogoBroken(true)}
+                    className="w-9 h-9 object-contain shrink-0"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
+                    {komisariat.logoInitial || "PK"}
+                  </div>
+                )}
+                <span className="flex flex-col leading-tight min-w-0">
+                  <span className="text-sm font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 truncate max-w-[130px] sm:max-w-[220px]">
+                    {komisariat.name}
+                  </span>
+                  <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 truncate max-w-[130px] sm:max-w-[220px]">
+                    {campusName}
+                  </span>
+                </span>
+              </a>
+            </div>
+
+            {/* Center pill navigation (desktop) */}
+            <nav
+              aria-label="Navigasi Komisariat"
+              className="hidden lg:flex items-center gap-0.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200/70 dark:border-zinc-800 shadow-sm p-1"
             >
-              <ChevronLeft className="w-4 h-4" />
-              <span className="hidden md:inline">Portal Cabang</span>
-            </Link>
+              <a
+                href="#top"
+                aria-current={activeSection === "" ? "page" : undefined}
+                className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-all ${
+                  activeSection === ""
+                    ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+              >
+                Beranda
+              </a>
+              {KOM_NAV_ITEMS.map((item) => {
+                const isActive = activeSection === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    aria-current={isActive ? "true" : undefined}
+                    className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-all whitespace-nowrap ${
+                      isActive
+                        ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold"
+                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
+            </nav>
 
-            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
+            {/* Right actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={toggleTheme}
+                title={darkMode ? "Beralih ke Mode Terang" : "Beralih ke Mode Gelap"}
+                className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center border border-zinc-200/80 dark:border-zinc-800 bg-white/80 hover:bg-white dark:bg-zinc-900/80 dark:hover:bg-zinc-800 backdrop-blur text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer"
+                aria-label="Ubah tema warna"
+              >
+                {mounted && darkMode ? (
+                  <Sun className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Moon className="w-4 h-4 text-zinc-700" />
+                )}
+              </button>
 
-            {/* Logo Komisariat / Inisial */}
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden bg-white border border-zinc-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shadow-xs shrink-0">
-              {komisariat.logo ? (
-                <img
-                  src={komisariat.logo}
-                  alt={komisariat.name}
-                  className="w-full h-full object-contain"
+              <Link
+                href="/login"
+                className="group inline-flex items-center gap-1.5 h-10 px-4 sm:px-5 rounded-full bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 text-[13px] font-semibold shadow-md transition-all whitespace-nowrap"
+              >
+                <span className="sm:hidden">Masuk</span>
+                <span className="hidden sm:inline">Masuk Portal</span>
+                <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
+
+
+              <button
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                className="lg:hidden w-10 h-10 rounded-full flex items-center justify-center border border-zinc-200/80 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                aria-label={mobileMenuOpen ? "Tutup menu navigasi" : "Buka menu navigasi"}
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile menu panel */}
+          <AnimatePresence>
+            {mobileMenuOpen && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="lg:hidden fixed inset-0 -z-10 bg-zinc-950/20 backdrop-blur-[2px]"
+                  onClick={() => setMobileMenuOpen(false)}
                 />
-              ) : (
-                <div className="w-full h-full rounded bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
-                  {komisariat.logoInitial || "PK"}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-[11px] sm:text-sm tracking-tight text-zinc-900 dark:text-zinc-100 leading-tight truncate">
-                {komisariat.name}
-              </span>
-              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                {campusName}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Navigation Anchor Links (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            <a href="#struktur" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              Struktur BPH
-            </a>
-            {events.length > 0 && (
-              <a href="#kaderisasi" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                Agenda Kegiatan
-              </a>
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.18 }}
+                  className="lg:hidden max-w-6xl mx-auto mt-2 rounded-3xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200/80 dark:border-zinc-800 shadow-xl shadow-zinc-900/10 p-2"
+                >
+                  <a
+                    href="#top"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-between transition-colors ${
+                      activeSection === ""
+                        ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold"
+                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                    }`}
+                  >
+                    <span>Beranda</span>
+                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                  </a>
+                  {KOM_NAV_ITEMS.map((item) => (
+                    <a
+                      key={item.id}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-between transition-colors ${
+                        activeSection === item.id
+                          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold"
+                          : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      <ChevronRight className="w-4 h-4 text-zinc-400" />
+                    </a>
+                  ))}
+                  <Link
+                    href="/#komisariat"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-between text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors"
+                  >
+                    <span>Portal PC PMII Grobogan</span>
+                    <ChevronLeft className="w-4 h-4 text-zinc-400" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="sm:hidden w-full px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-between text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                  >
+                    <span>{mounted && darkMode ? "Mode Terang" : "Mode Gelap"}</span>
+                    {mounted && darkMode ? (
+                      <Sun className="w-4 h-4 text-amber-400" />
+                    ) : (
+                      <Moon className="w-4 h-4 text-zinc-500" />
+                    )}
+                  </button>
+                  <div className="p-1 pt-3 mt-1 border-t border-zinc-100 dark:border-zinc-800">
+                    <Link
+                      href="/login"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center justify-center gap-1.5 h-11 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-semibold"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>Masuk Portal</span>
+                    </Link>
+                  </div>
+                </motion.div>
+              </>
             )}
-            <a href="#galeri" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              Galeri
-            </a>
-            {articles.length > 0 && (
-              <a href="#artikel" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                Artikel & Opini
-              </a>
-            )}
-          </nav>
-
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Dark / Light Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-all cursor-pointer"
-              aria-label="Toggle theme"
-            >
-              {mounted && darkMode ? (
-                <Sun className="w-4 h-4 text-amber-400" />
-              ) : (
-                <Moon className="w-4 h-4 text-blue-600" />
-              )}
-            </button>
-
-            <Link
-              href={registerUrl}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Daftar MAPABA</span>
-              <span className="sm:hidden">Daftar</span>
-            </Link>
-
-            <Link
-              href="/login"
-              className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium transition-colors"
-            >
-              <LogIn className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Masuk Portal</span>
-            </Link>
-          </div>
+          </AnimatePresence>
         </div>
       </header>
 
-      {/* 2. HERO SECTION CAROUSEL */}
-      <section className="relative pt-4 sm:pt-6 pb-6 sm:pb-8 overflow-hidden">
-        <div className="container mx-auto px-3 sm:px-6 max-w-6xl">
-          <div
-            className="relative rounded-3xl overflow-hidden border border-zinc-200/80 dark:border-zinc-800 shadow-xl bg-zinc-950 text-white min-h-[500px] sm:min-h-[540px] md:min-h-[580px] flex flex-col justify-between"
-            onMouseEnter={() => setIsCarouselPaused(true)}
-            onMouseLeave={() => setIsCarouselPaused(false)}
-          >
-            {/* Background Slides with AnimatePresence */}
-            <div className="absolute inset-0 z-0">
-              <AnimatePresence mode="wait">
-                {heroSlides[currentSlide] && (
-                  <motion.div
-                    key={heroSlides[currentSlide].id}
-                    initial={{ opacity: 0, scale: 1.05 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.98 }}
-                    transition={{ duration: 0.7, ease: "easeOut" }}
-                    className="absolute inset-0"
-                  >
+      <main id="top" className="flex-1">
+        {/* 2. HERO SECTION (CENTERED HEADLINE + FLOATING LIVE-DATA CARDS) */}
+        <section className="relative overflow-hidden bg-white dark:bg-zinc-950">
+          {/* Soft gradient glow + faded grid */}
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+            <div className="absolute -top-32 -right-24 w-[640px] h-[640px] rounded-full bg-violet-400/25 dark:bg-violet-600/15 blur-3xl" />
+            <div className="absolute top-24 -left-32 w-[540px] h-[540px] rounded-full bg-amber-200/50 dark:bg-amber-500/8 blur-3xl" />
+            <div className="absolute top-44 left-1/2 -translate-x-1/2 w-[720px] h-[420px] rounded-full bg-blue-300/25 dark:bg-blue-600/12 blur-3xl" />
+            <div
+              className="absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_75%)]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to right, rgba(120,120,170,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,120,170,0.12) 1px, transparent 1px)",
+                backgroundSize: "56px 56px",
+              }}
+            />
+          </div>
+
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-32 pb-16 sm:pt-36 sm:pb-24 lg:pt-40 lg:pb-32">
+            {/* ---------- Floating cards (desktop only, all data real) ---------- */}
+            <Floaty className="hidden lg:block absolute left-0 top-28 z-10 w-64 -rotate-3" delay={0}>
+              <div className="rounded-2xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur border border-zinc-200/80 dark:border-zinc-800 shadow-lg shadow-zinc-900/5 p-3.5">
+                <div className="flex items-center gap-3">
+                  {heroChairmanAvatar ? (
                     <img
-                      src={heroSlides[currentSlide].image}
-                      alt={heroSlides[currentSlide].headline}
-                      className="w-full h-full object-cover object-center"
+                      src={heroChairmanAvatar}
+                      alt={chairmanName}
+                      className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
                     />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/60 flex items-center justify-center font-bold text-xs shrink-0">
+                      {chairmanName ? getInitials(chairmanName) : <Crown className="w-4 h-4" />}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                      {chairmanName || "Belum Ditetapkan"}
+                    </p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                      Ketua Komisariat
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+                  <span>Masa Khidmat</span>
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-200">{heroPeriod}</span>
+                </div>
+              </div>
+            </Floaty>
 
-              {/* Layered Gradient Overlays for High Contrast Readability */}
-              <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/85 to-zinc-950/40" />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent" />
-              <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-600/25 blur-3xl rounded-full pointer-events-none" />
-              <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-600/20 blur-3xl rounded-full pointer-events-none" />
-            </div>
+            <Floaty className="hidden lg:block absolute right-0 top-32 z-10 w-60 rotate-3" delay={0.4} duration={7}>
+              <div className="rounded-2xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur border border-zinc-200/80 dark:border-zinc-800 shadow-lg shadow-zinc-900/5 p-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Kader Terdata</p>
+                    <p className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-100 leading-tight">
+                      {cadresCount}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Sahabat &amp; Sahabati komisariat
+                </div>
+              </div>
+            </Floaty>
 
-            {/* Top Bar inside Carousel: Campus Badge & Slide Count */}
-            <div className="relative z-10 px-5 sm:px-8 md:px-12 pt-6 sm:pt-8 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] sm:text-xs font-semibold text-zinc-300 tracking-wider uppercase">
+            <Floaty className="hidden lg:block absolute left-2 bottom-28 z-10 -rotate-2" delay={0.8} duration={6.5}>
+              <div className="rounded-2xl bg-zinc-900 dark:bg-zinc-800 text-white pl-2.5 pr-5 py-2.5 flex items-center gap-3 shadow-xl shadow-zinc-900/15 border border-white/5">
+                <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  {heroRayonCount > 0 ? <Building2 className="w-4 h-4" /> : <GraduationCap className="w-4 h-4" />}
+                </div>
+                <div>
+                  <p className="text-xs font-bold leading-tight">
+                    {heroRayonCount > 0 ? `${heroRayonCount} Rayon` : "Kaderisasi Berjenjang"}
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    {heroRayonCount > 0 ? "Basis kaderisasi fakultas" : "MAPABA · PKD · PKL"}
+                  </p>
+                </div>
+              </div>
+            </Floaty>
+
+            <Floaty className="hidden lg:block absolute right-2 bottom-32 z-10 rotate-2" delay={1.2} duration={7.5}>
+              <div className="rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-600 text-white pl-2.5 pr-5 py-2.5 flex items-center gap-3 shadow-xl shadow-violet-500/25">
+                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold leading-tight">{events.length} Agenda</p>
+                  <p className="text-[11px] text-violet-100 mt-0.5">Kaderisasi &amp; forum</p>
+                </div>
+              </div>
+            </Floaty>
+
+            <Sparkles className="hidden lg:block absolute left-[31%] top-28 w-5 h-5 text-indigo-500" aria-hidden="true" />
+            <Sparkles className="hidden lg:block absolute right-[29%] bottom-[30%] w-4 h-4 text-violet-500" aria-hidden="true" />
+
+            {/* ---------- Centered headline block ---------- */}
+            <div className="relative z-10 max-w-4xl mx-auto text-center">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur border border-zinc-200/80 dark:border-zinc-800 shadow-2xs mb-7 max-w-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 tracking-wide truncate">
                   Portal Resmi PMII {campusName}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-xs font-mono font-medium text-zinc-300">
-                <span className="text-white font-bold">0{currentSlide + 1}</span>
-                <span className="text-zinc-500">/</span>
-                <span className="text-zinc-400">0{heroSlides.length}</span>
-              </div>
-            </div>
 
-            {/* Main Slide Content */}
-            <div className="relative z-10 px-5 sm:px-8 md:px-12 py-8 sm:py-12 my-auto">
-              <AnimatePresence mode="wait">
-                {heroSlides[currentSlide] && (
-                  <motion.div
-                    key={heroSlides[currentSlide].id}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -15 }}
-                    transition={{ duration: 0.5, ease: "easeOut" }}
-                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
+              <div className="relative">
+                <h1 className="text-[26px] min-[380px]:text-[30px] sm:text-5xl lg:text-[56px] font-extrabold tracking-tight leading-[1.15] sm:leading-[1.1] text-zinc-900 dark:text-zinc-50 text-balance">
+                  <span className="block">{komisariat.name}</span>
+                  <span className="block bg-gradient-to-b from-zinc-500 to-zinc-400 sm:from-zinc-400 sm:to-zinc-300 dark:from-zinc-400 dark:to-zinc-600 dark:sm:from-zinc-500 dark:sm:to-zinc-700 bg-clip-text text-transparent">
+                    {campusName}
+                  </span>
+                  <span className="block">Bersama PC PMII Grobogan</span>
+                </h1>
+
+                {/* Overlapping highlight card: open event > latest article (hidden if neither) */}
+                {heroHighlight && (
+                <Floaty
+                  className="hidden lg:block absolute left-1/2 top-[62%] -translate-x-1/2 z-20 w-60 -rotate-6"
+                  delay={0.2}
+                  duration={6}
+                >
+                  <Link
+                    href={heroHighlight.href}
+                    className="block rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 shadow-2xl shadow-violet-500/20 border border-zinc-200/60 dark:border-zinc-800 text-left"
                   >
-                    {/* Left Column: Headlines & CTA */}
-                    <div className="lg:col-span-8 space-y-4 sm:space-y-6">
-                      {/* Badge */}
-                      {(() => {
-                        const BadgeIcon = heroSlides[currentSlide].badgeIcon;
-                        return (
-                          <div
-                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border backdrop-blur-md shadow-xs ${heroSlides[currentSlide].badgeStyle}`}
-                          >
-                            <BadgeIcon className="w-3.5 h-3.5" />
-                            <span>{heroSlides[currentSlide].badge}</span>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Title */}
-                      <div className="space-y-1.5">
-                        <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-[1.15]">
-                          {heroSlides[currentSlide].headline}
-                        </h1>
-                        <span className="block text-lg sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-blue-200 bg-clip-text text-transparent">
-                          {heroSlides[currentSlide].subHeadline}
+                    <div className="bg-gradient-to-br from-violet-500 to-indigo-600 text-white px-3.5 pt-3 pb-3.5">
+                      <p className="text-[11px] text-violet-100">{heroHighlight.label}</p>
+                      <p className="text-sm font-bold leading-snug mt-0.5 line-clamp-2">{heroHighlight.title}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                        <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-semibold">
+                          {heroHighlight.chipA}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-semibold">
+                          {heroHighlight.chipB}
                         </span>
                       </div>
-
-                      {/* Description */}
-                      <p className="text-xs sm:text-base text-zinc-300 max-w-2xl leading-relaxed">
-                        {heroSlides[currentSlide].description}
-                      </p>
-
-                      {/* CTA Buttons */}
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        {(() => {
-                          const PrimaryIcon = heroSlides[currentSlide].primaryCta.icon;
-                          const SecondaryIcon = heroSlides[currentSlide].secondaryCta.icon;
-                          return (
-                            <>
-                              <Link
-                                href={heroSlides[currentSlide].primaryCta.href}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 transition-all cursor-pointer group"
-                              >
-                                <PrimaryIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                <span>{heroSlides[currentSlide].primaryCta.label}</span>
-                              </Link>
-
-                              <a
-                                href={heroSlides[currentSlide].secondaryCta.href}
-                                className="inline-flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 text-white text-xs sm:text-sm font-medium transition-all cursor-pointer"
-                              >
-                                <SecondaryIcon className="w-4 h-4 text-blue-300" />
-                                <span>{heroSlides[currentSlide].secondaryCta.label}</span>
-                              </a>
-                            </>
-                          );
-                        })()}
-                      </div>
                     </div>
-
-                    {/* Right Column: Featured Floating Card (Desktop & Tablet) */}
-                    <div className="hidden lg:flex lg:col-span-4 justify-end">
-                      <div className="p-5 rounded-2xl bg-white/10 dark:bg-zinc-900/60 backdrop-blur-xl border border-white/15 shadow-2xl space-y-4 max-w-xs w-full">
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-white p-1.5 flex items-center justify-center shrink-0 shadow-xs">
-                            {komisariat.logo ? (
-                              <img
-                                src={komisariat.logo}
-                                alt={komisariat.name}
-                                className="w-full h-full object-contain"
-                              />
-                            ) : (
-                              <div className="w-full h-full rounded bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
-                                {komisariat.logoInitial || "PK"}
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-white truncate">
-                              {komisariat.name}
-                            </h4>
-                            <p className="text-[10px] text-zinc-300 truncate">
-                              {campusName}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-black/30 border border-white/10 space-y-1">
-                          <span className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider block">
-                            {heroSlides[currentSlide].metric.label}
-                          </span>
-                          <span className="text-2xl font-extrabold text-white font-mono block">
-                            {heroSlides[currentSlide].metric.value}
-                          </span>
-                          <span className="text-[10px] text-zinc-400 block">
-                            {heroSlides[currentSlide].metric.sub}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-[10px] text-zinc-300">
-                          <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                          <span>Terdaftar Resmi PC PMII Grobogan</span>
-                        </div>
-                      </div>
+                    <div className="px-3.5 py-2.5 flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                      <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span className="truncate" suppressHydrationWarning>{heroHighlight.footer}</span>
                     </div>
-                  </motion.div>
+                  </Link>
+                </Floaty>
                 )}
-              </AnimatePresence>
-            </div>
+              </div>
 
-            {/* Bottom Controls: Navigation Arrows & Indicator Pills */}
-            <div className="relative z-10 px-5 sm:px-8 md:px-12 pb-6 sm:pb-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/10 pt-4">
-              {/* Slide Indicator Pills */}
-              <div className="flex items-center gap-2">
-                {heroSlides.map((slide, idx) => (
-                  <button
-                    key={slide.id}
-                    onClick={() => setCurrentSlide(idx)}
-                    className={`transition-all duration-300 rounded-full h-2 ${
-                      currentSlide === idx
-                        ? "w-8 sm:w-10 bg-gradient-to-r from-blue-500 to-indigo-500"
-                        : "w-2 sm:w-2.5 bg-white/30 hover:bg-white/60"
-                    }`}
-                    aria-label={`Buka slide ${idx + 1}`}
-                  />
+              <p className="mt-6 sm:mt-8 text-sm sm:text-base md:text-lg text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto leading-relaxed">
+                Wadah pembinaan mahasiswa Islam berlandaskan Ahlussunnah wal Jama&apos;ah, mengasah intelektualitas
+                kritis dan kepemimpinan transformatif di lingkungan {campusName}.
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <a
+                  href="#struktur"
+                  className="inline-flex items-center h-11 px-6 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm font-semibold text-zinc-800 dark:text-zinc-100 shadow-xs hover:shadow-md transition-all"
+                >
+                  Lihat Struktur BPH
+                </a>
+              </div>
+
+              {/* Compact stats for tablet & mobile (floating cards hidden) */}
+              <div className="lg:hidden mt-9 flex flex-wrap items-center justify-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  {cadresCount} Kader
+                </span>
+                {heroRayonCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    {heroRayonCount} Rayon
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  {events.length} Agenda
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Rayon strip (real data, replaces partner-logo row) */}
+        {heroRayonCount > 0 && (
+          <section aria-label="Rayon di bawah naungan komisariat" className="border-y border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex items-stretch overflow-x-auto divide-x divide-zinc-200/80 dark:divide-zinc-800 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {(komisariat.rayons || []).slice(0, 6).map((r, i) => (
+                  <a
+                    key={i}
+                    href="#struktur"
+                    className="flex-1 min-w-[190px] flex items-center justify-center gap-2.5 px-5 py-6 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/60 flex items-center justify-center font-bold text-xs shrink-0">
+                      {i + 1}
+                    </div>
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 truncate max-w-[140px]">
+                      {r.name}
+                    </span>
+                  </a>
                 ))}
               </div>
+            </div>
+          </section>
+        )}
 
-              {/* Prev / Next Buttons */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={prevSlide}
-                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 flex items-center justify-center text-white transition-all cursor-pointer"
-                  aria-label="Slide sebelumnya"
+        {/* 3. KEY METRICS STRIP */}
+        <section aria-label="Ringkasan Komisariat" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {[
+              {
+                label: "Sahabat / Sahabati",
+                value: cadresCount,
+                sub: "Kader terdata",
+                icon: Users,
+                tone: "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400",
+              },
+              {
+                label: "Rayon / Fakultas",
+                value: (komisariat.rayons || []).length,
+                sub: "Basis kaderisasi",
+                icon: Building2,
+                tone: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400",
+              },
+              {
+                label: "Agenda Kaderisasi",
+                value: events.length,
+                sub: "Kegiatan terjadwal",
+                icon: Calendar,
+                tone: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400",
+              },
+              {
+                label: "Masa Khidmat",
+                value: bphData?.period || komisariat.structure?.period || "2026 - 2027",
+                sub: "Periode kepengurusan",
+                icon: Award,
+                tone: "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400",
+              },
+            ].map((stat) => {
+              const StatIcon = stat.icon;
+              return (
+                <div
+                  key={stat.label}
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-2xs flex items-center justify-between gap-3"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={nextSlide}
-                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 flex items-center justify-center text-white transition-all cursor-pointer"
-                  aria-label="Slide berikutnya"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{stat.label}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-50 font-mono tracking-tight mt-0.5 truncate">
+                      {stat.value}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{stat.sub}</p>
+                  </div>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${stat.tone}`}>
+                    <StatIcon className="w-5 h-5" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      </section>
-
-      {/* 3. STATS STRIP */}
-      <section className="border-y border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 py-6 sm:py-8">
-        <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div className="space-y-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-blue-600 dark:text-blue-400 font-mono">
-                {cadresCount > 0 ? cadresCount : "Aktif"}
-              </span>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Sahabat / Sahabati</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                {(komisariat.rayons || []).length > 0 ? (komisariat.rayons || []).length : "Terpadu"}
-              </span>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Rayon / Fakultas</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">
-                {events.length > 0 ? events.length : "Rutin"}
-              </span>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Agenda Kaderisasi</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono">
-                {bphData?.period || komisariat.structure?.period || "2026 - 2027"}
-              </span>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Masa Khidmat</p>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
       {/* 4. SUSUNAN BPH (BADAN PENGURUS HARIAN) & BAGAN STRUKTUR */}
-      <section id="struktur" className="py-16 md:py-24 container mx-auto px-4 sm:px-6 max-w-5xl scroll-mt-20">
+      <section id="struktur" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="text-center space-y-2.5 mb-8 sm:mb-12">
-          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-1 px-3 tracking-wider inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
             <GitFork className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             Bagan Struktur Organisasi
-          </Badge>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
             Badan Pengurus Harian & Hierarki
           </h2>
           <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
@@ -1711,14 +1800,14 @@ export function KomisariatLandingContent({ slug }: Props) {
       </section>
 
       {/* 5. AGENDA KADERISASI & EVENT TERBUKA */}
-      <section id="kaderisasi" className="py-16 md:py-20 bg-zinc-100/60 dark:bg-zinc-900/40 border-y border-zinc-200 dark:border-zinc-800 scroll-mt-20">
-        <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
+      <section id="kaderisasi" className="py-16 sm:py-24 bg-white dark:bg-zinc-900/40 border-y border-zinc-200/80 dark:border-zinc-800/80 scroll-mt-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-2 mb-10 sm:mb-12">
-            <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60 text-[10px] font-semibold uppercase py-1 px-3 tracking-wider inline-flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
+              <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               Agenda & Kaderisasi
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               Agenda Kegiatan Terbuka
             </h2>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
@@ -1843,13 +1932,6 @@ export function KomisariatLandingContent({ slug }: Props) {
                 Agenda Masa Penerimaan Anggota Baru (MAPABA) dan pelatihan terbuka di {campusName} akan segera diperbarui di sini.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-                <Link
-                  href={registerUrl}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Daftar MAPABA / Anggota Baru</span>
-                </Link>
                 <a
                   href="#kontak"
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium transition-colors"
@@ -1864,14 +1946,14 @@ export function KomisariatLandingContent({ slug }: Props) {
       </section>
 
       {/* 6. GALERI DOKUMENTASI KEGIATAN KOMISARIAT */}
-      <section id="galeri" className="py-16 md:py-20 container mx-auto px-4 sm:px-6 max-w-5xl scroll-mt-20">
+      <section id="galeri" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 sm:mb-10 gap-4">
           <div className="space-y-2">
-            <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60 text-[10px] font-semibold uppercase py-1 px-3 tracking-wider inline-flex items-center gap-1.5">
-              <Camera className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
+              <Camera className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               Dokumentasi & Galeri
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               Galeri Jejak Pergerakan
             </h2>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl">
@@ -1888,7 +1970,7 @@ export function KomisariatLandingContent({ slug }: Props) {
                   onClick={() => setSelectedGalleryCategory(cat)}
                   className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                     selectedGalleryCategory === cat
-                      ? "bg-emerald-600 text-white shadow-xs"
+                      ? "bg-blue-600 text-white shadow-2xs"
                       : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                   }`}
                 >
@@ -1973,15 +2055,15 @@ export function KomisariatLandingContent({ slug }: Props) {
       </section>
 
       {/* 7. ARTIKEL & WARTA KADER KOMISARIAT */}
-      <section id="artikel" className="py-16 md:py-20 bg-zinc-100/60 dark:bg-zinc-900/40 border-t border-zinc-200 dark:border-zinc-800 scroll-mt-20">
-        <div className="container mx-auto px-4 sm:px-6 max-w-5xl">
+      <section id="artikel" className="py-16 sm:py-24 bg-white dark:bg-zinc-900/40 border-t border-zinc-200/80 dark:border-zinc-800/80 scroll-mt-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 sm:mb-10 gap-4">
           <div className="space-y-2">
-            <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/60 text-[10px] font-semibold uppercase py-1 px-3 tracking-wider inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
               <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               Warta & Opini Kader
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               Artikel & Pemikiran Kader
             </h2>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl">
@@ -2069,25 +2151,78 @@ export function KomisariatLandingContent({ slug }: Props) {
         </div>
       </section>
 
+      </main>
+
       {/* 8. FOOTER */}
-      <footer className="w-full border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-8">
-        <div className="container mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
-          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
-            <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-              {komisariat.name}
-            </span>
-            <span className="hidden sm:inline text-zinc-400">•</span>
-            <span>Bernaung di bawah Pengurus Cabang PMII Grobogan</span>
+      <footer className="w-full border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-zinc-100 dark:border-zinc-800/80">
+            <div className="md:col-span-5 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-1 flex items-center justify-center overflow-hidden">
+                  {komisariat.logo && !logoBroken ? (
+                    <img
+                      src={komisariat.logo}
+                      alt={komisariat.name}
+                      onError={() => setLogoBroken(true)}
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="w-full h-full rounded bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center">
+                      {komisariat.logoInitial || "PK"}
+                    </div>
+                  )}
+                </div>
+                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{komisariat.name}</span>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm leading-relaxed">
+                Pangkalan resmi Pergerakan Mahasiswa Islam Indonesia di lingkungan {campusName}, bernaung di bawah Pengurus Cabang PMII Grobogan.
+              </p>
+              <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                Dzikir, Fikir, dan Amal Shaleh
+              </p>
+            </div>
+
+            <div className="md:col-span-3 space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+                Navigasi Halaman
+              </h4>
+              <ul className="space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+                {KOM_NAV_ITEMS.map((item) => (
+                  <li key={item.id}>
+                    <a href={item.href} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                      {item.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="md:col-span-4 space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+                Layanan & Akses
+              </h4>
+              <ul className="space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <li>
+                  <Link href="/login" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                    Portal Pengurus & Anggota
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                    Portal PC PMII Grobogan
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400">
-            <Link href="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              Portal Cabang
-            </Link>
-            <span>•</span>
-            <Link href={registerUrl} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              Daftar MAPABA
-            </Link>
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>© {new Date().getFullYear()} {komisariat.name}. Hak cipta dilindungi.</span>
+            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Terdaftar Resmi PC PMII Grobogan</span>
+            </div>
           </div>
         </div>
       </footer>

@@ -18,25 +18,31 @@ export async function GET(request: NextRequest) {
     const queryLower = query.toLowerCase();
     const cadres = await db.getCadres();
 
-    const match = cadres.find(
-      (c) =>
-        (c.name && c.name.toLowerCase().includes(queryLower)) ||
-        (c.id && c.id.toLowerCase() === queryLower)
+    const matches = cadres.filter(
+      (c: any) =>
+        (c.name && String(c.name).toLowerCase().includes(queryLower)) ||
+        (c.nim && String(c.nim).toLowerCase().includes(queryLower)) ||
+        (c.nik && String(c.nik).toLowerCase() === queryLower) ||
+        (c.id && String(c.id).toLowerCase() === queryLower)
     );
 
-    if (!match) {
-      return NextResponse.json({ found: false });
+    if (matches.length === 0) {
+      return NextResponse.json({ found: false, results: [] });
     }
+
+    const mappedResults = matches.slice(0, 5).map((match: any) => ({
+      name: match.name,
+      level: match.level || "Anggota",
+      commissariat: match.commissariat || "PC PMII Grobogan",
+      status: match.status || "Aktif",
+    }));
 
     // Hanya kembalikan data publik yang aman untuk verifikasi
     return NextResponse.json({
       found: true,
-      cadre: {
-        name: match.name,
-        level: match.level || "Anggota",
-        commissariat: match.commissariat || "PC PMII Grobogan",
-        status: match.status || "Aktif",
-      },
+      cadre: mappedResults[0],
+      results: mappedResults,
+      totalMatches: matches.length,
     });
   } catch (error) {
     console.error("[API Verify Cadre Error]:", error);

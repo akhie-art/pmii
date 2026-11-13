@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { db, UserAccount, UserRole } from "@/lib/db";
 import { DEFAULT_USERS } from "@/lib/services/defaults";
@@ -11,13 +12,9 @@ import {
   Lock,
   ArrowRight,
   AlertCircle,
-  CheckCircle,
+  CheckCircle2,
   Eye,
-  EyeOff,
-  Sun,
-  Moon,
-  ArrowLeft,
-  Shield
+  EyeOff
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -537,197 +534,201 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col justify-between p-4 sm:p-6 font-sans transition-colors duration-200">
-      
-      {/* TOP BAR */}
-      <div className="w-full max-w-md mx-auto flex items-center justify-between py-2">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kembali</span>
-        </Link>
-
-        {/* Theme Toggle Button */}
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          title={darkMode ? "Mode Terang" : "Mode Gelap"}
-          className="w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
-          aria-label="Toggle theme"
-        >
-          {darkMode ? (
-            <Sun className="w-4 h-4 text-amber-400" />
-          ) : (
-            <Moon className="w-4 h-4 text-blue-600" />
-          )}
-        </button>
+    <div className="relative min-h-screen bg-zinc-50/50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col justify-center items-center font-sans antialiased selection:bg-blue-600 selection:text-white overflow-hidden transition-colors duration-200 p-4 sm:p-6">
+      {/* Soft gradient ambient glow + faded grid background (exact match with Landing page design system) */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div className="absolute -top-32 -right-24 w-[560px] h-[560px] rounded-full bg-violet-400/20 dark:bg-violet-600/10 blur-3xl" />
+        <div className="absolute top-28 -left-32 w-[480px] h-[480px] rounded-full bg-amber-200/40 dark:bg-amber-500/8 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[620px] h-[400px] rounded-full bg-blue-300/20 dark:bg-blue-600/10 blur-3xl" />
+        <div
+          className="absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(120,120,170,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,120,170,0.12) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
+          }}
+        />
       </div>
 
       {/* LOGIN CARD WRAPPER */}
-      <div className="w-full max-w-md mx-auto my-auto space-y-5">
-        {/* MAIN CARD */}
-        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 sm:p-7 shadow-none transition-colors duration-200">
+      <main className="relative z-10 w-full max-w-md mx-auto my-auto">
+        <Card className="relative overflow-hidden rounded-3xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-2xl border border-zinc-200/80 dark:border-zinc-800/90 shadow-2xl shadow-zinc-950/5 p-6 sm:p-8 transition-colors duration-200">
           
-          <div className="space-y-5">
-            <div className="text-left space-y-1">
-              <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Masuk ke Portal</h1>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Gunakan akun Google, nama lengkap, atau email Anda</p>
+          {/* Subtle top card glow line */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-amber-400 to-blue-600 opacity-80" />
+
+          <div className="space-y-6">
+            
+            {/* Header: Logo & Title */}
+            <div className="text-center space-y-3">
+              <Link
+                href="/"
+                title="Kembali ke Beranda"
+                className="inline-flex p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/70 dark:border-zinc-700/60 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors"
+              >
+                <Image
+                  src="/image/logopmii.png"
+                  alt="Logo PMII"
+                  width={44}
+                  height={44}
+                  className="w-11 h-11 object-contain"
+                  priority
+                />
+              </Link>
+
+              <div>
+                <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-50">
+                  Masuk ke Portal
+                </h1>
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                  Akses layanan kaderisasi & tata kelola terpadu
+                </p>
+              </div>
             </div>
 
+            {/* Redirect Notice */}
             {redirectUrl && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs rounded-xl flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs rounded-2xl flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                 <div className="leading-relaxed font-medium">
-                  Silakan masuk ke akun Anda terlebih dahulu untuk mengakses kegiatan ini. Belum punya akun? Silakan daftar terlebih dahulu.
+                  Silakan masuk ke akun Anda terlebih dahulu untuk melanjutkan akses ke halaman tujuan.
                 </div>
               </div>
             )}
 
-            {/* GOOGLE SIGN IN BUTTON */}
+            {/* Google OAuth Button */}
             <Button
               type="button"
               variant="outline"
               disabled={loading || success}
               onClick={handleGoogleLogin}
-              className="w-full h-10 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all duration-150 cursor-pointer bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 shadow-xs"
+              className="w-full h-11 rounded-2xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all duration-150 cursor-pointer bg-white dark:bg-zinc-900/90 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-700/80 text-zinc-800 dark:text-zinc-200 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-600"
             >
               <GoogleIcon className="w-4 h-4" />
-              <span>Masuk dengan Google</span>
+              <span>Masuk dengan Akun Google</span>
             </Button>
 
-            {/* OR DIVIDER */}
-            <div className="relative my-4">
+            {/* Or Divider */}
+            <div className="relative my-2">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-200 dark:border-zinc-800" />
+                <div className="w-full border-t border-zinc-200/80 dark:border-zinc-800" />
               </div>
               <div className="relative flex justify-center text-[11px] uppercase">
-                <span className="bg-white dark:bg-zinc-900 px-2 text-zinc-400 dark:text-zinc-500 font-semibold">
-                  Atau masuk dengan nama / email
+                <span className="bg-white/95 dark:bg-zinc-900/95 px-3 text-zinc-400 dark:text-zinc-500 font-semibold tracking-wider">
+                  atau kredensial kader
                 </span>
               </div>
             </div>
 
-            {/* ERROR ALERT */}
+            {/* Error Alert */}
             <AnimatePresence mode="wait">
               {error && (
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-400 text-xs rounded-xl flex items-start gap-2.5"
+                  className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-400 text-xs rounded-2xl flex items-start gap-2.5"
                 >
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <div>{error}</div>
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                  <div className="font-medium leading-relaxed">{error}</div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* FORM */}
+            {/* Form */}
             <form onSubmit={handleLogin} className="space-y-4">
-              
-              {/* NAMA / EMAIL FIELD */}
+              {/* Identity Field */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  Nama Lengkap atau Email
+                  Identitas Kader / Email
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+                  <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 pointer-events-none" />
                   <Input
                     type="text"
                     required
                     disabled={loading || success}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Contoh: Ahmad Fauzi atau nama@pmii.id"
-                    className="text-sm pl-9 bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-xl h-10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-0 transition-colors"
+                    placeholder="Email, Nama Lengkap, NIK, atau NTA"
+                    className="text-sm pl-10 h-11 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                   />
                 </div>
               </div>
 
-              {/* PASSWORD FIELD */}
+              {/* Password Field */}
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                    Kata Sandi (Password)
+                    Kata Sandi
                   </label>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    Default: NIK / Tanggal Lahir
+                  </span>
                 </div>
                 <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 pointer-events-none" />
                   <Input
                     type={showPassword ? "text" : "password"}
                     required
                     disabled={loading || success}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="text-sm pl-9 pr-9 bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-xl h-10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-0 transition-colors"
+                    placeholder="Masukkan kata sandi..."
+                    className="text-sm pl-10 pr-10 h-11 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     tabIndex={-1}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                    aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* SUBMIT BUTTON */}
+              {/* Submit Button */}
               <Button
                 type="submit"
                 disabled={loading || success}
-                className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-zinc-950 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all duration-150 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed border-none mt-2"
+                className="w-full h-11 rounded-full bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed mt-2"
               >
                 {loading ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Memproses...</span>
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span>{loadingMessage || "Memproses..."}</span>
                   </div>
                 ) : success ? (
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-zinc-950" />
-                    <span>Masuk Berhasil</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-600" />
+                    <span>Masuk Berhasil! Mengalihkan...</span>
                   </div>
                 ) : (
                   <>
-                    <span>Masuk ke Akun</span>
+                    <span>Masuk ke Akun Portal</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </Button>
-
             </form>
 
-            {/* REGISTER LINK */}
-            <div className="text-center pt-4 border-t border-zinc-100 dark:border-zinc-800/80">
-              <span className="text-xs text-zinc-500">Kader baru belum terdata?</span>{" "}
+            {/* Register Link */}
+            <div className="text-center pt-3 border-t border-zinc-100 dark:border-zinc-800">
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Belum terdaftar sebagai kader?</span>{" "}
               <Link 
                 href={redirectUrl ? `/register?redirect=${encodeURIComponent(redirectUrl)}` : "/register"} 
-                className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
               >
-                Registrasi Anggota
+                <span>Daftar Kader Sekarang</span>
+                <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
 
           </div>
-
         </Card>
-
-        {/* BOTTOM HINT */}
-        <div className="text-center text-[11px] text-zinc-400 dark:text-zinc-500 flex items-center justify-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" />
-          <span>Sistem Informasi Terenkripsi Komisariat</span>
-        </div>
-
-      </div>
-
-      {/* FOOTER */}
-      <div className="w-full text-center py-2 text-[11px] text-zinc-400 dark:text-zinc-600">
-        © 2026 PK PMII Ki Ageng Getas Pendawa
-      </div>
-
+      </main>
     </div>
   );
 }

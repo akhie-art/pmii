@@ -7,14 +7,14 @@ export async function GET() {
   try {
     const cadres = await db.getCadres();
     return NextResponse.json({
-      cadresCount: cadres.length > 0 ? cadres.length : 1250,
+      cadresCount: Array.isArray(cadres) ? cadres.length : 0,
       stagesCount: 3,
       digitalArchivePercent: 100,
     });
   } catch (error) {
     console.error("[API Public Stats Error]:", error);
     return NextResponse.json({
-      cadresCount: 1250,
+      cadresCount: 0,
       stagesCount: 3,
       digitalArchivePercent: 100,
     });
