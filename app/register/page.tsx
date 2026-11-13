@@ -1164,44 +1164,29 @@ export default function RegisterPage() {
   const isFromKomisariat = !!(previousKomisariatUrl || derivedKomisariatUrl);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col justify-between p-4 sm:p-6 font-sans transition-colors duration-200">
-      
-      {/* TOP BAR */}
-      <div className="w-full max-w-2xl mx-auto flex items-center justify-between py-2">
-        <Link
-          href={backUrl}
-          onClick={(e) => {
-            if (typeof window !== "undefined" && window.history.length > 1 && document.referrer && document.referrer.includes("/komisariat/")) {
-              e.preventDefault();
-              router.back();
-            }
+    <div className="relative min-h-screen bg-zinc-50/50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col justify-between font-sans antialiased selection:bg-blue-600 selection:text-white overflow-hidden transition-colors duration-200 p-4 sm:p-6">
+      {/* Ambient glow + faded grid (sama dengan halaman Login) */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div className="absolute -top-32 -right-24 w-[560px] h-[560px] rounded-full bg-violet-400/20 dark:bg-violet-600/10 blur-3xl" />
+        <div className="absolute top-28 -left-32 w-[480px] h-[480px] rounded-full bg-amber-200/40 dark:bg-amber-500/10 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[620px] h-[400px] rounded-full bg-blue-300/20 dark:bg-blue-600/10 blur-3xl" />
+        <div
+          className="absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(120,120,170,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,120,170,0.12) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
           }}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>{isFromKomisariat ? "Kembali ke Halaman Sebelumnya" : "Kembali ke Login"}</span>
-        </Link>
-
-        {/* Theme Toggle Button */}
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          title={darkMode ? "Mode Terang" : "Mode Gelap"}
-          className="w-8 h-8 rounded-xl flex items-center justify-center border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
-          aria-label="Toggle theme"
-        >
-          {darkMode ? (
-            <Sun className="w-4 h-4 text-amber-400" />
-          ) : (
-            <Moon className="w-4 h-4 text-blue-600" />
-          )}
-        </button>
+        />
       </div>
 
-      <div className="w-full max-w-2xl mx-auto my-auto space-y-4 sm:space-y-5">
+      <div className="relative z-10 w-full max-w-2xl mx-auto my-auto space-y-4 sm:space-y-5">
         {/* REGISTRATION CARD */}
-        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-7 shadow-sm transition-colors duration-300">
-          
-          <div className="space-y-5">
+        <Card className="relative overflow-hidden rounded-3xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-2xl border border-zinc-200/80 dark:border-zinc-800/90 shadow-2xl shadow-zinc-950/5 p-5 sm:p-8 transition-colors duration-200">
+          {/* Garis aksen atas (sama dengan Login) */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-amber-400 to-blue-600 opacity-80" />
+
+          <div className="space-y-6">
             
             {/* JIKA BARU SAJA BERHASIL MENDAFTAR: TAMPILKAN STATUS REGISTRASI BERHASIL */}
             {registrationSuccessData ? (
@@ -1342,9 +1327,11 @@ export default function RegisterPage() {
               <>
             {/* 1. HEADER & EVENT CONTEXT */}
             {eventDetails ? (
-              <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 space-y-2.5">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4 space-y-2.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-900/60 text-[11px] font-bold text-blue-700 dark:text-blue-300 tracking-wide">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     Pendaftaran Kegiatan
                   </span>
                   <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200/70 dark:border-blue-900/60 text-[10px] font-bold uppercase py-0.5 px-2">
@@ -1353,7 +1340,7 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                  <h1 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  <h1 className="text-lg sm:text-xl font-black text-zinc-900 dark:text-zinc-50 tracking-tight">
                     {eventDetails.name}
                   </h1>
                   {eventDetails.description && (
@@ -1404,16 +1391,19 @@ export default function RegisterPage() {
                     </div>
                   )}
                 </div>
+                </div>
               </div>
             ) : (
-              <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3.5 space-y-1">
-                <h1 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              <div className="text-center space-y-3">
+              <div>
+                <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-50">
                   Daftar Akun Kader
                 </h1>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                   Lengkapi data keanggotaan Anda secara lengkap
                 </p>
               </div>
+            </div>
             )}
 
             {/* JIKA SUDAH TERDAFTAR: TAMPILKAN STATUS PENDAFTARAN & KARTU PESERTA */}
@@ -1558,11 +1548,11 @@ export default function RegisterPage() {
               <>
             {/* 3. MINIMALIST STEPPER (JIKA MULTI-STEP) */}
             {eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 && (
-              <div className="grid grid-cols-2 gap-1 bg-zinc-100 dark:bg-zinc-800/50 p-1 rounded-xl text-xs select-none">
+              <div className="grid grid-cols-2 gap-1 bg-zinc-100/80 dark:bg-zinc-800/50 p-1 rounded-2xl text-xs select-none">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     step === 1
                       ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs font-bold"
                       : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -1581,7 +1571,7 @@ export default function RegisterPage() {
                   onClick={() => {
                     if (step === 1) handleNextStep();
                   }}
-                  className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     step === 2
                       ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs font-bold"
                       : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -1636,7 +1626,7 @@ export default function RegisterPage() {
                     variant="outline"
                     disabled={loading}
                     onClick={handleGoogleRegister}
-                    className="w-full h-11 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all duration-150 cursor-pointer bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 shadow-xs"
+                    className="w-full h-11 rounded-2xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all duration-150 cursor-pointer bg-white dark:bg-zinc-900/90 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-700/80 text-zinc-800 dark:text-zinc-200 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-600"
                   >
                     <GoogleIcon className="w-4 h-4" />
                     <span>Daftar Cepat dengan Akun Google</span>
@@ -1647,7 +1637,7 @@ export default function RegisterPage() {
                       <div className="w-full border-t border-zinc-100 dark:border-zinc-800" />
                     </div>
                     <div className="relative flex justify-center text-[11px] uppercase">
-                      <span className="bg-white dark:bg-zinc-900 px-2 text-zinc-400 dark:text-zinc-500 font-semibold">
+                      <span className="bg-white/95 dark:bg-zinc-900/95 px-3 text-zinc-400 dark:text-zinc-500 font-semibold tracking-wider">
                         Atau lengkapi formulir manual
                       </span>
                     </div>
@@ -1663,7 +1653,7 @@ export default function RegisterPage() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 dark:text-rose-400 text-xs font-medium rounded-xl flex items-start gap-3"
+                  className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-400 text-xs font-medium rounded-2xl flex items-start gap-2.5"
                 >
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-500" />
                   <div>{error}</div>
@@ -1705,7 +1695,7 @@ export default function RegisterPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Alamat Email</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Alamat Email</label>
                         {isVerifyingEmail ? (
                           <span className="text-[10px] font-medium text-zinc-400 flex items-center gap-1">
                             <div className="w-2.5 h-2.5 border border-zinc-400 border-t-transparent rounded-full animate-spin" />
@@ -1737,13 +1727,13 @@ export default function RegisterPage() {
                         }}
                         onBlur={() => checkExistingAccount(email, false)}
                         placeholder="sahabat@domain.com"
-                        className="text-sm px-3.5 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors disabled:opacity-80 disabled:cursor-not-allowed"
+                        className="text-sm px-3.5 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl h-11 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all disabled:opacity-80 disabled:cursor-not-allowed"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Nama Lengkap</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Nama Lengkap</label>
                         {isExistingPasswordVerified && (
                           <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             ✓ Profil Dihubungkan
@@ -1756,28 +1746,28 @@ export default function RegisterPage() {
                         value={name}
                         onChange={(e) => handleNameChange(e.target.value)}
                         placeholder="Ahmad Fudholi"
-                        className="text-sm px-3.5 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                        className="text-sm px-3.5 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl h-11 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Nomor WhatsApp</label>
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Nomor WhatsApp</label>
                       <Input
                         required
                         disabled={loading}
                         value={phone}
                         onChange={(e) => handlePhoneChange(e.target.value)}
                         placeholder="081234567890"
-                        className="text-sm px-3.5 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                        className="text-sm px-3.5 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl h-11 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                       />
                     </div>
 
                     {!isGoogleAuthUser && isExistingAccount ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Kata Sandi Akun</label>
+                          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Kata Sandi Akun</label>
                           <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Verifikasi Anggota</span>
                         </div>
                         <div className="relative">
@@ -1788,7 +1778,7 @@ export default function RegisterPage() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Masukkan kata sandi akun Anda"
-                            className="text-sm px-3.5 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                            className="text-sm px-3.5 pr-10 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl h-11 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                           />
                           <button
                             type="button"
@@ -1805,7 +1795,7 @@ export default function RegisterPage() {
                   {!isGoogleAuthUser && !isExistingAccount ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Kata Sandi Baru</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Kata Sandi Baru</label>
                         <div className="relative">
                           <Input
                             type={showPassword ? "text" : "password"}
@@ -1814,7 +1804,7 @@ export default function RegisterPage() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Minimal 6 karakter"
-                            className="text-sm px-3.5 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                            className="text-sm px-3.5 pr-10 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl h-11 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                           />
                           <button
                             type="button"
@@ -1827,7 +1817,7 @@ export default function RegisterPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400 tracking-wider">Konfirmasi Sandi</label>
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Konfirmasi Sandi</label>
                         <div className="relative">
                           <Input
                             type={showConfirmPassword ? "text" : "password"}
@@ -1836,7 +1826,7 @@ export default function RegisterPage() {
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             placeholder="Ulangi kata sandi"
-                            className="text-sm px-3.5 pr-10 bg-zinc-50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800/80 rounded-xl h-11 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                            className="text-sm px-3.5 pr-10 bg-zinc-50/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-2xl h-11 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-600/10 transition-all"
                           />
                           <button
                             type="button"
@@ -1855,21 +1845,39 @@ export default function RegisterPage() {
                     </div>
                   ) : null}
 
-                  <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-row items-stretch gap-2.5 sm:gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={loading}
+                      onClick={() => router.push(backUrl)}
+                      className="shrink-0 w-24 sm:w-32 h-11 rounded-full border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-semibold text-xs sm:text-sm shadow-xs cursor-pointer transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      Batal
+                    </Button>
                     <Button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm h-11 sm:h-12 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
+                      className="flex-1 min-w-0 h-11 px-3 sm:px-4 rounded-full bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                       {loading ? (
                         <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                           <span>Memproses...</span>
                         </div>
                       ) : (
                         <>
-                          <span>{eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 ? "Lanjut ke Formulir & Persyaratan" : "Selesaikan Pendaftaran"}</span>
-                          <ArrowRight className="w-4 h-4" />
+                          {eventDetails && eventDetails.formFields && eventDetails.formFields.length > 0 ? (
+                            <span className="whitespace-nowrap">
+                              Lanjut<span className="hidden sm:inline"> ke Formulir &amp; Persyaratan</span>
+                            </span>
+                          ) : (
+                            <span className="whitespace-nowrap">
+                              <span className="sm:hidden">Daftar</span>
+                              <span className="hidden sm:inline">Selesaikan Pendaftaran</span>
+                            </span>
+                          )}
+                          <ArrowRight className="w-4 h-4 shrink-0" />
                         </>
                       )}
                     </Button>
