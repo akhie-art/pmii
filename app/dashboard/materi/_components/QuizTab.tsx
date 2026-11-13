@@ -212,7 +212,7 @@ export const QuizTab: React.FC<QuizTabProps> = ({
 
                   <div className="flex items-center gap-1.5">
                     <Link
-                      href="/admin/rekap-nilai"
+                      href="/dashboard/rekap-nilai"
                       className="h-7 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium text-xs flex items-center gap-1 transition-colors cursor-pointer"
                       title="Lihat Rekap Nilai Peserta"
                     >
