@@ -689,7 +689,7 @@ export async function saveTableData<T extends { id: string | number }>(
               copy.tenant_id = CABANG_TENANT_ID;
             } else {
               const commName = copy.commissariat || copy.komisariat || copy.perguruanTinggi || copy.campus;
-              let resolvedId = (commName ? getTenantIdByName(commName) : null) || copy.tenant_id || copy.komisariat_id;
+              let resolvedId = (copy.tenant_id && isValidUUID(copy.tenant_id) ? copy.tenant_id : null) || (commName ? getTenantIdByName(commName) : null) || copy.tenant_id || copy.komisariat_id;
               if (resolvedId === "33333333-3333-3333-3333-333333333333") resolvedId = "2342112a-7413-4151-9998-3a13e833902f";
               if (resolvedId === "44444444-4444-4444-4444-444444444444") resolvedId = "2eae53a7-28ff-40b5-95f1-69f85d179d8e";
               if (resolvedId === "c0000000-0000-0000-0000-000000000001") resolvedId = CABANG_TENANT_ID;

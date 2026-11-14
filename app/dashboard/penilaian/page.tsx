@@ -233,14 +233,10 @@ export default function PenilaianPesertaPage() {
         }
       }
 
-      const isCabangEvent = currentActivity && isCabangRecord(currentActivity);
-      const matchTenant = isCabangEvent
-        ? true
-        : isRecordInTenant(currentUser, item, activeTenant);
-
-      return matchTenant && matchActivity && matchSearch && matchStatus;
+      // Seluruh peserta yang terdaftar pada kegiatan yang dipilih (selectedActivityId) berhak dinilai
+      return matchActivity && matchSearch && matchStatus;
     });
-  }, [evaluations, selectedActivityId, searchQuery, statusFilter, selectedMateri, currentUser, activeTenant]);
+  }, [evaluations, selectedActivityId, searchQuery, statusFilter, selectedMateri]);
 
   // Open Score Modal for specific materi
   const handleOpenScoreModal = (evalItem: ParticipantEvaluation, materi: string) => {

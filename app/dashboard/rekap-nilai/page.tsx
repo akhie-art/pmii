@@ -171,16 +171,9 @@ export default function RekapNilaiPage() {
   // All evaluations for current activity sorted by score descending
   const currentActivityEvals = useMemo(() => {
     return evaluations
-      .filter((e) => {
-        const matchAct = e.activityId === selectedActivityId;
-        const isCabangEvent = currentActivity && isCabangRecord(currentActivity);
-        const matchTenant = isCabangEvent
-          ? true
-          : isRecordInTenant(currentUser, e, activeTenant);
-        return matchAct && matchTenant;
-      })
+      .filter((e) => e.activityId === selectedActivityId)
       .sort((a, b) => b.finalScore - a.finalScore);
-  }, [evaluations, selectedActivityId, currentUser, activeTenant]);
+  }, [evaluations, selectedActivityId]);
 
   // Top 3 Leaderboard
   const topThree = useMemo(() => {

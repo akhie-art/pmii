@@ -315,9 +315,19 @@ export function syncEvaluationsWithRegistrations(
   let hasChanges = false;
   const syncedList = [...(currentEvals || [])];
 
-  // 1. Lengkapi evaluasi yang sudah ada jika profilnya (avatar/commissariat/university/gender) masih kosong
+  // 1. Lengkapi evaluasi yang sudah ada jika profilnya (avatar/commissariat/university/gender/tenant_id) masih kosong
   for (let i = 0; i < syncedList.length; i++) {
     const item = syncedList[i];
+    const event = events.find((e) => e.id === item.activityId);
+    if (event?.tenant_id && (item as any).tenant_id !== event.tenant_id) {
+      (item as any).tenant_id = event.tenant_id;
+      hasChanges = true;
+    }
+    if ((event as any)?.komisariat_id && (item as any).komisariat_id !== (event as any).komisariat_id) {
+      (item as any).komisariat_id = (event as any).komisariat_id;
+      hasChanges = true;
+    }
+
     const matchedCadre = cadres.find(
       (c) =>
         (c.id && item.cadreId && c.id === item.cadreId) ||
@@ -408,6 +418,8 @@ export function syncEvaluationsWithRegistrations(
         avatar: matchedCadre?.avatar || reg.avatar || "",
         gender: resolvedGender,
         commissariat: resolvedComm,
+        tenant_id: event?.tenant_id || reg.tenant_id,
+        komisariat_id: (event as any)?.komisariat_id || reg.komisariat_id,
         university: resolvedUniv,
         level: event?.level || "MAPABA",
         sessionScores: {},
