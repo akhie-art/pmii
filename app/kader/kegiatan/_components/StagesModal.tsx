@@ -1912,20 +1912,25 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             return (
               <div
                 key={q.id}
-                className={`p-4 rounded-xl border transition-all space-y-3 ${
+                className={`p-4 sm:p-5 rounded-2xl border transition-all space-y-3.5 shadow-2xs ${
                   isQuizSubmitted
                     ? isUserAnswerCorrect
-                      ? "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10"
+                      ? "border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/30 dark:bg-emerald-950/20"
                       : hasUserAnswered
-                      ? "border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10"
+                      ? "border-rose-300 dark:border-rose-800/80 bg-rose-50/30 dark:bg-rose-950/20"
                       : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/40"
-                    : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                    : "border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex-1 leading-relaxed">
-                    <span className="text-zinc-400 mr-1.5">{qIdx + 1}.</span> {q.question}
-                  </span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-bold shrink-0 mt-0.5 border border-zinc-200/80 dark:border-zinc-700/80">
+                      {qIdx + 1}
+                    </span>
+                    <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-relaxed flex-1">
+                      {q.question}
+                    </h4>
+                  </div>
                   {isQuizSubmitted && (
                     hasUserAnswered ? (
                       isUserAnswerCorrect ? (
@@ -1941,32 +1946,32 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                   )}
                 </div>
 
-                {/* Options */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Options (Full-width 1 column layout for long answer readability) */}
+                <div className="grid grid-cols-1 gap-2.5">
                   {q.options.map((opt, optIdx) => {
                     const isSelected = selectedOpt === optIdx;
                     const isCorrectAnswer = q.correctAnswer === optIdx;
 
                     let optClass =
-                      "border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/60 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300";
+                      "border-zinc-200/90 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/60 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-850 hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer";
 
                     if (isQuizSubmitted) {
                       if (isSelected && isCorrectAnswer) {
                         optClass =
-                          "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-semibold ring-1 ring-emerald-500/40 cursor-default";
+                          "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 font-semibold ring-1 ring-emerald-500/40 cursor-default";
                       } else if (isSelected && !isCorrectAnswer) {
                         optClass =
-                          "border-rose-500 bg-rose-50 dark:bg-rose-950/50 text-rose-900 dark:text-rose-200 font-semibold ring-1 ring-rose-500/40 cursor-default";
+                          "border-rose-500 bg-rose-50 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 font-semibold ring-1 ring-rose-500/40 cursor-default";
                       } else if (!isSelected && isCorrectAnswer && hasUserAnswered) {
                         optClass =
-                          "border-emerald-300 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-400/30 cursor-default";
+                          "border-emerald-400 dark:border-emerald-700 bg-emerald-50/40 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-400/40 cursor-default";
                       } else {
                         optClass =
-                          "border-zinc-200 dark:border-zinc-800 opacity-60 text-zinc-400 dark:text-zinc-500 cursor-default";
+                          "border-zinc-200/80 dark:border-zinc-800 opacity-60 text-zinc-500 dark:text-zinc-400 cursor-default";
                       }
                     } else if (isSelected) {
                       optClass =
-                        "border-blue-600 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20 font-semibold";
+                        "border-blue-600 bg-blue-50/80 dark:bg-blue-950/40 text-blue-950 dark:text-blue-100 ring-2 ring-blue-500/25 font-semibold";
                     }
 
                     return (
@@ -1979,10 +1984,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                             setUserAnswers((prev) => ({ ...prev, [q.id]: optIdx }));
                           }
                         }}
-                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs text-left transition-all ${optClass}`}
+                        className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-xl border text-left transition-all ${optClass}`}
                       >
                         <span
-                          className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
                             isSelected && !isQuizSubmitted
                               ? "bg-blue-600 text-white"
                               : isQuizSubmitted && isSelected && isCorrectAnswer
@@ -1993,12 +1998,14 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                               ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
                               : isSelected && isQuizSubmitted
                               ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                              : "bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                              : "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                           }`}
                         >
                           {letterLabels[optIdx]}
                         </span>
-                        <span className="truncate flex-1">{opt}</span>
+                        <span className="flex-1 text-xs sm:text-[13px] leading-relaxed break-words whitespace-normal font-normal">
+                          {opt}
+                        </span>
                       </button>
                     );
                   })}
