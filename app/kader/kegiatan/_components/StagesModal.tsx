@@ -916,32 +916,80 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               const levelQuizzes: QuizQuestion[] = levelKurikulum?.quiz || [];
               const matchedKaderisasi = kaderisasi.find((k: any) => k.nama === event?.level || k.id === event?.level);
 
-              const getSessionResources = (sessionTitle: string) => {
-                const clean = sessionTitle.toLowerCase().replace(/^(sesi\s*\d+[:\-.]?|\d+[:\-.]?)\s*/i, "").trim();
-                const rawWords = clean.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
-                const words = rawWords.filter((w) => w.length >= 2);
+              // Helper pencocokan judul materi, silabus, dan kuis secara akurat tanpa false positive kata sambung
+              const STOP_WORDS = new Set([
+                "dan", "atau", "yang", "di", "ke", "dari", "untuk", "pada", "dengan", "tentang",
+                "dalam", "sebagai", "oleh", "antara", "sesi", "materi", "modul", "bab", "sub"
+              ]);
 
+              const normalizeText = (str: string): string => {
+                if (!str) return "";
+                return str
+                  .toLowerCase()
+                  .replace(/^(sesi\s*\d+[:\-.]?|\d+[:\-.]?)\s*/i, "")
+                  .replace(/&/g, " dan ")
+                  .replace(/[^a-z0-9\s]/g, " ")
+                  .replace(/\s+/g, " ")
+                  .trim();
+              };
+
+              const extractMeaningfulKeywords = (str: string): string[] => {
+                const norm = normalizeText(str);
+                return norm.split(/\s+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+              };
+
+              const isMatchResource = (titleA: string, titleB: string): boolean => {
+                const normA = normalizeText(titleA);
+                const normB = normalizeText(titleB);
+                if (!normA || !normB) return false;
+
+                // 1. Kesamaan persis setelah normalisasi
+                if (normA === normB) return true;
+
+                // 2. Substring penuh untuk judul yang cukup panjang (minimal 6 karakter)
+                if (normA.length >= 6 && normB.includes(normA)) return true;
+                if (normB.length >= 6 && normA.includes(normB)) return true;
+
+                // 3. Irisan kata kunci bermakna (menghindari false positive kata umum seperti 'dan')
+                const keysA = extractMeaningfulKeywords(titleA);
+                const keysB = extractMeaningfulKeywords(titleB);
+                if (keysA.length === 0 || keysB.length === 0) return false;
+
+                const overlap = keysA.filter((w) =>
+                  keysB.some((b) => b === w || ((b.includes(w) || w.includes(b)) && Math.min(b.length, w.length) >= 4))
+                );
+                const minLen = Math.min(keysA.length, keysB.length);
+
+                if (minLen === 1) {
+                  return overlap.length >= 1;
+                }
+
+                return overlap.length >= 2 && (overlap.length / minLen) >= 0.5;
+              };
+
+              const getSessionResources = (sessionTitle: string) => {
                 const files: { name: string; size?: string; url?: string; isRef?: boolean }[] = [];
+                const seenUrls = new Set<string>();
 
                 levelMaterials.forEach((mat) => {
-                  const mTitle = (mat.title || mat.fileName || "").toLowerCase();
-                  const mDesc = (mat.description || "").toLowerCase();
-                  const isMatch = mTitle.includes(clean) || clean.includes(mTitle) || words.some((w) => mTitle.includes(w) || mDesc.includes(w));
-
-                  if (isMatch) {
+                  const mTitle = mat.title || mat.fileName || "";
+                  if (isMatchResource(sessionTitle, mTitle)) {
                     if (mat.materialFiles && mat.materialFiles.length > 0) {
                       mat.materialFiles.forEach((f: any) => {
-                        if (f.url && f.url !== "#") {
+                        if (f.url && f.url !== "#" && !seenUrls.has(f.url)) {
+                          seenUrls.add(f.url);
                           files.push({ name: f.name || "Berkas Materi", size: f.size, url: f.url, isRef: false });
                         }
                       });
-                    } else if (mat.fileUrl && mat.fileUrl !== "#") {
+                    } else if (mat.fileUrl && mat.fileUrl !== "#" && !seenUrls.has(mat.fileUrl)) {
+                      seenUrls.add(mat.fileUrl);
                       files.push({ name: mat.fileName || mat.title || "Berkas Materi", size: mat.fileSize, url: mat.fileUrl, isRef: false });
                     }
 
                     if (mat.referensiFiles && mat.referensiFiles.length > 0) {
                       mat.referensiFiles.forEach((f: any) => {
-                        if (f.url && f.url !== "#") {
+                        if (f.url && f.url !== "#" && !seenUrls.has(f.url)) {
+                          seenUrls.add(f.url);
                           files.push({ name: f.name || "Berkas Referensi", size: f.size, url: f.url, isRef: true });
                         }
                       });
@@ -950,27 +998,18 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                 });
 
                 const matchedSyllabus = levelSyllabus.find((s) => {
-                  const sName = (s.subjectName || "").toLowerCase();
-                  return sName.includes(clean) || clean.includes(sName) || words.some((w) => sName.includes(w));
+                  const sName = s.subjectName || s.title || "";
+                  return isMatchResource(sessionTitle, sName);
                 });
 
                 // Match quiz questions configured in /admin/materi for this session/materi
                 const matchedQuizzes = levelQuizzes.filter((q) => {
-                  const sub = (q.subjectName || q.materialTitle || "").toLowerCase().trim();
+                  const sub = q.subjectName || q.materialTitle || "";
                   if (!sub) return false;
-                  const subWords = sub.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w: string) => w.length >= 2);
-
-                  if (sub === clean || clean.includes(sub) || sub.includes(clean)) return true;
-                  if (words.some((w: string) => sub.includes(w) || subWords.includes(w))) return true;
-
-                  if (matchedSyllabus?.subjectName) {
-                    const sylClean = matchedSyllabus.subjectName.toLowerCase().trim();
-                    if (sylClean === sub || sylClean.includes(sub) || sub.includes(sylClean)) return true;
-                    const sylWords = sylClean.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w: string) => w.length >= 2);
-                    if (sylWords.some((w: string) => sub.includes(w) || subWords.includes(w))) return true;
-                  }
-
-                  return false;
+                  return (
+                    isMatchResource(sessionTitle, sub) ||
+                    (matchedSyllabus?.subjectName && isMatchResource(matchedSyllabus.subjectName, sub))
+                  );
                 });
 
                 return { files, matchedSyllabus, matchedQuizzes };

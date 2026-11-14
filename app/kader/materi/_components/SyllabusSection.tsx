@@ -406,28 +406,73 @@ export const SyllabusSection: React.FC<SyllabusSectionProps> = ({
 
                     {/* Berkas Bahan Ajar & Modul Sesi Ini */}
                     {(() => {
-                      const sName = (item.subjectName || "").toLowerCase();
-                      const words = sName.split(/\s+/).filter((w) => w.length > 3);
+                      const STOP_WORDS = new Set([
+                        "dan", "atau", "yang", "di", "ke", "dari", "untuk", "pada", "dengan", "tentang",
+                        "dalam", "sebagai", "oleh", "antara", "sesi", "materi", "modul", "bab", "sub"
+                      ]);
 
+                      const normalizeText = (str: string): string => {
+                        if (!str) return "";
+                        return str
+                          .toLowerCase()
+                          .replace(/^(sesi\s*\d+[:\-.]?|\d+[:\-.]?)\s*/i, "")
+                          .replace(/&/g, " dan ")
+                          .replace(/[^a-z0-9\s]/g, " ")
+                          .replace(/\s+/g, " ")
+                          .trim();
+                      };
+
+                      const extractMeaningfulKeywords = (str: string): string[] => {
+                        const norm = normalizeText(str);
+                        return norm.split(/\s+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+                      };
+
+                      const isMatchResource = (titleA: string, titleB: string): boolean => {
+                        const normA = normalizeText(titleA);
+                        const normB = normalizeText(titleB);
+                        if (!normA || !normB) return false;
+
+                        if (normA === normB) return true;
+                        if (normA.length >= 6 && normB.includes(normA)) return true;
+                        if (normB.length >= 6 && normA.includes(normB)) return true;
+
+                        const keysA = extractMeaningfulKeywords(titleA);
+                        const keysB = extractMeaningfulKeywords(titleB);
+                        if (keysA.length === 0 || keysB.length === 0) return false;
+
+                        const overlap = keysA.filter((w) =>
+                          keysB.some((b) => b === w || ((b.includes(w) || w.includes(b)) && Math.min(b.length, w.length) >= 4))
+                        );
+                        const minLen = Math.min(keysA.length, keysB.length);
+                        if (minLen === 1) return overlap.length >= 1;
+                        return overlap.length >= 2 && (overlap.length / minLen) >= 0.5;
+                      };
+
+                      const sName = item.subjectName || "";
                       const matchingMatFiles: { name: string; size?: string; url?: string; matId: string }[] = [];
+                      const seenUrls = new Set<string>();
 
                       materialsList.forEach((mat) => {
-                        const mTitle = (mat.title || mat.fileName || "").toLowerCase();
-                        const mDesc = (mat.description || "").toLowerCase();
-                        const isMatch = mTitle.includes(sName) || sName.includes(mTitle) || words.some((w) => mTitle.includes(w) || mDesc.includes(w));
-
-                        if (isMatch) {
+                        const mTitle = mat.title || mat.fileName || "";
+                        if (isMatchResource(sName, mTitle)) {
                           if (mat.materialFiles && mat.materialFiles.length > 0) {
                             mat.materialFiles.forEach((f) => {
-                              matchingMatFiles.push({ name: f.name, size: f.size, url: f.url, matId: mat.id });
+                              if (f.url && f.url !== "#" && !seenUrls.has(f.url)) {
+                                seenUrls.add(f.url);
+                                matchingMatFiles.push({ name: f.name, size: f.size, url: f.url, matId: mat.id });
+                              }
                             });
-                          } else if (mat.fileName) {
+                          } else if (mat.fileName && mat.fileUrl && !seenUrls.has(mat.fileUrl)) {
+                            seenUrls.add(mat.fileUrl);
                             matchingMatFiles.push({ name: mat.fileName, size: mat.fileSize, url: mat.fileUrl, matId: mat.id });
                           }
 
                           if (mat.referensiFiles && mat.referensiFiles.length > 0) {
                             mat.referensiFiles.forEach((f) => {
-                              matchingMatFiles.push({ name: f.name, size: f.size, url: f.url, matId: mat.id });
+                              if (f.url && f.url !== "#" && !seenUrls.has(f.url)) {
+                                seenUrls.add(f.url);
+                                matchingMatFiles.push({ name: f.name, size: f.size, url: f.url, matId: mat.id });
+                              }
                             });
                           }
                         }
