@@ -178,9 +178,88 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         if (raw) {
           setQuizResults(JSON.parse(raw));
         }
+
+        // Sinkronkan status kuis dengan data evaluations di database
+        if (activeCadre?.id) {
+          db.getEvaluations([]).then((allEvals) => {
+            const ev = allEvals.find(
+              (e) =>
+                String(e.activityId) === String(event.id) &&
+                (String(e.cadreId) === String(activeCadre.id) || String(e.id) === String(activeCadre.id))
+            );
+
+            if (ev) {
+              const dbQuiz = ev.quizResults || {};
+              const currentRaw = localStorage.getItem(key);
+              let localData: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
+              let hasReset = false;
+
+              // Jika di localData tercatat post-test tapi di DB tidak ada (telah di-reset oleh instruktur), hapus!
+              Object.keys(localData).forEach((k) => {
+                if (k.endsWith("-POST")) {
+                  const sTitle = k.replace(/-POST$/, "");
+                  const dbEntry = dbQuiz[sTitle];
+                  const dbSession = ev.sessionScores?.[sTitle];
+                  if (!dbEntry?.postTest && !dbSession?.postTestScore) {
+                    delete localData[k];
+                    delete localData[sTitle];
+                    hasReset = true;
+                  }
+                }
+              });
+
+              // Jika di DB ada nilai yang belum ada di local, masukkan
+              Object.entries(dbQuiz).forEach(([sub, res]: [string, any]) => {
+                if (res?.preTest !== undefined && !localData[`${sub}-PRE`]) {
+                  localData[`${sub}-PRE`] = { score: res.preTest, submittedAt: res.submittedAt || new Date().toISOString() };
+                  hasReset = true;
+                }
+                if (res?.postTest !== undefined && !localData[`${sub}-POST`]) {
+                  localData[`${sub}-POST`] = { score: res.postTest, submittedAt: res.submittedAt || new Date().toISOString() };
+                  localData[sub] = { score: res.postTest, submittedAt: res.submittedAt || new Date().toISOString() };
+                  hasReset = true;
+                }
+              });
+
+              if (hasReset || !currentRaw) {
+                localStorage.setItem(key, JSON.stringify(localData));
+                setQuizResults(localData);
+              }
+            }
+          }).catch(() => {});
+        }
       } catch (e) {
         console.error("Failed to load quiz results", e);
       }
+
+      // Listener sinyal reset kuis real-time dari instruktur
+      const handleQuizResetEvent = (e: any) => {
+        const detail = e.detail;
+        if (!detail) return;
+        if (
+          String(detail.activityId) === String(event.id) &&
+          (!detail.cadreId || String(detail.cadreId) === String(activeCadre?.id))
+        ) {
+          const key = `PMII_QUIZ_RESULTS_${activeCadre?.id || "guest"}_${event.id}`;
+          const currentRaw = localStorage.getItem(key);
+          if (currentRaw) {
+            try {
+              const parsed = JSON.parse(currentRaw);
+              if (detail.materi && detail.materi !== "ALL") {
+                delete parsed[`${detail.materi}-POST`];
+                delete parsed[detail.materi];
+              } else {
+                Object.keys(parsed).forEach((k) => {
+                  if (k.endsWith("-POST")) delete parsed[k];
+                });
+              }
+              localStorage.setItem(key, JSON.stringify(parsed));
+              setQuizResults({ ...parsed });
+            } catch {}
+          }
+        }
+      };
+      window.addEventListener("PMII_QUIZ_RESET", handleQuizResetEvent);
 
       try {
         const careerKey = `PMII_CAREER_TEST_${activeCadre?.id || "guest"}_${event.id}`;
@@ -220,6 +299,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
       } catch (e) {
         console.error("Failed to load career test results", e);
       }
+
+      return () => {
+        window.removeEventListener("PMII_QUIZ_RESET", handleQuizResetEvent);
+      };
     }
   }, [event?.id, activeCadre?.id]);
 

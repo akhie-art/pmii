@@ -25,6 +25,7 @@ import { AssessmentFilters } from "./_components/AssessmentFilters";
 import { MateriTabs } from "./_components/MateriTabs";
 import { AssessmentList } from "./_components/AssessmentList";
 import { ScoringModal } from "./_components/ScoringModal";
+import { ResetPostTestModal } from "./_components/ResetPostTestModal";
 
 export default function PenilaianPesertaPage() {
   const pathname = usePathname();
@@ -49,6 +50,12 @@ export default function PenilaianPesertaPage() {
   const [selectedEval, setSelectedEval] = useState<ParticipantEvaluation | null>(null);
   const [modalMateri, setModalMateri] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Reset Post-Test Modal State
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetParticipant, setResetParticipant] = useState<ParticipantEvaluation | null>(null);
+  const [resetSessionTitle, setResetSessionTitle] = useState<string | undefined>(undefined);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Scoring Form States
   const [kognitif, setKognitif] = useState(80);
@@ -313,6 +320,124 @@ export default function PenilaianPesertaPage() {
     toast.success(`Nilai ${modalMateri} untuk ${selectedEval.participantName} berhasil disimpan!`);
   };
 
+  // Open Reset Post-Test Confirmation Modal
+  const handleOpenResetPostTestModal = (evalItem: ParticipantEvaluation, sessionTitle?: string) => {
+    setResetParticipant(evalItem);
+    setResetSessionTitle(sessionTitle);
+    setResetModalOpen(true);
+  };
+
+  // Execute Reset Post-Test
+  const handleConfirmResetPostTest = async (evalItem: ParticipantEvaluation, sessionTitle?: string) => {
+    setIsResetting(true);
+    try {
+      const isSpecific = Boolean(sessionTitle && sessionTitle !== "ALL");
+      const updatedList = evaluations.map((item) => {
+        if (item.id === evalItem.id) {
+          const updatedQuizResults = { ...(item.quizResults || {}) };
+          const updatedSessionScores = { ...(item.sessionScores || {}) };
+
+          if (isSpecific && sessionTitle) {
+            if (updatedQuizResults[sessionTitle]) {
+              const copyEntry = { ...updatedQuizResults[sessionTitle] };
+              delete copyEntry.postTest;
+              if (!copyEntry.preTest) {
+                delete updatedQuizResults[sessionTitle];
+              } else {
+                updatedQuizResults[sessionTitle] = copyEntry;
+              }
+            }
+            if (updatedSessionScores[sessionTitle]) {
+              const copySession = { ...updatedSessionScores[sessionTitle] };
+              delete copySession.postTestScore;
+              updatedSessionScores[sessionTitle] = copySession;
+            }
+          } else {
+            Object.keys(updatedQuizResults).forEach((k) => {
+              const copyEntry = { ...updatedQuizResults[k] };
+              delete copyEntry.postTest;
+              if (!copyEntry.preTest) {
+                delete updatedQuizResults[k];
+              } else {
+                updatedQuizResults[k] = copyEntry;
+              }
+            });
+            Object.keys(updatedSessionScores).forEach((k) => {
+              const copySession = { ...updatedSessionScores[k] };
+              delete copySession.postTestScore;
+              updatedSessionScores[k] = copySession;
+            });
+          }
+
+          const postVals = Object.values(updatedQuizResults)
+            .map((v) => v.postTest)
+            .filter((v): v is number => typeof v === "number");
+          const newPostAvg = postVals.length > 0 ? Math.round(postVals.reduce((a, b) => a + b, 0) / postVals.length) : undefined;
+
+          return {
+            ...item,
+            quizResults: updatedQuizResults,
+            sessionScores: updatedSessionScores,
+            postTestAverage: newPostAvg,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return item;
+      });
+
+      setEvaluations(updatedList);
+      await db.saveEvaluations(updatedList);
+
+      if (typeof window !== "undefined") {
+        const cadreKeyId = evalItem.cadreId || evalItem.id;
+        const cacheKey = `PMII_QUIZ_RESULTS_${cadreKeyId}_${evalItem.activityId}`;
+        const rawLocal = localStorage.getItem(cacheKey);
+        if (rawLocal) {
+          try {
+            const parsed = JSON.parse(rawLocal);
+            if (isSpecific && sessionTitle) {
+              delete parsed[`${sessionTitle}-POST`];
+              delete parsed[sessionTitle];
+            } else {
+              Object.keys(parsed).forEach((k) => {
+                if (k.endsWith("-POST")) delete parsed[k];
+              });
+            }
+            localStorage.setItem(cacheKey, JSON.stringify(parsed));
+          } catch {}
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("PMII_QUIZ_RESET", {
+            detail: {
+              cadreId: cadreKeyId,
+              activityId: evalItem.activityId,
+              materi: isSpecific ? sessionTitle : "ALL",
+              timestamp: Date.now()
+            }
+          })
+        );
+      }
+
+      if (selectedEval?.id === evalItem.id) {
+        const refreshed = updatedList.find((e) => e.id === evalItem.id) || null;
+        setSelectedEval(refreshed);
+      }
+
+      setResetModalOpen(false);
+      toast.success(
+        isSpecific && sessionTitle
+          ? `Post-Test ${sessionTitle} untuk ${evalItem.participantName} berhasil di-reset!`
+          : `Seluruh Post-Test untuk ${evalItem.participantName} berhasil di-reset!`
+      );
+    } catch (err) {
+      console.error("Gagal me-reset post-test:", err);
+      toast.error("Gagal me-reset post-test peserta.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   if (!mounted || loading) {
     return (
       <div className="space-y-5 max-w-7xl mx-auto p-4 animate-pulse">
@@ -385,6 +510,7 @@ export default function PenilaianPesertaPage() {
         currentActivity={currentActivity}
         getParticipantAvatar={getParticipantAvatar}
         onOpenScoreModal={handleOpenScoreModal}
+        onOpenResetPostTestModal={handleOpenResetPostTestModal}
       />
 
       {/* 5. CLEAN MINIMALIST SCORING MODAL */}
@@ -404,6 +530,17 @@ export default function PenilaianPesertaPage() {
         sessionNotes={sessionNotes}
         setSessionNotes={setSessionNotes}
         onSaveEvaluation={handleSaveEvaluation}
+        onResetPostTest={(item, materi) => handleOpenResetPostTestModal(item, materi)}
+      />
+
+      {/* 6. RESET POST-TEST CONFIRMATION MODAL */}
+      <ResetPostTestModal
+        isOpen={resetModalOpen}
+        onOpenChange={setResetModalOpen}
+        participant={resetParticipant}
+        sessionTitle={resetSessionTitle}
+        onConfirmReset={handleConfirmResetPostTest}
+        isResetting={isResetting}
       />
     </div>
   );

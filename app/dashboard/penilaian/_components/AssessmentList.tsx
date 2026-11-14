@@ -1,5 +1,5 @@
 import React from "react";
-import { Users, Pencil, Brain } from "lucide-react";
+import { Users, Pencil, Brain, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { ParticipantEvaluation, EventActivity } from "@/lib/db";
@@ -11,6 +11,7 @@ interface AssessmentListProps {
   currentActivity: EventActivity | null;
   getParticipantAvatar: (item: ParticipantEvaluation) => string | undefined;
   onOpenScoreModal: (evalItem: ParticipantEvaluation, materi: string) => void;
+  onOpenResetPostTestModal?: (item: ParticipantEvaluation, sessionTitle?: string) => void;
 }
 
 export const AssessmentList: React.FC<AssessmentListProps> = ({
@@ -19,7 +20,8 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
   activitySessions,
   currentActivity,
   getParticipantAvatar,
-  onOpenScoreModal
+  onOpenScoreModal,
+  onOpenResetPostTestModal
 }) => {
   return (
     <Card className="bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800/80 rounded-xl overflow-hidden shadow-xs">
@@ -169,6 +171,63 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
                         </span>
                       </div>
                     )}
+
+                    {/* Post-Test Status & Reset Action */}
+                    {(() => {
+                      if (isSpecificMateri) {
+                        const sessionQuiz = item.quizResults?.[selectedMateri];
+                        const sessionScoreData = item.sessionScores?.[selectedMateri];
+                        const postScore = sessionScoreData?.postTestScore ?? sessionQuiz?.postTest;
+
+                        if (postScore === undefined) return null;
+
+                        return (
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60 font-mono">
+                              Post-Test: {postScore}
+                            </span>
+                            {onOpenResetPostTestModal && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenResetPostTestModal(item, selectedMateri)}
+                                className="text-[9.5px] text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-0.5 cursor-pointer transition-colors"
+                                title="Reset nilai post-test sesi ini agar peserta bisa mengulang"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" />
+                                <span>Reset</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // ALL View
+                      const hasAnyPostTest =
+                        item.postTestAverage !== undefined ||
+                        Object.values(item.quizResults || {}).some((q) => typeof q?.postTest === "number") ||
+                        Object.values(item.sessionScores || {}).some((s) => typeof s?.postTestScore === "number");
+
+                      if (!hasAnyPostTest) return null;
+
+                      return (
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <span className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-800/60 font-mono">
+                            Rata Post: {item.postTestAverage ?? "-"}
+                          </span>
+                          {onOpenResetPostTestModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenResetPostTestModal(item, undefined)}
+                              className="text-[9.5px] text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-0.5 cursor-pointer transition-colors"
+                              title="Reset nilai post-test peserta agar dapat mengerjakan ulang"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" />
+                              <span>Reset Post-Test</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
