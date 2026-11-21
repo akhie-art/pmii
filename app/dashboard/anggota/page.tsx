@@ -1237,92 +1237,14 @@ export default function AnggotaPage() {
     }
   };
 
-  // Unduh Curriculum Vitae (CV) Resmi Kader (Mendukung Dokumen Word Kustom / PDF Bawaan)
+  // Buka Curriculum Vitae (CV) Resmi Organisasi (Format PDF Kop Surat Resmi PMII di Tab Baru)
   const handleDownloadCV = async (member: Member) => {
     try {
-      showToast(`Menyiapkan Curriculum Vitae untuk ${member.name}...`);
-      const customTemplateBase64 = typeof window !== "undefined"
-        ? localStorage.getItem(CV_TEMPLATE_STORAGE_KEY)
-        : null;
-
-      if (customTemplateBase64) {
-        // Gunakan template docx kustom pengurus
-        const { base64ToArrayBuffer, fillDocxTemplate } = await import(
-          "@/app/dashboard/surat/component/docx-template-helper"
-        );
-        const { getBase64Image, generateFallbackFormalPhoto } = await import(
-          "./_components/generateCvPdf"
-        );
-
-        const buffer = base64ToArrayBuffer(customTemplateBase64);
-        const ttlParts: string[] = [];
-        if (member.tempatLahir) ttlParts.push(member.tempatLahir);
-        if (member.tanggalLahir) {
-          const formattedTgl = formatDateIndo(member.tanggalLahir);
-          if (formattedTgl && formattedTgl !== "-") ttlParts.push(formattedTgl);
-        }
-        const formattedTTL = ttlParts.length > 0 ? ttlParts.join(", ") : "-";
-
-        const data = {
-          nama: member.name || "-",
-          nim: member.nim || member.nik || "-",
-          ttl: formattedTTL,
-          alamat: member.alamatRumah || member.alamatDomisili || "-",
-          phone: member.phone || "-",
-          pendidikan: [
-            member.pendidikanSD ? `SD: ${member.pendidikanSD}` : "",
-            member.pendidikanSMP ? `SMP: ${member.pendidikanSMP}` : "",
-            member.pendidikanSMA ? `SMA: ${member.pendidikanSMA}` : "",
-            member.perguruanTinggi ? `PT: ${member.perguruanTinggi}${member.jurusan ? ` (${member.jurusan})` : ""}` : ""
-          ].filter(Boolean).join("\n") || "-",
-          organisasi: [
-            member.organisasiSMP ? `SMP: ${member.organisasiSMP}` : "",
-            member.organisasiSMA ? `SMA: ${member.organisasiSMA}` : "",
-            member.organisasiPT ? `PT/Umum: ${member.organisasiPT}` : ""
-          ].filter(Boolean).join("\n") || "-",
-          motto: member.orientasiProfetik || member.motivasiMapaba || member.minatPassion || "-",
-          nipa: member.nipa || "-",
-          komisariat: member.komisariat || "-"
-        };
-
-        // Siapkan foto kader (foto asli atau foto resmi PMII)
-        const photoUrl = resolveMemberPhotoUrl(member);
-        let photoDataUrl = "";
-        if (photoUrl) {
-          try {
-            const imgObj = await getBase64Image(photoUrl);
-            if (imgObj?.dataUrl) photoDataUrl = imgObj.dataUrl;
-          } catch (e) {
-            console.warn("Gagal mengambil foto kader:", e);
-          }
-        }
-        if (!photoDataUrl) {
-          photoDataUrl = generateFallbackFormalPhoto(member.name || "Kader PMII");
-        }
-
-        const result = fillDocxTemplate(buffer, data, photoDataUrl);
-        if (result.error) {
-          throw new Error(result.error);
-        }
-
-        const url = URL.createObjectURL(result.blob);
-        const a = document.createElement("a");
-        a.href = url;
-        const cleanName = (member.name || "Kader").replace(/[^a-zA-Z0-9_\-]/g, "_");
-        a.download = `CV_${cleanName}.docx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast(`CV resmi untuk ${member.name} berhasil diunduh (.docx).`);
-      } else {
-        // Gunakan template default PDF resmi PMII dengan Kop Surat
-        const { generateMemberCvPdf } = await import("./_components/generateCvPdf");
-        await generateMemberCvPdf(member);
-        showToast(`Membuka CV resmi ${member.name} di tab baru...`);
-      }
+      showToast(`Membuka CV resmi ${member.name} di tab baru...`);
+      const { generateMemberCvPdf } = await import("./_components/generateCvPdf");
+      await generateMemberCvPdf(member);
     } catch (err) {
-      console.error("Gagal membuat CV:", err);
+      console.error("Gagal membuka CV:", err);
       showToast("Gagal membuka berkas CV.");
     }
   };
