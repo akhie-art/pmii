@@ -1,10 +1,10 @@
 import { BoardMember } from "./types";
-import { KEYS, DEFAULT_BOARDS } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData, deleteTableRow, normalizeKomisariat } from "./core";
 import { supabase, isSupabaseConfigured } from "../supabase";
 import { isValidUUID } from "../utils";
 
-export async function getBoards(defaultData: BoardMember[] = DEFAULT_BOARDS): Promise<BoardMember[]> {
+export async function getBoards(defaultData: BoardMember[] = []): Promise<BoardMember[]> {
   const list = await getTableData<BoardMember>("pengurus", KEYS.BOARDS, defaultData);
   return list.map(b => ({
     ...b,

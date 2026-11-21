@@ -75,7 +75,7 @@ export default function KaderLayout({
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const [activeCadre, setActiveCadre] = useState<any>(null);
+  const [activeAnggota, setActiveAnggota] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>("peserta");
   const [isStaffUser, setIsStaffUser] = useState(false);
   const [tenantInfo, setTenantInfo] = useState<{ name: string; logo: string | null }>({
@@ -277,10 +277,10 @@ export default function KaderLayout({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const activeCadreId = localStorage.getItem("PMII_ACTIVE_CADRE_ID");
+      const activeAnggotaId = localStorage.getItem("PMII_ACTIVE_ANGGOTA_ID") || localStorage.getItem("PMII_ACTIVE_CADRE_ID");
       const savedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
 
-      if (!activeCadreId && !savedUser) {
+      if (!activeAnggotaId && !savedUser) {
         const fullPath = window.location.pathname + window.location.search;
         router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
         return;
@@ -309,9 +309,9 @@ export default function KaderLayout({
 
       // Fast synchronous hydration from local cache so the layout renders instantly without freeze
       if (parsedUser) {
-        setActiveCadre({
-          id: parsedUser.id || activeCadreId || "cadre-user",
-          name: parsedUser.name || "Kader PMII",
+        setActiveAnggota({
+          id: parsedUser.id || activeAnggotaId || "anggota-user",
+          name: parsedUser.name || "Anggota PMII",
           email: parsedUser.email || "",
           level: "MAPABA",
           commissariat: parsedUser.commissariat || "Ki Ageng Getas Pendawa",
@@ -347,9 +347,9 @@ export default function KaderLayout({
       const savedTheme = localStorage.getItem("PMII_THEME") || "dark";
       setDarkMode(savedTheme === "dark");
 
-      const loadCadre = async () => {
-        const [cadres, commList] = await Promise.all([
-          db.getCadres([]),
+      const loadAnggota = async () => {
+        const [anggotaList, commList] = await Promise.all([
+          db.getAnggota([]),
           db.getCommissariats().catch(() => [])
         ]);
 
@@ -359,12 +359,12 @@ export default function KaderLayout({
           try {
             parsedUser = JSON.parse(savedUser);
             if (parsedUser?.email) {
-              found = cadres.find(c => c.email && c.email.trim().toLowerCase() === parsedUser.email.trim().toLowerCase());
+              found = anggotaList.find(c => c.email && c.email.trim().toLowerCase() === parsedUser.email.trim().toLowerCase());
             }
           } catch (e) {}
         }
-        if (!found && activeCadreId) {
-          found = cadres.find(c => c.id === activeCadreId);
+        if (!found && activeAnggotaId) {
+          found = anggotaList.find(c => c.id === activeAnggotaId);
         }
 
         const targetComm = found?.commissariat || parsedUser?.commissariat || "PMII Grobogan";
@@ -390,15 +390,16 @@ export default function KaderLayout({
         }
 
         if (found) {
-          setActiveCadre(found);
+          setActiveAnggota(found);
+          localStorage.setItem("PMII_ACTIVE_ANGGOTA_ID", found.id);
           localStorage.setItem("PMII_ACTIVE_CADRE_ID", found.id);
           if (found.role) {
             setUserRole(found.role.toLowerCase());
           }
         } else if (parsedUser) {
-          setActiveCadre({
-            id: parsedUser.id || "cadre-user",
-            name: parsedUser.name || "Kader PMII",
+          setActiveAnggota({
+            id: parsedUser.id || "anggota-user",
+            name: parsedUser.name || "Anggota PMII",
             email: parsedUser.email || "",
             level: "MAPABA",
             commissariat: parsedUser.commissariat || "Ki Ageng Getas Pendawa",
@@ -412,7 +413,7 @@ export default function KaderLayout({
         fetchPortalNotifications(activeEmail, activeName, isAnggota);
       };
 
-      loadCadre();
+      loadAnggota();
     }
   }, [router]);
 
@@ -420,9 +421,9 @@ export default function KaderLayout({
   useEffect(() => {
     if (!mounted) return;
     const handleSync = () => {
-      const email = activeCadre?.email;
-      const name = activeCadre?.name;
-      const isAnggota = (activeCadre?.role || userRole) === "anggota";
+      const email = activeAnggota?.email;
+      const name = activeAnggota?.name;
+      const isAnggota = (activeAnggota?.role || userRole) === "anggota";
       fetchPortalNotifications(email, name, isAnggota);
     };
 
@@ -433,7 +434,7 @@ export default function KaderLayout({
       window.removeEventListener("PMII_TABLE_SYNC", handleSync);
       window.removeEventListener("storage", handleSync);
     };
-  }, [mounted, activeCadre, userRole]);
+  }, [mounted, activeAnggota, userRole]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -474,9 +475,9 @@ export default function KaderLayout({
     );
   }
 
-  const cadreInitials = activeCadre?.name
-    ? activeCadre.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()
-    : "KD";
+  const anggotaInitials = activeAnggota?.name
+    ? activeAnggota.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()
+    : "AG";
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -738,20 +739,20 @@ export default function KaderLayout({
                   render={
                     <button className="flex items-center gap-2.5 p-1 -mr-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors group cursor-pointer border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800">
                       <Avatar className="w-8 h-8 border border-zinc-200 dark:border-zinc-800 flex-shrink-0">
-                        {activeCadre?.avatar ? (
-                          <AvatarImage src={activeCadre.avatar} alt={activeCadre.name || "Kader"} />
+                        {activeAnggota?.avatar ? (
+                          <AvatarImage src={activeAnggota.avatar} alt={activeAnggota.name || "Anggota"} />
                         ) : null}
                         <AvatarFallback className="bg-blue-600 dark:bg-blue-700 text-white font-bold text-xs">
-                          {cadreInitials}
+                          {anggotaInitials}
                         </AvatarFallback>
                       </Avatar>
                       
                       <div className="hidden sm:flex flex-col text-left">
                         <span className="text-xs font-bold truncate max-w-[130px] text-zinc-900 dark:text-zinc-100">
-                          {activeCadre?.name || "Sahabat"}
+                          {activeAnggota?.name || "Sahabat"}
                         </span>
                         <span className="text-[10px] uppercase font-semibold text-blue-600 dark:text-amber-400">
-                          {activeCadre?.role || userRole || "Peserta"}
+                          {activeAnggota?.role || userRole || "Peserta"}
                         </span>
                       </div>
                       <ChevronDown className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors ml-0.5 shrink-0 hidden sm:block" />
@@ -764,10 +765,10 @@ export default function KaderLayout({
                 >
                   <div className="px-2.5 py-2 border-b border-zinc-100 dark:border-zinc-800 mb-1">
                     <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                      {activeCadre?.name || "Sahabat PMII"}
+                      {activeAnggota?.name || "Sahabat PMII"}
                     </p>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-                      {activeCadre?.email || "anggota@pmii.id"}
+                      {activeAnggota?.email || "anggota@pmii.id"}
                     </p>
                   </div>
                   <DropdownMenuItem

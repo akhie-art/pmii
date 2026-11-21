@@ -208,13 +208,13 @@ export function LandingContent() {
     setVerifyResults(null);
 
     try {
-      const res = await fetch(`/api/verify-cadre?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/verify-anggota?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (res.ok && data.found) {
         if (Array.isArray(data.results) && data.results.length > 0) {
           setVerifyResults(data.results);
-        } else if (data.cadre) {
-          setVerifyResults([data.cadre]);
+        } else if (data.anggota || data.cadre) {
+          setVerifyResults([data.anggota || data.cadre]);
         } else {
           setVerifyResults("NOT_FOUND");
         }

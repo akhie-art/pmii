@@ -32,7 +32,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { db, DEFAULT_EVENTS, DEFAULT_REGISTRATIONS, getDefaultEventTimeline, ensureEvaluationForRegistration } from "@/lib/db";
+import { db, getDefaultEventTimeline, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserAccount, EventStageTimeline } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
@@ -164,7 +164,7 @@ export default function KomisariatKegiatanPage() {
       }
 
       // Load registrations
-      const fetchedRegs = await db.getRegistrations(DEFAULT_REGISTRATIONS);
+      const fetchedRegs = await db.getRegistrations([]);
       const cleanedRegs = fetchedRegs.filter((r: any) => !r.id?.startsWith("reg-mock") && !r.id?.includes("mock"));
       setRegistrations(cleanedRegs);
 

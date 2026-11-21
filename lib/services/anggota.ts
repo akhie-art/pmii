@@ -1,9 +1,9 @@
 import { CadreFollowUp, Anggota } from "./types";
-import { KEYS, DEFAULT_CADRES } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData, normalizeKomisariat, normalizeDateString } from "./core";
 import { getUserPassword, setUserPassword } from "./credentials";
 
-export async function getAnggota(defaultData: Anggota[] = DEFAULT_CADRES): Promise<Anggota[]> {
+export async function getAnggota(defaultData: Anggota[] = []): Promise<Anggota[]> {
   let list = await getTableData<Anggota>("anggota", KEYS.CADRES, defaultData);
   // Filter out dummy data if any exist in local storage cache
   list = list.filter(c => 

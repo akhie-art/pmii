@@ -1,9 +1,9 @@
 import { ParticipantRegistration } from "./types";
-import { KEYS, DEFAULT_REGISTRATIONS } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData } from "./core";
 
 export async function getRegistrations(
-  defaultData: ParticipantRegistration[] = DEFAULT_REGISTRATIONS
+  defaultData: ParticipantRegistration[] = []
 ): Promise<ParticipantRegistration[]> {
   const data = await getTableData<ParticipantRegistration>("pendaftaran", KEYS.REGISTRATIONS, defaultData);
   const cleaned = data.filter(item => !["reg-101", "reg-102", "reg-103", "reg-104", "reg-105", "reg-106"].includes(item.id));

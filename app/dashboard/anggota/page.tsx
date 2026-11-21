@@ -67,7 +67,7 @@ import {
 } from "@/lib/tenancy";
 import dynamic from "next/dynamic";
 import type { Member, CadreHistory } from "./_components/types";
-import { mapCadreToMember, mapMemberToCadre, resolveMemberPhotoUrl, formatDateIndo } from "./_components/types";
+import { mapCadreToMember, mapMemberToCadre, mapAnggotaToMember, mapMemberToAnggota, resolveMemberPhotoUrl, formatDateIndo } from "./_components/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MemberBulkActionBar } from "./_components/MemberBulkActionBar";
 import type { ImportAccountSettings } from "./_components/ImportMemberModal";
@@ -204,9 +204,9 @@ export default function AnggotaPage() {
     try {
       let dbCadres: any[] = [];
       try {
-        dbCadres = await db.getCadres([]);
+        dbCadres = await db.getAnggota([]);
       } catch (e) {
-        console.warn("[AnggotaPage] db.getCadres error:", e);
+        console.warn("[AnggotaPage] db.getAnggota error:", e);
       }
 
       // Direct fallback ke Supabase jika db.getCadres() mengembalikan kosong
@@ -456,14 +456,14 @@ export default function AnggotaPage() {
       });
       setMembers(updatedMembers);
 
-      const dbCadres = await db.getCadres([]);
+      const dbCadres = await db.getAnggota([]);
       const updatedCadres = dbCadres.map((c) => {
         if (selectedMemberIds.includes(c.id)) {
           return { ...c, status: "AKTIF" as const };
         }
         return c;
       });
-      await db.saveCadres(updatedCadres);
+      await db.saveAnggota(updatedCadres);
 
       showToast(`${selectedMemberIds.length} data anggota berhasil diaktifkan!`);
       setSelectedMemberIds([]);
@@ -487,14 +487,14 @@ export default function AnggotaPage() {
       });
       setMembers(updatedMembers);
 
-      const dbCadres = await db.getCadres([]);
+      const dbCadres = await db.getAnggota([]);
       const updatedCadres = dbCadres.map((c) => {
         if (selectedMemberIds.includes(c.id)) {
           return { ...c, status: "REVISI" as const };
         }
         return c;
       });
-      await db.saveCadres(updatedCadres);
+      await db.saveAnggota(updatedCadres);
 
       showToast(`${selectedMemberIds.length} anggota diubah menjadi Non-Aktif.`);
       setSelectedMemberIds([]);
@@ -518,14 +518,14 @@ export default function AnggotaPage() {
       });
       setMembers(updatedMembers);
 
-      const dbCadres = await db.getCadres([]);
+      const dbCadres = await db.getAnggota([]);
       const updatedCadres = dbCadres.map((c) => {
         if (selectedMemberIds.includes(c.id)) {
           return { ...c, isGraduated: true };
         }
         return c;
       });
-      await db.saveCadres(updatedCadres);
+      await db.saveAnggota(updatedCadres);
 
       showToast(`${selectedMemberIds.length} anggota diluluskan & KTA Digital diterbitkan.`);
       setSelectedMemberIds([]);
@@ -546,7 +546,7 @@ export default function AnggotaPage() {
       setMembers(updatedMembers);
 
       for (const id of selectedMemberIds) {
-        await db.deleteCadre(id);
+        await db.deleteAnggota(id);
       }
 
       // Also clean up corresponding user accounts in users and Supabase Auth
@@ -652,7 +652,7 @@ export default function AnggotaPage() {
 
     const updatedList = [newMember, ...members];
     setMembers(updatedList);
-    await db.saveCadres(updatedList.map((m) => mapMemberToCadre(m)));
+    await db.saveAnggota(updatedList.map((m) => mapMemberToAnggota(m)));
 
     setShowAddModal(false);
     showToast(`Sahabat ${newMember.name} berhasil didaftarkan.`);
@@ -694,8 +694,8 @@ export default function AnggotaPage() {
 
     // Fast Single-Row Update (O(1) in background, no lag)
     if (targetMember) {
-      db.updateCadre(targetMember.id, mapMemberToCadre(targetMember)).catch((err) => {
-        console.warn("Background updateCadre notice:", err);
+      db.updateAnggota(targetMember.id, mapMemberToAnggota(targetMember)).catch((err) => {
+        console.warn("Background updateAnggota notice:", err);
       });
     }
   };
@@ -706,7 +706,7 @@ export default function AnggotaPage() {
 
     const remaining = members.filter((m) => m.id !== deletingMember.id);
     setMembers(remaining);
-    await db.deleteCadre(deletingMember.id);
+    await db.deleteAnggota(deletingMember.id);
 
     // Sinkronkan penghapusan akun ke Supabase Auth
     await db.deleteUserFromAuth({
@@ -862,10 +862,10 @@ export default function AnggotaPage() {
       }
     });
 
-    // Simpan ke Cadres
+    // Simpan ke Anggota
     const updatedCadres = [...createdMembers, ...members];
     setMembers(updatedCadres);
-    await db.saveCadres(updatedCadres.map((m) => mapMemberToCadre(m)));
+    await db.saveAnggota(updatedCadres.map((m) => mapMemberToAnggota(m)));
 
     // Simpan ke Users jika opsi pembuatan akun aktif
     if (accountSettings.createAccounts && newUsers.length > 0) {

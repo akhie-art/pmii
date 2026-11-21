@@ -1,4 +1,4 @@
-import { getCadres, saveCadres, updateCadre, getAnggota, saveAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./cadres";
+import { getCadres, saveCadres, updateCadre, getAnggota, saveAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./anggota";
 import { getEvents, saveEvents, deleteEvent, getDefaultEventTimeline } from "./events";
 import { getRegistrations, saveRegistrations, deleteRegistration } from "./registrations";
 import { getRequirements, saveRequirements } from "./requirements";
@@ -203,4 +203,3 @@ export * from "./pengajuan-sk";
 export * from "./archive";
 export * from "./gallery";
 export * from "./anggota";
-export * from "./cadres";

@@ -1,18 +1,7 @@
 import {
-  CadreFollowUp,
-  EventActivity,
-  ParticipantRegistration,
-  Requirement,
   CommissariatList,
-  BoardMember,
   UserAccount,
-  ParticipantEvaluation,
-  Kaderisasi,
-  Article,
-  CertificateLayoutConfig,
-  SuratTemplate,
-  PengajuanSK,
-  GalleryItem
+  CertificateLayoutConfig
 } from "./types";
 
 // LocalStorage Keys
@@ -37,34 +26,6 @@ export const KEYS = {
   GALLERY: "PMII_GALLERY_DATA",
 };
 
-export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
-  {
-    id: "gal-1",
-    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
-    imageUrl: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=800&q=80",
-    image_url: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=800&q=80",
-    created_at: "2026-10-12T08:00:00.000Z"
-  },
-  {
-    id: "gal-2",
-    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
-    imageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
-    image_url: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
-    created_at: "2026-10-18T08:00:00.000Z"
-  },
-  {
-    id: "gal-3",
-    tenant_id: "13aea81b-ca8c-43c2-b44f-7d70cdc11f7f",
-    imageUrl: "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=800&q=80",
-    image_url: "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=800&q=80",
-    created_at: "2026-10-25T08:00:00.000Z"
-  }
-];
-
-export const DEFAULT_PENGAJUAN_SK: PengajuanSK[] = [];
-
-export const DEFAULT_SURAT_TEMPLATES: SuratTemplate[] = [];
-
 export const DEFAULT_CERT_CONFIG: CertificateLayoutConfig = {
   nama: { x: 35.0, y: 29.2, fontSize: 13, color: "#0f172a", align: "left", fontWeight: "bold", bold: true, enabled: true },
   nomor: { x: 50.0, y: 13.8, fontSize: 13, color: "#1e3a8a", align: "center", fontWeight: "normal", bold: false, enabled: true },
@@ -76,13 +37,6 @@ export const DEFAULT_CERT_CONFIG: CertificateLayoutConfig = {
   paperSize: "A4",
   numberSegments: ["010", "01", "091222", "001", "12", "2026"]
 };
-
-export const DEFAULT_CADRES: CadreFollowUp[] = [];
-export const DEFAULT_ANGGOTA: CadreFollowUp[] = DEFAULT_CADRES;
-export const DEFAULT_EVENTS: EventActivity[] = [];
-export const DEFAULT_REGISTRATIONS: ParticipantRegistration[] = [];
-
-export const DEFAULT_REQUIREMENTS: Requirement[] = [];
 
 export const DEFAULT_COMMISSARIATS: CommissariatList[] = [
   {
@@ -104,20 +58,7 @@ export const DEFAULT_COMMISSARIATS: CommissariatList[] = [
     rayons: [],
     level: "KOMISARIAT",
     type: "KOMISARIAT",
-    gallery: [
-      {
-        id: "gal-1",
-        imageUrl: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=800&q=80"
-      },
-      {
-        id: "gal-2",
-        imageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80"
-      },
-      {
-        id: "gal-3",
-        imageUrl: "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=800&q=80"
-      }
-    ]
+    gallery: []
   },
   {
     id: "2342112a-7413-4151-9998-3a13e833902f",
@@ -170,8 +111,6 @@ export const DEFAULT_COMMISSARIATS: CommissariatList[] = [
   }
 ];
 
-export const DEFAULT_BOARDS: BoardMember[] = [];
-
 export const DEFAULT_USERS: UserAccount[] = [
   {
     id: "75228d23-a7f6-4bb8-9d3e-16eec5f23926",
@@ -207,8 +146,3 @@ export const DEFAULT_USERS: UserAccount[] = [
     createdAt: "2026-10-15T15:39:01.939562+00:00"
   }
 ];
-
-export const DEFAULT_EVALUATIONS: ParticipantEvaluation[] = [];
-export const DEFAULT_KADERISASI: Kaderisasi[] = [];
-
-export const DEFAULT_ARTICLES: Article[] = [];

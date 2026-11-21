@@ -1,5 +1,5 @@
 import { Article } from "./types";
-import { KEYS, DEFAULT_ARTICLES } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData, deleteTableRow } from "./core";
 
 export function formatArticleDate(input?: any): string {
@@ -46,7 +46,7 @@ export function formatArticleDate(input?: any): string {
 }
 
 export async function getArticles(): Promise<Article[]> {
-  const list = await getTableData<Article>("articles", KEYS.ARTICLES, DEFAULT_ARTICLES);
+  const list = await getTableData<Article>("articles", KEYS.ARTICLES, []);
   return list.map((item: any) => {
     const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
     return {
@@ -74,7 +74,7 @@ export async function deleteArticle(articleId: string): Promise<boolean> {
 }
 
 export async function likeArticle(articleId: string): Promise<number> {
-  const articles = await getTableData<Article>("articles", KEYS.ARTICLES, DEFAULT_ARTICLES);
+  const articles = await getTableData<Article>("articles", KEYS.ARTICLES, []);
   let newLikes = 0;
   const updated = articles.map((a) => {
     if (a.id === articleId || a.slug === articleId) {

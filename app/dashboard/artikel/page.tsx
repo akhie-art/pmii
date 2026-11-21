@@ -6,7 +6,7 @@ import { Newspaper, Plus, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { db, DEFAULT_ARTICLES, generateUUID, type Article, type UserAccount } from "@/lib/db";
+import { db, generateUUID, type Article, type UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 import {

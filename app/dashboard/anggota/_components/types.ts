@@ -123,6 +123,9 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
   };
 }
 
+export const mapAnggotaToMember = mapCadreToMember;
+export const mapMemberToAnggota = mapMemberToCadre;
+
 export function mapMemberToCadre(m: Member): CadreFollowUp {
   const tid = m.tenant_id || m.komisariat_id || getTenantIdByName(m.komisariat);
   const commissariat =

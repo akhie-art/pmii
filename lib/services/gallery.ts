@@ -1,5 +1,5 @@
 import { GalleryItem } from "./types";
-import { KEYS, DEFAULT_GALLERY_ITEMS } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData, deleteTableRow, upsertTableRow } from "./core";
 import { deleteStorageFile } from "../supabase";
 
@@ -22,7 +22,7 @@ function normalizeGalleryItem(item: any): GalleryItem {
  * Mengambil semua data foto galeri dari database 'galeri'
  */
 export async function getGalleryItems(
-  defaultData: GalleryItem[] = DEFAULT_GALLERY_ITEMS
+  defaultData: GalleryItem[] = []
 ): Promise<GalleryItem[]> {
   const rawItems = await getTableData<GalleryItem>("galeri", KEYS.GALLERY, defaultData);
   return rawItems.map(normalizeGalleryItem);

@@ -1,5 +1,5 @@
 import { PengajuanSK, StatusPengajuanSK } from "./types";
-import { KEYS, DEFAULT_PENGAJUAN_SK } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData, deleteTableRow } from "./core";
 import { deleteStorageFile } from "../supabase";
 
@@ -7,7 +7,7 @@ export async function getPengajuanSK(): Promise<PengajuanSK[]> {
   return getTableData<PengajuanSK>(
     "pengajuan_sk",
     KEYS.PENGAJUAN_SK,
-    DEFAULT_PENGAJUAN_SK
+    []
   );
 }
 

@@ -1,5 +1,5 @@
 import { ParticipantEvaluation, SessionScore, ParticipantRegistration, EventActivity, CadreFollowUp } from "./types";
-import { KEYS, DEFAULT_EVALUATIONS } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData } from "./core";
 import { supabase, isSupabaseConfigured } from "../supabase";
 import { isValidUUID, generateUUID } from "../utils";
@@ -176,7 +176,7 @@ export function deduplicateEvaluations(evalList: ParticipantEvaluation[]): Parti
 }
 
 export async function getEvaluations(
-  defaultData: ParticipantEvaluation[] = DEFAULT_EVALUATIONS
+  defaultData: ParticipantEvaluation[] = []
 ): Promise<ParticipantEvaluation[]> {
   const data = await getTableData<ParticipantEvaluation>("evaluations", KEYS.EVALUATIONS, defaultData);
   const withoutDummies = data.filter(item =>

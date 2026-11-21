@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { db, DEFAULT_ARTICLES, formatArticleDate } from "@/lib/db";
+import { db, formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
 
 export function BacaArtikelContent() {
@@ -71,7 +71,7 @@ export function BacaArtikelContent() {
       setLoading(true);
       try {
         const allArticles = await db.getArticles();
-        const articlesPool = allArticles && allArticles.length > 0 ? allArticles : DEFAULT_ARTICLES;
+        const articlesPool = allArticles || [];
 
         // Find match by slug or id
         const found = articlesPool.find(

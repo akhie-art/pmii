@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { db, DEFAULT_ARTICLES } from "@/lib/db";
+import { db } from "@/lib/db";
 import { BacaArtikelContent } from "./_components/BacaArtikelContent";
 
 interface PageProps {
@@ -8,9 +8,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  let article = DEFAULT_ARTICLES.find(
-    (a) => a.slug === slug || a.id === slug
-  );
+  let article: any = null;
 
   try {
     const remoteArticles = await db.getArticles();

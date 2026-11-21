@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { db, type CadreFollowUp } from "@/lib/db";
+import { db, type Anggota } from "@/lib/db";
 import { motion } from "framer-motion";
 import {
   BookOpen,
@@ -144,11 +144,11 @@ function ActionCard({
 export default function KaderDashboardPage() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [cadre, setCadre] = useState<CadreFollowUp | null>(null);
+  const [anggota, setAnggota] = useState<Anggota | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
-      const activeId = typeof window !== "undefined" ? (localStorage.getItem("PMII_ACTIVE_CADRE_ID") || "") : "";
+      const activeId = typeof window !== "undefined" ? (localStorage.getItem("PMII_ACTIVE_ANGGOTA_ID") || localStorage.getItem("PMII_ACTIVE_CADRE_ID") || "") : "";
       const savedUserStr = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
       let loggedInUser: any = null;
       if (savedUserStr) {
@@ -157,12 +157,12 @@ export default function KaderDashboardPage() {
         } catch (e) {}
       }
 
-      const cadres = await db.getCadres([]);
-      const currentCadre = (activeId ? cadres.find((c: any) => c.id === activeId) : null) ||
-                           (loggedInUser ? cadres.find((c: any) => c.id === loggedInUser.id || (c.email && c.email.toLowerCase() === loggedInUser.email?.toLowerCase())) : null) ||
-                           cadres[0] || null;
+      const anggotaList = await db.getAnggota([]);
+      const currentAnggota = (activeId ? anggotaList.find((c: any) => c.id === activeId) : null) ||
+                             (loggedInUser ? anggotaList.find((c: any) => c.id === loggedInUser.id || (c.email && c.email.toLowerCase() === loggedInUser.email?.toLowerCase())) : null) ||
+                             anggotaList[0] || null;
 
-      setCadre(currentCadre);
+      setAnggota(currentAnggota);
       setMounted(true);
     };
     loadData();
@@ -186,7 +186,7 @@ export default function KaderDashboardPage() {
     );
   }
 
-  if (!cadre) {
+  if (!anggota) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md mx-auto shadow-sm space-y-6 text-zinc-900 dark:text-zinc-100">
         <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500">
@@ -215,10 +215,10 @@ export default function KaderDashboardPage() {
   }
 
   const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
-  const rolePrefix = match ? `/${match[1]}` : (cadre?.role ? `/${cadre.role.toLowerCase()}` : "/peserta");
-  const isPeserta = (match ? match[1] : (cadre?.role ? cadre.role.toLowerCase() : "peserta")) === "peserta" || rolePrefix === "/peserta";
+  const rolePrefix = match ? `/${match[1]}` : (anggota?.role ? `/${anggota.role.toLowerCase()}` : "/peserta");
+  const isPeserta = (match ? match[1] : (anggota?.role ? anggota.role.toLowerCase() : "peserta")) === "peserta" || rolePrefix === "/peserta";
 
-  const initials = (cadre.name || "K")
+  const initials = (anggota.name || "K")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -226,18 +226,18 @@ export default function KaderDashboardPage() {
     .join("")
     .toUpperCase();
 
-  const firstName = (cadre.name || "").split(" ")[0] || "Sahabat";
-  const statusLabel = cadre.isGraduated
+  const firstName = (anggota.name || "").split(" ")[0] || "Sahabat";
+  const statusLabel = anggota.isGraduated
     ? "Lulus"
-    : cadre.status === "AKTIF"
+    : anggota.status === "AKTIF"
     ? "Aktif"
-    : cadre.status === "SELESAI"
+    : anggota.status === "SELESAI"
     ? "Selesai"
-    : cadre.status === "REVISI"
+    : anggota.status === "REVISI"
     ? "Perlu Revisi"
-    : cadre.status || "-";
-  const submissionCount = Array.isArray(cadre.submissions) ? cadre.submissions.length : 0;
-  const idNumber = cadre.nipa || cadre.nta || cadre.registrationNumber || "-";
+    : anggota.status || "-";
+  const submissionCount = Array.isArray(anggota.submissions) ? anggota.submissions.length : 0;
+  const idNumber = anggota.nipa || anggota.nta || anggota.registrationNumber || "-";
 
   return (
     <motion.div
@@ -258,7 +258,7 @@ export default function KaderDashboardPage() {
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              {isPeserta ? "Portal Peserta" : "Portal Kader"}
+              {isPeserta ? "Portal Peserta" : "Portal Anggota"}
             </p>
             <h1 className="text-lg md:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               Selamat datang, {firstName}!
@@ -271,7 +271,7 @@ export default function KaderDashboardPage() {
           </div>
           <Badge
             className={`self-start sm:self-center shrink-0 border text-[11px] font-semibold px-2.5 py-1 ${
-              cadre.isGraduated || cadre.status === "AKTIF"
+              anggota.isGraduated || anggota.status === "AKTIF"
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900"
                 : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900"
             }`}
@@ -283,8 +283,8 @@ export default function KaderDashboardPage() {
 
       {/* 2. RINGKASAN PROFIL */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile icon={GraduationCap} label="Tingkat Kaderisasi" value={cadre.level || "-"} tone="blue" />
-        <StatTile icon={Building2} label="Komisariat" value={cadre.commissariat || "-"} tone="indigo" />
+        <StatTile icon={GraduationCap} label="Tingkat Kaderisasi" value={anggota.level || "-"} tone="blue" />
+        <StatTile icon={Building2} label="Komisariat" value={anggota.commissariat || "-"} tone="indigo" />
         <StatTile icon={ShieldCheck} label="No. Anggota" value={idNumber} tone="emerald" />
         <StatTile icon={ClipboardList} label="Tugas Terkirim" value={`${submissionCount} tugas`} tone="amber" />
       </div>
@@ -330,7 +330,7 @@ export default function KaderDashboardPage() {
             href={`${rolePrefix}/profil`}
             cta="Lihat Profil"
             tone="emerald"
-            badge={cadre.isGraduated ? "Terverifikasi" : undefined}
+            badge={anggota.isGraduated ? "Terverifikasi" : undefined}
           />
         </div>
       </div>

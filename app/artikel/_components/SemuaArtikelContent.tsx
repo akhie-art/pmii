@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { db, DEFAULT_ARTICLES, formatArticleDate } from "@/lib/db";
+import { db, formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
 
 const ARTICLE_CATEGORIES = ["Semua", "Kaderisasi", "Opini & Pergerakan", "Tata Kelola"];
@@ -27,7 +27,7 @@ const ARTICLE_CATEGORIES = ["Semua", "Kaderisasi", "Opini & Pergerakan", "Tata K
 export function SemuaArtikelContent() {
   const [darkMode, setDarkMode] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [articles, setArticles] = useState<Article[]>(DEFAULT_ARTICLES);
+  const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("Semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);

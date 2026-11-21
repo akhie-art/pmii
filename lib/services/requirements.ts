@@ -1,9 +1,9 @@
 import { Requirement } from "./types";
-import { KEYS, DEFAULT_REQUIREMENTS } from "./defaults";
+import { KEYS } from "./defaults";
 import { getTableData, saveTableData } from "./core";
 
 export async function getRequirements(
-  defaultData: Requirement[] = DEFAULT_REQUIREMENTS
+  defaultData: Requirement[] = []
 ): Promise<Requirement[]> {
   const list = await getTableData<Requirement>("persyaratan", KEYS.REQUIREMENTS, defaultData);
   if ((!list || list.length === 0) && defaultData && defaultData.length > 0) {

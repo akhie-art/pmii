@@ -44,7 +44,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { db, DEFAULT_ARTICLES, formatArticleDate } from "@/lib/db";
+import { db, formatArticleDate } from "@/lib/db";
 import type { Article, EventActivity } from "@/lib/db";
 import { getKomisariatSlug, normalizeTenantName } from "@/lib/tenancy";
 import { DEFAULT_COMMISSARIATS } from "@/lib/services/defaults";

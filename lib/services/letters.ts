@@ -1,5 +1,5 @@
 import { getTableData, saveTableData, deleteTableRow } from "./core";
-import { KEYS, DEFAULT_SURAT_TEMPLATES } from "./defaults";
+import { KEYS } from "./defaults";
 import { SuratTemplate } from "./types";
 import { deleteStorageFile } from "../supabase";
 
@@ -25,7 +25,7 @@ export async function deleteSurat(id: string, fileUrl?: string): Promise<boolean
 }
 
 export async function getSuratTemplates(): Promise<SuratTemplate[]> {
-  return getTableData<SuratTemplate>("surat_templates", KEYS.SURAT_TEMPLATES, DEFAULT_SURAT_TEMPLATES);
+  return getTableData<SuratTemplate>("surat_templates", KEYS.SURAT_TEMPLATES, []);
 }
 
 export async function saveSuratTemplates(templates: SuratTemplate[]): Promise<boolean> {

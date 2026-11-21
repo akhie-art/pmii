@@ -1,7 +1,8 @@
-import type { CadreFollowUp } from "@/lib/db";
+import type { Anggota, CadreFollowUp } from "@/lib/db";
 
 export interface ProfileHeaderProps {
   currentCadre: CadreFollowUp;
+  currentAnggota?: Anggota;
   avatar: string;
   isUploadingPhoto: boolean;
   hasMapabaRegistration: boolean;
@@ -14,6 +15,7 @@ export interface ProfileHeaderProps {
 
 export interface DigitalKtaCardProps {
   currentCadre: CadreFollowUp;
+  currentAnggota?: Anggota;
   rolePrefix: string;
   memberNTA: string;
   memberStartDate: string;

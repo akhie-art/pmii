@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import QRCode from "qrcode";
-import { db, type CadreFollowUp } from "@/lib/db";
+import { db, type Anggota, type CadreFollowUp } from "@/lib/db";
 import { exportCardAsImage } from "@/lib/cardExporter";
 import { supabase, isSupabaseConfigured, deleteStorageFile } from "@/lib/supabase";
 import {
@@ -162,9 +162,9 @@ export default function ProfilPage() {
         }
       }
 
-      // Fallback ke db.getCadres jika query spesifik tidak menemukan hasil (misal mode offline/mock)
+      // Fallback ke db.getAnggota jika query spesifik tidak menemukan hasil (misal mode offline/mock)
       if (!mine) {
-        allCadres = await db.getCadres([]);
+        allCadres = await db.getAnggota([]);
         mine =
           (activeId ? allCadres.find((c) => c.id === activeId) : null) ||
           (loggedInUser
@@ -183,9 +183,9 @@ export default function ProfilPage() {
           loggedInUser.role?.toLowerCase() === "admin" ||
           loggedInUser.role?.toLowerCase() === "pengurus";
 
-        const fallbackCadre: CadreFollowUp = {
-          id: loggedInUser.id || `cadre-${Date.now()}`,
-          name: loggedInUser.name || "Kader PMII",
+        const fallbackAnggota: Anggota = {
+          id: loggedInUser.id || `anggota-${Date.now()}`,
+          name: loggedInUser.name || "Anggota PMII",
           email: loggedInUser.email || "",
           phone: loggedInUser.phone || "",
           level: (loggedInUser.level as any) || "MAPABA",
@@ -201,9 +201,9 @@ export default function ProfilPage() {
           jurusan: loggedInUser.jurusan || "",
           angkatan: loggedInUser.angkatan || "2026"
         };
-        mine = fallbackCadre;
-        allCadres.push(fallbackCadre);
-        await db.saveCadres(allCadres);
+        mine = fallbackAnggota;
+        allCadres.push(fallbackAnggota);
+        await db.saveAnggota(allCadres);
       }
 
       setCadres(allCadres);
@@ -513,7 +513,7 @@ export default function ProfilPage() {
 
       const updatedList = cadres.map((c) => (c.id === currentCadre.id ? updated : c));
       setCadres(updatedList);
-      await db.saveCadres(updatedList);
+      await db.saveAnggota(updatedList);
 
       if (typeof window !== "undefined") {
         const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
@@ -641,7 +641,7 @@ export default function ProfilPage() {
 
       const updatedList = cadres.map((c) => (c.id === currentCadre.id ? updated : c));
       setCadres(updatedList);
-      await db.saveCadres(updatedList);
+      await db.saveAnggota(updatedList);
 
       toast.success("Pas foto resmi berhasil dihapus.");
     }
@@ -827,7 +827,7 @@ export default function ProfilPage() {
       const previousEmail = currentCadre.email || "";
 
       // 1. Direct Targeted Single-Row Update in Supabase & Local Cache (O(1) lightning fast)
-      await db.updateCadre(currentCadre.id, updated);
+      await db.updateAnggota(currentCadre.id, updated);
 
       const updatedList = cadres.map((c) => (c.id === currentCadre.id ? updated : c));
       setCadres(updatedList);
@@ -835,6 +835,7 @@ export default function ProfilPage() {
 
       // 2. Sync local user session immediately
       if (typeof window !== "undefined") {
+        localStorage.setItem("PMII_ACTIVE_ANGGOTA_ID", updated.id);
         localStorage.setItem("PMII_ACTIVE_CADRE_ID", updated.id);
         const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
         if (savedUserStr) {
