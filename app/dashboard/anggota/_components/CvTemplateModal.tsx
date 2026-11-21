@@ -131,38 +131,38 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[540px] p-5 sm:p-6 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl gap-4">
-        <DialogHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800 text-left">
-          <div className="flex items-center gap-3">
+      <DialogContent className="sm:max-w-xl w-full max-w-[calc(100vw-2rem)] min-w-0 overflow-hidden p-5 sm:p-6 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl gap-4">
+        <DialogHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800 text-left min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-md bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 flex items-center justify-center text-zinc-700 dark:text-zinc-300 shrink-0">
               <FileText className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <DialogTitle className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100">
                 Template CV Kader
               </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
                 Gunakan template resmi PMII atau sesuaikan dengan berkas Word (.docx).
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-3.5 py-1 text-xs">
+        <div className="space-y-3.5 py-1 text-xs min-w-0">
           {/* Status Template Aktif */}
-          <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <div className="w-8 h-8 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 shrink-0">
                 <FileCheck className="w-4 h-4" />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate text-xs">
                     {hasCustomTemplate ? customTemplateName : "Template Bawaan PMII"}
                   </span>
                   <Badge
                     variant="outline"
-                    className={`text-[10px] px-1.5 py-0 rounded font-normal ${
+                    className={`text-[10px] px-1.5 py-0 rounded font-normal shrink-0 ${
                       hasCustomTemplate
                         ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200/60 dark:border-amber-900/40"
                         : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
@@ -180,7 +180,7 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
             </div>
 
             {hasCustomTemplate && (
-              <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+              <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -264,12 +264,12 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
           )}
 
           {/* Tag & Placeholder Panduan (Click to Copy) */}
-          <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/30 space-y-2">
-            <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-[11px]">
+          <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/30 space-y-2 min-w-0">
+            <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-[11px] min-w-0">
               <span className="font-medium text-zinc-800 dark:text-zinc-200">Tag Placeholder Tersedia:</span>
-              <span className="text-[10px] text-zinc-400">Klik tag untuk menyalin</span>
+              <span className="text-[10px] text-zinc-400 shrink-0">Klik tag untuk menyalin</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 min-w-0">
               {supportedTags.map((item) => {
                 const isCopied = copiedTag === item.tag;
                 return (
@@ -277,10 +277,10 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
                     key={item.tag}
                     type="button"
                     onClick={() => handleCopyTag(item.tag)}
-                    className="group relative flex flex-col items-start p-1.5 sm:p-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all text-left focus:outline-none"
+                    className="group relative flex flex-col items-start p-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all text-left focus:outline-none min-w-0 w-full overflow-hidden"
                   >
-                    <div className="w-full flex items-center justify-between gap-1">
-                      <span className="font-mono text-[11px] font-medium text-zinc-900 dark:text-zinc-100">
+                    <div className="w-full flex items-center justify-between gap-1 min-w-0">
+                      <span className="font-mono text-[11px] font-medium text-zinc-900 dark:text-zinc-100 truncate">
                         {item.tag}
                       </span>
                       {isCopied ? (
@@ -300,11 +300,11 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
         </div>
 
         {/* Footer Actions */}
-        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2">
+        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2 min-w-0 w-full">
           <a
             href="/templates/template-cv-pmii.docx"
             download="Template_CV_PMII_Dasar.docx"
-            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors shrink-0"
           >
             <FileDown className="w-3.5 h-3.5 text-zinc-500" />
             <span>Unduh Contoh (.docx)</span>
@@ -313,7 +313,7 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
           <Button
             size="sm"
             onClick={onClose}
-            className="h-8 px-4 text-xs font-medium rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 transition-colors"
+            className="h-8 px-4 text-xs font-medium rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 transition-colors shrink-0"
           >
             Selesai
           </Button>
