@@ -2190,11 +2190,6 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                       <Badge className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${typeBadge.color}`}>
                         {typeBadge.label}
                       </Badge>
-                      {activeReadingModal.fileSize && (
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          {activeReadingModal.fileSize}
-                        </span>
-                      )}
                       {activeReadingModal.isRef && (
                         <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
                           Referensi
