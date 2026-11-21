@@ -2,7 +2,7 @@
 
 import { Member, formatDateIndo, resolveMemberPhotoUrl } from "./types";
 import { base64ToArrayBuffer, fillDocxTemplate } from "@/app/dashboard/surat/component/docx-template-helper";
-import { getBase64Image, generateFallbackFormalPhoto } from "./generateCvPdf";
+import { getBase64Image, generateFallbackFormalPhoto, getPmiiPeriod } from "./generateCvPdf";
 import { parseOrgItems } from "@/app/anggota/profil/_components/HistoryTab";
 
 /**
@@ -11,9 +11,18 @@ import { parseOrgItems } from "@/app/anggota/profil/_components/HistoryTab";
  */
 export async function previewCustomDocxCv(
   member: Member,
-  customTemplateBase64: string
+  customTemplateBase64?: string
 ): Promise<void> {
-  const buffer = base64ToArrayBuffer(customTemplateBase64);
+  let buffer: ArrayBuffer;
+  if (customTemplateBase64) {
+    buffer = base64ToArrayBuffer(customTemplateBase64);
+  } else {
+    const res = await fetch("/templates/template-cv-pmii.docx");
+    if (!res.ok) {
+      throw new Error("Gagal mengunduh template CV resmi (/templates/template-cv-pmii.docx)");
+    }
+    buffer = await res.arrayBuffer();
+  }
 
   // Format Tempat & Tanggal Lahir
   const ttlParts: string[] = [];
@@ -61,19 +70,25 @@ export async function previewCustomDocxCv(
   smpOrgs.forEach((org) => orgParts.push(org));
   smaOrgs.forEach((org) => orgParts.push(org));
   ptOrgs.forEach((org) => orgParts.push(org));
+
+  // Sertakan Keikutsertaan PMII
+  const pmiiRange = getPmiiPeriod(member);
+  const pmiiLabel = member.jabatan && member.jabatan !== "Anggota" ? `PMII (${member.jabatan})` : "Pergerakan Mahasiswa Islam Indonesia (PMII)";
+  orgParts.push(pmiiRange ? `${pmiiLabel} (${pmiiRange})` : pmiiLabel);
+
   const formattedOrganisasi = orgParts.length > 0 ? orgParts.join("\n") : "-";
 
   const data: Record<string, string> = {
     nama: member.name || "-",
     nim: member.nim || member.nik || "-",
     ttl: formattedTTL,
-    alamat: member.alamatRumah || member.alamatDomisili || "-",
+    alamat: member.alamatRumah || member.alamatDomisili || (member as any).address || "-",
     phone: member.phone || "-",
     pendidikan: formattedPendidikan,
     organisasi: formattedOrganisasi,
-    motto: member.orientasiProfetik || member.motivasiMapaba || member.minatPassion || "-",
-    nipa: member.nipa || "-",
-    komisariat: member.komisariat || "-"
+    motto: (member as any).mottoHidup || member.orientasiProfetik || member.motivasiMapaba || member.minatPassion || "-",
+    nipa: member.nipa || (member as any).nta || "-",
+    komisariat: member.komisariat || (member as any).commissariat || "-"
   };
 
   // Siapkan foto kader (foto asli atau foto resmi PMII)

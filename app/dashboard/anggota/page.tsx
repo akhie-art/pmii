@@ -1251,7 +1251,7 @@ export default function AnggotaPage() {
     }
   };
 
-  // Buka Curriculum Vitae (CV) Organisasi (Mendukung Template Kustom Word yang Diunggah atau PDF Bawaan PMII di Tab Baru)
+  // Buka Curriculum Vitae (CV) Organisasi (Mendukung Template Kustom Word atau Template Resmi PMII di Tab Baru)
   const handleDownloadCV = async (member: Member) => {
     try {
       showToast(`Menyiapkan Curriculum Vitae ${member.name}...`);
@@ -1259,20 +1259,12 @@ export default function AnggotaPage() {
         ? localStorage.getItem(CV_TEMPLATE_STORAGE_KEY)
         : null;
 
-      if (customTemplateBase64) {
-        // Gunakan template dokumen Word kustom yang diunggah pengurus & buka pratinjau di tab baru
-        const { previewCustomDocxCv } = await import("./_components/previewCustomDocxCv");
-        await previewCustomDocxCv(member, customTemplateBase64);
-        showToast(`Membuka CV template kustom ${member.name} di tab baru...`);
-      } else {
-        // Gunakan template default PDF resmi PMII dengan Kop Surat
-        const { generateMemberCvPdf } = await import("./_components/generateCvPdf");
-        await generateMemberCvPdf(member);
-        showToast(`Membuka CV resmi ${member.name} di tab baru...`);
-      }
+      const { previewCustomDocxCv } = await import("./_components/previewCustomDocxCv");
+      await previewCustomDocxCv(member, customTemplateBase64 || undefined);
+      showToast(`Membuka CV Organisasi ${member.name} di tab baru...`);
     } catch (err) {
-      console.error("Gagal membuka CV:", err);
-      showToast("Gagal membuka berkas CV.");
+      console.error("Gagal membuka CV Organisasi:", err);
+      showToast("Gagal membuka berkas CV Organisasi.");
     }
   };
 

@@ -30,7 +30,7 @@ function parseCvOrgItems(raw?: string | null): { nama: string; tahunMulai?: stri
  * Menghitung rentang tahun keaktifan PMII untuk disajikan pada CV ATS & Formal
  * Contoh: "2021 - Sekarang" atau "2020 - 2024"
  */
-function getPmiiPeriod(member: Member): string {
+export function getPmiiPeriod(member: Member): string {
   let startYear = member.angkatan ? member.angkatan.replace(/\D/g, "") : "";
   if (!startYear && member.tahunMasukPT) {
     startYear = member.tahunMasukPT.replace(/\D/g, "");

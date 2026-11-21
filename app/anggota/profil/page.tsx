@@ -1269,20 +1269,14 @@ export default function ProfilPage() {
     const memberData = getMemberDataForCv();
     if (!memberData) return;
     try {
-      toast.info(`Menyiapkan Curriculum Vitae ${memberData.name}...`);
+      toast.info(`Menyiapkan Curriculum Vitae Organisasi ${memberData.name}...`);
       const customTemplateBase64 = typeof window !== "undefined"
         ? localStorage.getItem("PMII_CUSTOM_CV_TEMPLATE")
         : null;
 
-      if (customTemplateBase64) {
-        const { previewCustomDocxCv } = await import("@/app/dashboard/anggota/_components/previewCustomDocxCv");
-        await previewCustomDocxCv(memberData as any, customTemplateBase64);
-        toast.success(`Membuka CV template kustom di tab baru...`);
-      } else {
-        const { generateMemberCvPdf } = await import("@/app/dashboard/anggota/_components/generateCvPdf");
-        await generateMemberCvPdf(memberData as any);
-        toast.success(`Membuka CV resmi di tab baru...`);
-      }
+      const { previewCustomDocxCv } = await import("@/app/dashboard/anggota/_components/previewCustomDocxCv");
+      await previewCustomDocxCv(memberData as any, customTemplateBase64 || undefined);
+      toast.success(`Membuka CV Organisasi di tab baru...`);
     } catch (err) {
       console.error("Gagal membuka CV Organisasi:", err);
       toast.error("Gagal membuka berkas CV Organisasi.");
