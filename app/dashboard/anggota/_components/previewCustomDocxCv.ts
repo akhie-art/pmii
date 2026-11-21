@@ -110,6 +110,61 @@ export async function previewCustomDocxCv(
     renderAltChunks: true
   });
 
+  // 1. Periksa apakah docx-preview sudah merender gambar pas foto
+  const renderedImgs = Array.from(renderContainer.querySelectorAll("img"));
+  let foundPhotoInDom = false;
+  renderedImgs.forEach((img) => {
+    const src = img.getAttribute("src") || "";
+    // Identifikasi gambar pas foto kader
+    if (src.includes("member_photo") || (photoDataUrl && (src === photoDataUrl || src.length > 500))) {
+      foundPhotoInDom = true;
+      img.style.width = "3cm";
+      img.style.height = "4cm";
+      img.style.objectFit = "cover";
+      img.style.border = "1.5px solid #000000";
+      img.style.display = "block";
+      img.style.boxShadow = "none";
+      img.style.margin = "12px 0";
+    }
+  });
+
+  // 2. Jika pas foto belum muncul di DOM preview, sisipkan pas foto 3x4 di bawah Motto Hidup di sebelah kiri
+  if (!foundPhotoInDom && photoDataUrl) {
+    const allElements = Array.from(renderContainer.querySelectorAll("p, tr, td, div, span"));
+    const mottoEl = allElements.find((el) => {
+      const txt = (el.textContent || "").trim().toLowerCase();
+      return txt.includes("motto hidup") || txt.includes("motto :");
+    });
+
+    const photoWrapper = document.createElement("div");
+    photoWrapper.className = "cv-pas-foto-container";
+    photoWrapper.style.cssText = "display: flex; justify-content: flex-start; margin-top: 14px; margin-bottom: 14px; text-align: left;";
+    photoWrapper.innerHTML = `
+      <div style="display: inline-block; text-align: left;">
+        <img
+          src="${photoDataUrl}"
+          alt="Pas Foto 3x4"
+          style="width: 3cm; height: 4cm; object-fit: cover; border: 1.5px solid #000000; box-shadow: none; display: block; background-color: #ffffff;"
+        />
+      </div>
+    `;
+
+    if (mottoEl) {
+      const tableParent = mottoEl.closest("table");
+      if (tableParent && tableParent.parentNode) {
+        tableParent.parentNode.insertBefore(photoWrapper, tableParent.nextSibling);
+      } else {
+        const pParent = mottoEl.closest("p") || mottoEl;
+        if (pParent.parentNode) {
+          pParent.parentNode.insertBefore(photoWrapper, pParent.nextSibling);
+        }
+      }
+    } else {
+      const firstSection = renderContainer.querySelector("section.docx") || renderContainer;
+      firstSection.appendChild(photoWrapper);
+    }
+  }
+
   const cleanName = (member.name || "Kader").replace(/[^a-zA-Z0-9_\-]/g, "_");
   const fileName = `CV_${cleanName}.docx`;
   const docxBlobUrl = URL.createObjectURL(result.blob);

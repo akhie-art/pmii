@@ -180,13 +180,55 @@ export function fillDocxTemplate(
         const docFile = outZip.file("word/document.xml");
         if (docFile) {
           let docXml = docFile.asText();
-          const solidFillRegex = /<a:solidFill><a:schemeClr val="lt1"\s*\/><\/a:solidFill>/;
+
+          if (!docXml.includes("xmlns:r=")) {
+            docXml = docXml.replace("<w:document ", '<w:document xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+          }
+          if (!docXml.includes("xmlns:wp=")) {
+            docXml = docXml.replace("<w:document ", '<w:document xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ');
+          }
+          if (!docXml.includes("xmlns:a=")) {
+            docXml = docXml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ');
+          }
+          if (!docXml.includes("xmlns:pic=")) {
+            docXml = docXml.replace("<w:document ", '<w:document xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
+          }
+
+          const photoDrawing = `<w:drawing xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="1080000" cy="1440000"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1703607031" name="Pas Foto 3x4"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1703607031" name="member_photo.jpg"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdMemberPhoto"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1080000" cy="1440000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln w="9525"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>`;
+
+          // 1. Cek apakah ada AlternateContent kotak teks Foto 3x4
+          const alternateRegex = /<mc:AlternateContent>[\s\S]*?Foto 3x4[\s\S]*?<\/mc:AlternateContent>/g;
+          if (alternateRegex.test(docXml)) {
+            docXml = docXml.replace(alternateRegex, photoDrawing);
+          }
+
+          // 2. Cek apakah ada placeholder tag teks Foto 3x4 atau [Foto 3x4] atau {{foto}}
+          const fotoTextRegex = /<w:r[^>]*>[\s\S]*?<w:t[^>]*>(?:Foto 3x4|\[Foto 3x4\]|\{\{foto\}\}|\{\{photo\}\})<\/w:t>[\s\S]*?<\/w:r>/g;
+          if (fotoTextRegex.test(docXml)) {
+            docXml = docXml.replace(fotoTextRegex, `<w:r>${photoDrawing}</w:r>`);
+          }
+
+          // 3. Fallback solidFill (jika ada shape drawingml lama)
+          const solidFillRegex = /<a:solidFill><a:schemeClr val="lt1"\s*\/><\/a:solidFill>/g;
           const blipFill =
             '<a:blipFill><a:blip r:embed="rIdMemberPhoto"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>';
-
           if (solidFillRegex.test(docXml)) {
             docXml = docXml.replace(solidFillRegex, blipFill);
           }
+
+          // 4. Jika belum ada drawing pas foto sama sekali, sisipkan di bawah Motto Hidup di sebelah kiri
+          if (!docXml.includes('r:embed="rIdMemberPhoto"')) {
+            const mottoMatch = docXml.match(/(?:Motto\s*<\/w:t>[\s\S]*?Hidup|Motto\s*Hidup|\{\{motto\}\})/);
+            if (mottoMatch && mottoMatch.index !== undefined) {
+              const tblCloseIdx = docXml.indexOf("</w:tbl>", mottoMatch.index);
+              if (tblCloseIdx !== -1) {
+                const insertPos = tblCloseIdx + "</w:tbl>".length;
+                const photoParagraph = `<w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="140" w:after="140"/></w:pPr><w:r>${photoDrawing}</w:r></w:p>`;
+                docXml = docXml.slice(0, insertPos) + photoParagraph + docXml.slice(insertPos);
+              }
+            }
+          }
+
           if (docXml.includes("<w:t>Foto 3x4</w:t>")) {
             docXml = docXml.replace("<w:t>Foto 3x4</w:t>", "<w:t></w:t>");
           }
