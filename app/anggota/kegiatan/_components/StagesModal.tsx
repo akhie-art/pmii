@@ -68,6 +68,7 @@ interface StagesModalProps {
   rolePrefix: string;
   kurikulumData?: Record<string, any> | null;
   kaderisasiList?: any[];
+  onOpenTwibbon?: () => void;
 }
 
 export const StagesModal: React.FC<StagesModalProps> = ({
@@ -85,7 +86,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
   onCadreUpdated,
   rolePrefix,
   kurikulumData,
-  kaderisasiList
+  kaderisasiList,
+  onOpenTwibbon
 }) => {
   // RTL direct upload state
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
@@ -775,6 +777,34 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             {/* TAHAP 1: FORMULIR PENDAFTARAN */}
             {currentStageTab === 1 && (
               <div className="space-y-4 min-w-0">
+                {/* Banner Twibbon Kampanye Resmi */}
+                {event?.twibbon?.isActive && event?.twibbon?.frameUrl && (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-amber-50/70 dark:from-blue-950/40 dark:to-amber-950/20 border border-blue-200/80 dark:border-blue-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="p-2 rounded-xl bg-blue-600 text-white shadow-2xs shrink-0">
+                        <Sparkles className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block truncate">
+                          Twibbon Kampanye {event.name}
+                        </span>
+                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
+                          Semarakkan kaderisasi! Unduh twibbon & salin caption medsos.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={onOpenTwibbon}
+                      className="h-8 px-3 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shrink-0 cursor-pointer shadow-none transition-colors"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1" />
+                      Buat Twibbon
+                    </Button>
+                  </div>
+                )}
+
                 {myReg ? (
                   <div className="space-y-3 min-w-0">
                     <div className="p-3.5 sm:p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 space-y-3 min-w-0">

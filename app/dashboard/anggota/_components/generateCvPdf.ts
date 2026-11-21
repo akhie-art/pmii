@@ -1,23 +1,29 @@
-import { jsPDF } from "jspdf";
 import type { Member } from "./types";
+import { resolveMemberPhotoUrl, formatDateIndo } from "./types";
+export { resolveMemberPhotoUrl, formatDateIndo };
 
-/**
- * Resolves the member's photo URL or data URI from any available field
- */
-export function resolveMemberPhotoUrl(member: Partial<Member>): string {
-  // 1. Check avatar
-  if (member.avatar && typeof member.avatar === "string" && member.avatar.trim()) {
-    const a = member.avatar.trim();
-    if (a.startsWith("data:") || a.startsWith("http://") || a.startsWith("https://") || a.startsWith("/")) {
-      return a;
-    }
-    if (a.includes("/")) {
-      return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/${a}`;
-    }
-    return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/avatars/${a}`;
+function parseCvOrgItems(raw?: string | null): { nama: string; tahunMulai?: string; tahunSelesai?: string }[] {
+  if (!raw || !raw.trim()) return [];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item: any) => ({
+            nama: (item.nama || item.name || "").trim(),
+            tahunMulai: (item.tahunMulai || item.startYear || "").trim(),
+            tahunSelesai: (item.tahunSelesai || item.endYear || "").trim()
+          }))
+          .filter((i) => i.nama);
+      }
+    } catch {}
   }
-
-  return "";
+  return trimmed
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => ({ nama: s, tahunMulai: "", tahunSelesai: "" }));
 }
 
 /**
@@ -201,21 +207,6 @@ export async function getBase64Image(url?: string): Promise<{ dataUrl: string; f
   return null;
 }
 
-function formatDateIndo(dateStr?: string): string {
-  if (!dateStr) return "-";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric"
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 /**
  * Resolves Kop Surat information based on the member's commissariat
  */
@@ -263,6 +254,7 @@ function getCommissariatKopData(commName: string) {
  * PMII Kop Surat and table layout from the provided document template.
  */
 export async function generateMemberCvPdf(member: Member): Promise<void> {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -357,21 +349,32 @@ export async function generateMemberCvPdf(member: Member): Promise<void> {
   const ttlText = ttlParts.length > 0 ? ttlParts.join(", ") : "-";
 
   // Riwayat Pendidikan (Each institution on its own line)
+  const formatEdu = (name?: string, start?: string, end?: string) => {
+    if (!name) return "";
+    const period = [start, end].filter(Boolean).join(" - ");
+    return period ? `${name} (${period})` : name;
+  };
+
   const eduList: string[] = [];
-  if (member.pendidikanSD) eduList.push(member.pendidikanSD);
-  if (member.pendidikanSMP) eduList.push(member.pendidikanSMP);
-  if (member.pendidikanSMA) eduList.push(member.pendidikanSMA);
+  if (member.pendidikanSD) eduList.push(formatEdu(member.pendidikanSD, member.tahunMasukSD, member.tahunLulusSD));
+  if (member.pendidikanSMP) eduList.push(formatEdu(member.pendidikanSMP, member.tahunMasukSMP, member.tahunLulusSMP));
+  if (member.pendidikanSMA) eduList.push(formatEdu(member.pendidikanSMA, member.tahunMasukSMA, member.tahunLulusSMA));
   if (member.perguruanTinggi) {
     const campus = member.jurusan ? `${member.perguruanTinggi} (${member.jurusan})` : member.perguruanTinggi;
-    eduList.push(campus);
+    eduList.push(formatEdu(campus, member.tahunMasukPT, member.tahunLulusPT));
   }
   if (eduList.length === 0) eduList.push("-");
 
   // Pengalaman Organisasi (Each organization on its own line)
   const orgList: string[] = [];
-  if (member.organisasiSMP) orgList.push(member.organisasiSMP);
-  if (member.organisasiSMA) orgList.push(member.organisasiSMA);
-  if (member.organisasiPT) orgList.push(member.organisasiPT);
+  const formatOrgItem = (item: { nama: string; tahunMulai?: string; tahunSelesai?: string }) => {
+    const period = [item.tahunMulai, item.tahunSelesai].filter(Boolean).join(" - ");
+    return period ? `${item.nama} (${period})` : item.nama;
+  };
+
+  parseCvOrgItems(member.organisasiSMP).forEach((item) => orgList.push(formatOrgItem(item)));
+  parseCvOrgItems(member.organisasiSMA).forEach((item) => orgList.push(formatOrgItem(item)));
+  parseCvOrgItems(member.organisasiPT).forEach((item) => orgList.push(formatOrgItem(item)));
   orgList.push(member.jabatan && member.jabatan !== "Anggota" ? `PMII (${member.jabatan})` : "PMII");
 
   // Motto Hidup
@@ -483,7 +486,6 @@ export async function generateMemberCvPdf(member: Member): Promise<void> {
   doc.text(`Grobogan, ${todayStr}`, signX, signY);
 
   signY += 5.5;
-  doc.text("Yang bersangkutan,", signX, signY);
 
   // Ruang untuk tanda tangan
   signY += 24;
@@ -497,7 +499,349 @@ export async function generateMemberCvPdf(member: Member): Promise<void> {
     doc.text(`NIPA. ${member.nipa}`, signX, signY);
   }
 
-  // 6. SIMPAN FILE PDF
-  const safeName = (member.name || "Kader").replace(/[^a-zA-Z0-9]/g, "_");
-  doc.save(`CV_${safeName}.pdf`);
+  // 6. BUKA FILE PDF DI TAB BARU (PREVIEW SEPERTI SIAPKERJA)
+  const pdfBlob = doc.output("blob");
+  const blob = new Blob([pdfBlob], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(blob);
+  const opened = window.open(blobUrl, "_blank");
+  if (!opened) {
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+}
+
+/**
+ * Generates an ATS-Friendly Curriculum Vitae (PDF)
+ * Formatted with clean typography, standard single-column hierarchy,
+ * pure black text (0, 0, 0), and high-contrast styling that passes
+ * Applicant Tracking System (ATS) parsers.
+ */
+export async function generateMemberCvAtsPdf(member: Member): Promise<void> {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4"
+  });
+
+  const pageWidth = 210;
+  const marginX = 20;
+  const contentWidth = pageWidth - marginX * 2; // 170mm
+  let curY = 22;
+
+  // Set warna teks default hitam pekat
+  doc.setTextColor(0, 0, 0);
+
+  // 1. NAMA LENGKAP (Bold, 18pt, Hitam Pekat)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(0, 0, 0);
+  doc.text((member.name || "KADER PMII").toUpperCase(), marginX, curY);
+
+  curY += 6;
+
+  // 2. SUBTITLE / PROFESSIONAL TITLE (Hitam Pekat)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  const headline = [
+    member.perguruanTinggi ? `Mahasiswa ${member.perguruanTinggi}` : "",
+    member.jurusan ? `Jurusan ${member.jurusan}` : "",
+    "Kader PMII"
+  ].filter(Boolean).join(" | ") || "Kader PMII";
+  doc.text(headline, marginX, curY);
+
+  curY += 5;
+
+  // 3. BARIS KONTAK (Single-line ATS-compliant, Hitam Pekat)
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  const contacts: string[] = [];
+  if (member.email) contacts.push(member.email);
+  if (member.phone) contacts.push(member.phone);
+  const location = [member.tempatLahir, member.alamatDomisili || member.alamatRumah].filter(Boolean)[0];
+  if (location) contacts.push(location);
+  if (member.instagram) contacts.push(`Instagram: @${member.instagram.replace(/^@/, "")}`);
+
+  doc.text(contacts.join("   |   "), marginX, curY);
+
+  curY += 3.5;
+  // Garis pemisah horizontal hitam pekat
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.35);
+  doc.line(marginX, curY, marginX + contentWidth, curY);
+  curY += 6;
+
+  // Helper: auto-add new page if near bottom
+  const checkPageBreak = (neededSpace: number = 10) => {
+    if (curY + neededSpace > 280) {
+      doc.addPage();
+      curY = 20;
+      doc.setTextColor(0, 0, 0);
+    }
+  };
+
+  const renderSectionHeader = (title: string) => {
+    checkPageBreak(15);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(title.toUpperCase(), marginX, curY);
+    curY += 2;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.25);
+    doc.line(marginX, curY, marginX + contentWidth, curY);
+    curY += 5;
+  };
+
+  // 4. RINGKASAN PROFESIONAL (SUMMARY)
+  const summaryText = member.orientasiProfetik || member.motivasiMapaba || member.minatPassion;
+  if (summaryText) {
+    renderSectionHeader("Ringkasan Profesional");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    const splitSummary = doc.splitTextToSize(summaryText, contentWidth);
+    doc.text(splitSummary, marginX, curY);
+    curY += splitSummary.length * 4.2 + 3.5;
+  }
+
+  // 5. PENDIDIKAN (EDUCATION)
+  renderSectionHeader("Pendidikan");
+
+  if (member.perguruanTinggi) {
+    checkPageBreak(12);
+    const ptPeriod = [member.tahunMasukPT, member.tahunLulusPT || (member.tahunMasukPT ? "Sekarang" : "")].filter(Boolean).join(" - ");
+    const angkatanStr = ptPeriod ? ptPeriod : member.angkatan ? `Angkatan ${member.angkatan}` : "";
+    const angkatanW = angkatanStr ? doc.getTextWidth(angkatanStr) + 6 : 0;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+    const univLines = doc.splitTextToSize(member.perguruanTinggi, contentWidth - angkatanW);
+    doc.text(univLines, marginX, curY);
+
+    if (angkatanStr) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(angkatanStr, marginX + contentWidth, curY, { align: "right" });
+    }
+    curY += univLines.length * 4.2;
+
+    const subDegree = [member.fakultas, member.jurusan].filter(Boolean).join(" - ");
+    if (subDegree) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      const subLines = doc.splitTextToSize(subDegree, contentWidth);
+      doc.text(subLines, marginX, curY);
+      curY += subLines.length * 4.2;
+    }
+    curY += 1.5;
+  }
+
+  if (member.pendidikanSMA) {
+    checkPageBreak(8);
+    const smaPeriod = [member.tahunMasukSMA, member.tahunLulusSMA].filter(Boolean).join(" - ");
+    const periodW = smaPeriod ? doc.getTextWidth(smaPeriod) + 6 : 0;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    const smaText = member.pendidikanSMA.toLowerCase().includes("smk") || 
+                    member.pendidikanSMA.toLowerCase().includes("sma") || 
+                    member.pendidikanSMA.toLowerCase().includes("ma ")
+      ? member.pendidikanSMA
+      : `SMA / Sederajat: ${member.pendidikanSMA}`;
+    const smaLines = doc.splitTextToSize(smaText, contentWidth - periodW);
+    doc.text(smaLines, marginX, curY);
+
+    if (smaPeriod) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(smaPeriod, marginX + contentWidth, curY, { align: "right" });
+    }
+    curY += smaLines.length * 4.2;
+  }
+
+  if (member.pendidikanSMP) {
+    checkPageBreak(8);
+    const smpPeriod = [member.tahunMasukSMP, member.tahunLulusSMP].filter(Boolean).join(" - ");
+    const periodW = smpPeriod ? doc.getTextWidth(smpPeriod) + 6 : 0;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    const smpText = member.pendidikanSMP.toLowerCase().includes("smp") || 
+                    member.pendidikanSMP.toLowerCase().includes("mts")
+      ? member.pendidikanSMP
+      : `SMP / Sederajat: ${member.pendidikanSMP}`;
+    const smpLines = doc.splitTextToSize(smpText, contentWidth - periodW);
+    doc.text(smpLines, marginX, curY);
+
+    if (smpPeriod) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(smpPeriod, marginX + contentWidth, curY, { align: "right" });
+    }
+    curY += smpLines.length * 4.2;
+  }
+
+  if (member.pendidikanSD) {
+    checkPageBreak(8);
+    const sdPeriod = [member.tahunMasukSD, member.tahunLulusSD].filter(Boolean).join(" - ");
+    const periodW = sdPeriod ? doc.getTextWidth(sdPeriod) + 6 : 0;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    const sdText = member.pendidikanSD.toLowerCase().includes("sd") || 
+                   member.pendidikanSD.toLowerCase().includes("mi ")
+      ? member.pendidikanSD
+      : `SD / Sederajat: ${member.pendidikanSD}`;
+    const sdLines = doc.splitTextToSize(sdText, contentWidth - periodW);
+    doc.text(sdLines, marginX, curY);
+
+    if (sdPeriod) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(sdPeriod, marginX + contentWidth, curY, { align: "right" });
+    }
+    curY += sdLines.length * 4.2;
+  }
+  curY += 2;
+
+  // 6. PENGALAMAN ORGANISASI & KEPEMIMPINAN
+  renderSectionHeader("Pengalaman Organisasi & Kepemimpinan");
+
+  // PMII
+  checkPageBreak(22);
+  const commName = member.komisariat || "Cabang Grobogan";
+  const commW = commName ? doc.getTextWidth(commName) + 6 : 0;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
+  const pmiiTitleLines = doc.splitTextToSize("Pergerakan Mahasiswa Islam Indonesia (PMII)", contentWidth - commW);
+  doc.text(pmiiTitleLines, marginX, curY);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text(commName, marginX + contentWidth, curY, { align: "right" });
+  curY += pmiiTitleLines.length * 4.2 + 1;
+
+  // Bullets Pengalaman PMII
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  const pmiiBullets = [
+    `Aktif berpartisipasi dalam agenda pengkaderan dan pergerakan intelektual tingkat ${commName}.`,
+    `Telah menyelesaikan jenjang kaderisasi formal: ${member.level || "MAPABA"}${member.nipa ? ` (NIPA: ${member.nipa})` : ""}.`
+  ];
+  pmiiBullets.forEach((bullet) => {
+    checkPageBreak(8);
+    const lines = doc.splitTextToSize("•  " + bullet, contentWidth - 4);
+    doc.text(lines, marginX + 2, curY);
+    curY += lines.length * 4.2;
+  });
+  curY += 2;
+
+  // Organisasi Lainnya (Tingkat Kampus / SMA / SMP - Mendukung Repeat & Tahun)
+  const otherOrgSections = [
+    { items: parseCvOrgItems(member.organisasiPT), level: "Tingkat Kampus / Umum" },
+    { items: parseCvOrgItems(member.organisasiSMA), level: "Tingkat SMA" },
+    { items: parseCvOrgItems(member.organisasiSMP), level: "Tingkat SMP" }
+  ];
+
+  otherOrgSections.forEach(({ items, level }) => {
+    items.forEach((item) => {
+      checkPageBreak(8);
+      const period = [item.tahunMulai, item.tahunSelesai].filter(Boolean).join(" - ");
+      const periodW = period ? doc.getTextWidth(period) + 6 : 0;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+
+      const titleText = `•  ${item.nama} (${level})`;
+      const splitLines = doc.splitTextToSize(titleText, contentWidth - periodW);
+      doc.text(splitLines, marginX + 2, curY);
+
+      if (period) {
+        doc.text(period, marginX + contentWidth, curY, { align: "right" });
+      }
+      curY += splitLines.length * 4.2 + 0.5;
+    });
+  });
+  curY += 1.5;
+
+  // 7. KADERISASI & PELATIHAN RESMI
+  if (member.history && member.history.length > 0) {
+    renderSectionHeader("Kaderisasi & Pelatihan Resmi");
+    member.history.forEach((h) => {
+      checkPageBreak(8);
+      const locDate = [h.location, h.date].filter(Boolean).join(" - ");
+      const locDateW = locDate ? doc.getTextWidth(locDate) + 6 : 0;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      const trainingTitle = `Pelatihan Kader: ${h.level}`;
+      const titleLines = doc.splitTextToSize(trainingTitle, contentWidth - locDateW);
+      doc.text(titleLines, marginX + 2, curY);
+
+      if (locDate) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+        doc.text(locDate, marginX + contentWidth, curY, { align: "right" });
+      }
+      curY += titleLines.length * 4.2;
+    });
+    curY += 2;
+  }
+
+  // 8. KEAHLIAN & MINAT
+  renderSectionHeader("Keahlian & Minat");
+  checkPageBreak(15);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  const skillsList = [
+    member.minatPassion ? `Bidang Minat: ${member.minatPassion}` : "",
+    "Keahlian: Kepemimpinan Organisasi, Komunikasi Publik, Manajemen Tim, Critical Thinking",
+    `Status Keanggotaan: ${member.status} (${member.level || "Kader"})`
+  ].filter(Boolean);
+
+  skillsList.forEach((skill) => {
+    checkPageBreak(8);
+    const lines = doc.splitTextToSize("•  " + skill, contentWidth - 4);
+    doc.text(lines, marginX + 2, curY);
+    curY += lines.length * 4.2;
+  });
+
+  // 9. BUKA FILE PDF DI TAB BARU (PREVIEW SEPERTI SIAPKERJA)
+  const pdfBlob = doc.output("blob");
+  const blob = new Blob([pdfBlob], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(blob);
+  const opened = window.open(blobUrl, "_blank");
+  if (!opened) {
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 }

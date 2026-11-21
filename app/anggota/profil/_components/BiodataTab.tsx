@@ -1,7 +1,14 @@
 "use client";
 
-import React from "react";
-import { User, Calendar, MapPin, ShieldAlert, HeartPulse, CreditCard, Home } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { User, Calendar, MapPin, ShieldAlert, HeartPulse, CreditCard, Home, Camera, ZoomIn, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectTrigger,
@@ -32,10 +39,128 @@ export function BiodataTab({
   golonganDarah,
   setGolonganDarah,
   riwayatPenyakit,
-  setRiwayatPenyakit
+  setRiwayatPenyakit,
+  pasFoto,
+  isUploadingPasFoto,
+  onPasFotoUpload,
+  onRemovePasFoto
 }: BiodataTabProps) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
+      {/* 1. PAS FOTO RESMI (3x4) */}
+      <div className="p-3.5 sm:p-4 rounded-lg bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+            Pas Foto Resmi (3×4)
+          </label>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 hidden sm:inline">
+            Digunakan untuk KTA Digital & CV Resmi PMII (Kolom Terpisah dari Avatar)
+          </span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3.5 sm:gap-4">
+          {pasFoto ? (
+            <div className="relative group shrink-0">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsPreviewOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setIsPreviewOpen(true);
+                }}
+                className="w-24 h-32 rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 shadow-2xs cursor-pointer relative"
+                title="Klik untuk melihat foto penuh"
+              >
+                <img
+                  src={pasFoto}
+                  alt="Pas Foto Kader"
+                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs gap-1">
+                  <ZoomIn className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="w-24 h-32 rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex flex-col items-center justify-center text-zinc-400 shrink-0">
+              <User className="w-7 h-7 opacity-40 mb-1" />
+              <span className="text-[10px] font-medium text-center">Foto 3×4</span>
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">
+            <div>
+              <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                {pasFoto ? "Pas Foto Kader Terpasang" : "Unggah Pas Foto Berlatar Resmi"}
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                Disarankan pas foto berpakaian rapi / jas PMII dengan rasio 3:4 (Maks. 5 MB).
+              </p>
+            </div>
+
+            {isEditing && (
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5">
+                <input
+                  type="file"
+                  ref={photoInputRef}
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  className="hidden"
+                  onChange={onPasFotoUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isUploadingPasFoto}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="h-8 px-3 text-xs rounded-md border-zinc-200 dark:border-zinc-800 cursor-pointer flex items-center gap-1.5 font-medium"
+                >
+                  <Camera className="w-3.5 h-3.5 text-zinc-500" />
+                  <span>{pasFoto ? "Ganti Foto" : "Pilih Foto 3×4"}</span>
+                </Button>
+
+                {pasFoto && onRemovePasFoto && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingPasFoto}
+                    onClick={onRemovePasFoto}
+                    className="h-8 px-2.5 text-xs rounded-md border-zinc-200 dark:border-zinc-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus</span>
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Zoom Preview */}
+        {pasFoto && (
+          <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+            <DialogContent className="max-w-md p-4 sm:p-5 overflow-hidden">
+              <DialogHeader className="pb-2.5 border-b border-zinc-100 dark:border-zinc-800 pr-8">
+                <DialogTitle className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Pratinjau Pas Foto Resmi
+                </DialogTitle>
+              </DialogHeader>
+              <div className="my-2 max-h-[70vh] flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-md p-2">
+                <img
+                  src={pasFoto}
+                  alt="Pas Foto Penuh"
+                  className="max-h-[65vh] w-auto max-w-full object-contain rounded shadow-xs"
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
       {/* Row 1: Nama Lengkap & Jenis Kelamin */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
         <ProfileField
@@ -157,12 +282,28 @@ export function BiodataTab({
             </InputGroupAddon>
             <InputGroupInput
               type="date"
+              max={new Date().toISOString().split("T")[0]}
               value={tanggalLahir}
               onChange={(e) => setTanggalLahir(e.target.value)}
             />
           </InputGroup>
         </ProfileField>
       </div>
+
+      {/* Pratinjau Format Resmi Tempat, Tanggal Lahir (Kombinasi Standar Indonesia) */}
+      {!isEditing && (tempatLahir || tanggalLahir) && (
+        <div className="px-3.5 py-2 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="font-semibold text-blue-700 dark:text-blue-400 shrink-0">TTL Resmi:</span>
+            <span className="font-medium truncate">
+              {tempatLahir ? tempatLahir : "Kota belum diisi"}, {tanggalLahir ? formatIndonesianDate(tanggalLahir) : "Tanggal belum diisi"}
+            </span>
+          </div>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 shrink-0 border border-blue-200 dark:border-blue-800">
+            Standar CV & KTA
+          </span>
+        </div>
+      )}
 
       {/* Row 4: Alamat Asal & Domisili */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">

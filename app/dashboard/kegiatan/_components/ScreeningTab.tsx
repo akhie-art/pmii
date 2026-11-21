@@ -1,10 +1,27 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Eye, CheckCircle2, Check, XCircle, Clock } from "lucide-react";
+import {
+  Search,
+  Eye,
+  CheckCircle2,
+  Check,
+  XCircle,
+  Clock,
+  Trash2,
+  AlertTriangle
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
 import type { EventActivity, ParticipantRegistration } from "./types";
 
 interface ScreeningTabProps {
@@ -14,6 +31,7 @@ interface ScreeningTabProps {
   onQuickApprove?: (reg: ParticipantRegistration) => void;
   onBatchApprove?: (regs: ParticipantRegistration[]) => void;
   onOpenAddParticipant?: () => void;
+  onDeleteRegistration?: (regId: string, cadreName?: string) => Promise<void> | void;
 }
 
 export default function ScreeningTab({
@@ -22,9 +40,12 @@ export default function ScreeningTab({
   onOpenScreening,
   onQuickApprove,
   onBatchApprove,
-  onOpenAddParticipant
+  onOpenAddParticipant,
+  onDeleteRegistration
 }: ScreeningTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<ParticipantRegistration | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const totalFields = (event.formFields || []).length;
 
@@ -44,6 +65,17 @@ export default function ScreeningTab({
     const pendingList = registrations.filter((r) => r.status === "PENDING");
     if (pendingList.length > 0) {
       onBatchApprove(pendingList);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmTarget || !onDeleteRegistration) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteRegistration(deleteConfirmTarget.id, deleteConfirmTarget.cadreName);
+      setDeleteConfirmTarget(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -145,7 +177,7 @@ export default function ScreeningTab({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto">
                   <span className="text-[10px] text-zinc-500 font-medium mr-1">
                     Berkas: {verifiedCount}/{totalFields}
                   </span>
@@ -172,13 +204,69 @@ export default function ScreeningTab({
                     <Eye className="w-3 h-3" />
                     <span>Tinjau</span>
                   </Button>
+
+                  {/* Tombol Hapus Pendaftar */}
+                  {onDeleteRegistration && (
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setDeleteConfirmTarget(reg)}
+                      className="h-7.5 w-7.5 p-0 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:text-rose-600 hover:border-rose-200 dark:hover:border-rose-900/50 rounded-md cursor-pointer transition-colors"
+                      title="Hapus data pendaftaran"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Modal Konfirmasi Hapus Pendaftar */}
+      {deleteConfirmTarget && (
+        <Dialog open={Boolean(deleteConfirmTarget)} onOpenChange={(open) => !open && setDeleteConfirmTarget(null)}>
+          <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                <span>Hapus Pendaftaran Peserta</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-zinc-500 pt-1 leading-relaxed">
+                Apakah Anda yakin ingin menghapus data pendaftaran kader{" "}
+                <strong className="text-zinc-900 dark:text-zinc-100">{deleteConfirmTarget.cadreName}</strong>
+                {deleteConfirmTarget.registrationNumber && ` (${deleteConfirmTarget.registrationNumber})`}?
+                <br />
+                Data berkas screening dan riwayat pendaftaran ini akan dihapus secara permanen.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmTarget(null)}
+                disabled={isDeleting}
+                className="h-8 text-xs px-3 rounded-lg border-zinc-200 dark:border-zinc-800"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="h-8 text-xs px-3.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? "Menghapus..." : "Ya, Hapus"}</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
-

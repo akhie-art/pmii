@@ -14,11 +14,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:role(peserta|anggota|kader)",
-        destination: "/kader",
+        destination: "/anggota",
       },
       {
         source: "/:role(peserta|anggota|kader)/:path*",
-        destination: "/kader/:path*",
+        destination: "/anggota/:path*",
       },
       {
         source: "/:role(admin|cabang|pc|pengurus|instruktur|superadmin|super_admin)",

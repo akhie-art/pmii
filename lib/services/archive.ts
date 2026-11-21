@@ -1,5 +1,5 @@
 import { KEYS } from "./defaults";
-import { getTableData, saveTableData } from "./core";
+import { getTableData, saveTableData, deleteTableRow } from "./core";
 import { isValidUUID, generateUUID } from "../utils";
 
 export async function getArsip(): Promise<any[]> {
@@ -12,5 +12,13 @@ export async function saveArsip(arsipList: any[]): Promise<boolean> {
     id: isValidUUID(String(a.id)) ? String(a.id) : generateUUID(),
     created_at: a.created_at || new Date().toISOString()
   }));
-  return saveTableData<any>("arsip", KEYS.ARSIP, normalized);
+  return saveTableData<any>("arsip", KEYS.ARSIP, normalized, {
+    allowDeletion: true,
+    forceWipeAll: true
+  });
 }
+
+export async function deleteArsip(id: string): Promise<boolean> {
+  return deleteTableRow("arsip", id, KEYS.ARSIP);
+}
+

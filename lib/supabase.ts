@@ -168,7 +168,7 @@ export function extractStorageInfo(rawUrl: string): { bucket: string; path: stri
   }
 
   // Pattern 2: :bucket/:path where bucket is known
-  const knownBuckets = ["materials", "articles", "documents", "avatars", "komisariat"];
+  const knownBuckets = ["materials", "articles", "documents", "avatars", "komisariat", "pas-foto"];
   for (const b of knownBuckets) {
     if (cleanUrl.startsWith(`${b}/`)) {
       return {
@@ -178,7 +178,13 @@ export function extractStorageInfo(rawUrl: string): { bucket: string; path: stri
     }
   }
 
-  // Pattern 3: Relative paths that belong to bucket materials
+  // Pattern 3: Relative paths that belong to bucket materials or pas-foto
+  if (cleanUrl.startsWith("pas-foto/")) {
+    return {
+      bucket: "pas-foto",
+      path: decodeURIComponent(cleanUrl.slice("pas-foto/".length))
+    };
+  }
   if (
     cleanUrl.startsWith("drive/") ||
     cleanUrl.startsWith("ktp/") ||

@@ -907,19 +907,13 @@ export default function DashboardLayout({
         position="bottom-right"
         toastOptions={{
           classNames: {
-            toast: "!bg-zinc-900 !border !border-zinc-800 !text-zinc-100 !shadow-2xl !rounded-xl !text-xs !font-semibold",
-            title: "!text-zinc-50 !font-bold !text-xs",
-            description: "!text-zinc-400 !text-[10px]",
-            success: "!border-emerald-500/30",
-            error: "!border-rose-500/30",
-            warning: "!border-amber-500/30",
-            info: "!border-blue-500/30",
-            actionButton: "!bg-pmii-gold !text-zinc-900 !font-bold !text-[10px] !rounded-lg",
-            cancelButton: "!bg-zinc-800 !text-zinc-400 !text-[10px] !rounded-lg",
+            toast: "!bg-white dark:!bg-zinc-900 !border !border-zinc-200/90 dark:!border-zinc-800 !text-zinc-900 dark:!text-zinc-100 !shadow-lg !rounded-xl !text-xs p-3.5",
+            title: "!text-zinc-900 dark:!text-zinc-100 !font-semibold !text-xs",
+            description: "!text-zinc-500 dark:!text-zinc-400 !text-[11px] !mt-0.5",
+            actionButton: "!bg-blue-600 hover:!bg-blue-700 !text-white !font-medium !text-xs !rounded-lg",
+            cancelButton: "!bg-zinc-100 dark:!bg-zinc-800 !text-zinc-600 dark:!text-zinc-300 !text-xs !rounded-lg",
           }
         }}
-        richColors
-        closeButton
       />
     </SidebarProvider>
   );

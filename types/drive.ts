@@ -30,4 +30,7 @@ export interface FolderItem {
   isLocked?: boolean;
   password?: string;
   parent?: string | null;
+  uploader?: string;
+  uploaderAvatar?: string;
+  access?: "Public" | "Internal";
 }

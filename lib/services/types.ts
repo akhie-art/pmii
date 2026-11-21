@@ -92,9 +92,17 @@ export interface CadreFollowUp {
   alamatDomisili?: string;
   domicileAddress?: string;
   pendidikanSD?: string;
+  tahunMasukSD?: string;
+  tahunLulusSD?: string;
   pendidikanSMP?: string;
+  tahunMasukSMP?: string;
+  tahunLulusSMP?: string;
   pendidikanSMA?: string;
+  tahunMasukSMA?: string;
+  tahunLulusSMA?: string;
   perguruanTinggi?: string;
+  tahunMasukPT?: string;
+  tahunLulusPT?: string;
   campus?: string;
   fakultas?: string;
   faculty?: string;
@@ -108,6 +116,7 @@ export interface CadreFollowUp {
   twitterAccount?: string;
   facebookAccount?: string;
   avatar?: string;
+  pasFoto?: string;
   riwayatPenyakit?: string;
   golonganDarah?: string;
   organisasiSMP?: string;
@@ -125,6 +134,10 @@ export interface CadreFollowUp {
     completedAt?: string;
   }) | any;
 }
+
+export type Anggota = CadreFollowUp;
+export type Cadre = CadreFollowUp;
+export type Member = CadreFollowUp;
 
 export interface FormField {
   id: string;
@@ -157,6 +170,14 @@ export interface EventStageTimeline {
   activeStage?: "REGISTRATION" | "SCREENING" | "EVENT" | "GRADUATION";
 }
 
+export interface TwibbonConfig {
+  frameUrl?: string;
+  caption?: string;
+  isActive?: boolean;
+  customText?: string;
+  updatedAt?: string;
+}
+
 export interface EventActivity {
   id: string;
   name: string;
@@ -177,6 +198,7 @@ export interface EventActivity {
   timeline?: EventStageTimeline;
   targetCadres?: string[];
   requiresGraduation?: boolean;
+  twibbon?: TwibbonConfig;
 }
 
 export interface ParticipantRegistration {
@@ -211,6 +233,7 @@ export interface ParticipantRegistration {
   userId?: string;
   cadreId?: string;
   avatar?: string;
+  pasFoto?: string;
   gender?: string;
   university?: string;
 }
@@ -254,6 +277,7 @@ export interface BoardMember {
   gender?: string;
   status?: string;
   avatar?: string;
+  pasFoto?: string;
   anggota_id?: string | null;
   order?: number;
   user_id?: string; // @deprecated - Gunakan anggota_id (relasi ke tabel anggota)
@@ -338,6 +362,7 @@ export interface UserAccount {
   createdAt: string;
   allowedMenus?: string[];
   avatar?: string;
+  pasFoto?: string;
 }
 
 export interface SessionScore {
@@ -364,6 +389,7 @@ export interface ParticipantEvaluation {
   komisariat_id?: string | null;
   tenant_id?: string | null;
   avatar?: string;
+  pasFoto?: string;
   kognitif: number;
   afektif: number;
   psikomotorik: number;

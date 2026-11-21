@@ -116,6 +116,16 @@ export async function getEvents(defaultData: EventActivity[] = []): Promise<Even
         ? e.description.replace(/\s*<!--\s*WA_LINK:.*?\s*-->/g, "").trim()
         : e.description;
 
+      const parsedTwibbon = typeof (e as any).twibbon === "string"
+        ? (() => {
+            try {
+              return JSON.parse((e as any).twibbon);
+            } catch {
+              return (e as any).twibbon;
+            }
+          })()
+        : e.twibbon;
+
       return {
         ...e,
         timeline: e.timeline || getDefaultEventTimeline(e),
@@ -124,6 +134,7 @@ export async function getEvents(defaultData: EventActivity[] = []): Promise<Even
         sessions,
         formFields: e.formFields || (e as any).formfields || [],
         commissariat: normalizeKomisariat(e.commissariat),
+        twibbon: parsedTwibbon
       };
     });
 

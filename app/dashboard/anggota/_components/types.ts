@@ -32,9 +32,17 @@ export interface Member {
   alamatRumah?: string;
   alamatDomisili?: string;
   pendidikanSD?: string;
+  tahunMasukSD?: string;
+  tahunLulusSD?: string;
   pendidikanSMP?: string;
+  tahunMasukSMP?: string;
+  tahunLulusSMP?: string;
   pendidikanSMA?: string;
+  tahunMasukSMA?: string;
+  tahunLulusSMA?: string;
   perguruanTinggi?: string;
+  tahunMasukPT?: string;
+  tahunLulusPT?: string;
   fakultas?: string;
   jurusan?: string;
   ktmName?: string;
@@ -43,6 +51,7 @@ export interface Member {
   twitter?: string;
   facebook?: string;
   avatar?: string;
+  pasFoto?: string;
   riwayatPenyakit?: string;
   golonganDarah?: string;
   organisasiSMP?: string;
@@ -83,9 +92,17 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     alamatRumah: c.alamatRumah || c.address || "",
     alamatDomisili: c.alamatDomisili || "",
     pendidikanSD: c.pendidikanSD || "",
+    tahunMasukSD: c.tahunMasukSD || "",
+    tahunLulusSD: c.tahunLulusSD || "",
     pendidikanSMP: c.pendidikanSMP || "",
+    tahunMasukSMP: c.tahunMasukSMP || "",
+    tahunLulusSMP: c.tahunLulusSMP || "",
     pendidikanSMA: c.pendidikanSMA || "",
+    tahunMasukSMA: c.tahunMasukSMA || "",
+    tahunLulusSMA: c.tahunLulusSMA || "",
     perguruanTinggi: c.perguruanTinggi || "",
+    tahunMasukPT: c.tahunMasukPT || "",
+    tahunLulusPT: c.tahunLulusPT || "",
     fakultas: c.fakultas || "",
     jurusan: c.jurusan || "",
     ktmName: c.ktmName || "",
@@ -94,6 +111,7 @@ export function mapCadreToMember(c: CadreFollowUp): Member {
     twitter: c.twitter || "",
     facebook: c.facebook || "",
     avatar: c.avatar || "",
+    pasFoto: c.pasFoto || "",
     riwayatPenyakit: c.riwayatPenyakit || "",
     golonganDarah: c.golonganDarah || "O",
     organisasiSMP: c.organisasiSMP || "",
@@ -141,9 +159,17 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     alamatRumah: m.alamatRumah,
     alamatDomisili: m.alamatDomisili,
     pendidikanSD: m.pendidikanSD,
+    tahunMasukSD: m.tahunMasukSD,
+    tahunLulusSD: m.tahunLulusSD,
     pendidikanSMP: m.pendidikanSMP,
+    tahunMasukSMP: m.tahunMasukSMP,
+    tahunLulusSMP: m.tahunLulusSMP,
     pendidikanSMA: m.pendidikanSMA,
+    tahunMasukSMA: m.tahunMasukSMA,
+    tahunLulusSMA: m.tahunLulusSMA,
     perguruanTinggi: m.perguruanTinggi,
+    tahunMasukPT: m.tahunMasukPT,
+    tahunLulusPT: m.tahunLulusPT,
     fakultas: m.fakultas,
     jurusan: m.jurusan,
     ktmName: m.ktmName,
@@ -151,6 +177,7 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     twitter: m.twitter,
     facebook: m.facebook,
     avatar: m.avatar,
+    pasFoto: m.pasFoto,
     riwayatPenyakit: m.riwayatPenyakit,
     golonganDarah: m.golonganDarah,
     organisasiSMP: m.organisasiSMP,
@@ -160,4 +187,60 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
     minatPassion: m.minatPassion,
     motivasiMapaba: m.motivasiMapaba
   };
+}
+
+/**
+ * Resolves the member's photo URL or data URI from any available field
+ */
+export function resolveMemberPhotoUrl(member?: Partial<Member> | null): string {
+  if (!member) return "";
+  // 1. Check official pasFoto (formal 3x4 photo) first
+  if (member.pasFoto && typeof member.pasFoto === "string" && member.pasFoto.trim()) {
+    const p = member.pasFoto.trim();
+    if (p.startsWith("data:") || p.startsWith("http://") || p.startsWith("https://") || p.startsWith("/")) {
+      return p;
+    }
+    if (p.includes("/")) {
+      return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/${p}`;
+    }
+    return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/avatars/${p}`;
+  }
+
+  // 2. Fallback to profile avatar
+  if (member.avatar && typeof member.avatar === "string" && member.avatar.trim()) {
+    const a = member.avatar.trim();
+    if (a.startsWith("data:") || a.startsWith("http://") || a.startsWith("https://") || a.startsWith("/")) {
+      return a;
+    }
+    if (a.includes("/")) {
+      return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/${a}`;
+    }
+    return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/avatars/${a}`;
+  }
+
+  return "";
+}
+
+export function formatDateIndo(dateStr?: string): string {
+  if (!dateStr || dateStr.trim() === "" || dateStr === "-") return "-";
+
+  const BULAN_INDO = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+
+  const trimmed = dateStr.trim();
+
+  // Format YYYY-MM-DD atau YYYY/MM/DD
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(trimmed)) {
+    const parts = trimmed.split("T")[0].split(/[-/]/).map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
+    if (y && m && d && m >= 1 && m <= 12) {
+      return `${d} ${BULAN_INDO[m - 1]} ${y}`;
+    }
+  }
+
+  return trimmed;
 }

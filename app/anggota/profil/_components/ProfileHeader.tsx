@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
-import { Camera, Trash2, ShieldCheck, Mail, Building } from "lucide-react";
+import React, { useState } from "react";
+import { Camera, Trash2, ShieldCheck, Mail, Building, Copy, Check, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { ProfileHeaderProps } from "./types";
 
 export function ProfileHeader({
@@ -10,10 +11,21 @@ export function ProfileHeader({
   avatar,
   isUploadingPhoto,
   hasMapabaRegistration,
+  completionScore = 0,
+  memberNTA,
   fileInputRef,
   onPhotoUpload,
   onRemovePhoto
 }: ProfileHeaderProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyNta = () => {
+    if (!memberNTA || memberNTA === "-") return;
+    navigator.clipboard.writeText(memberNTA);
+    setCopied(true);
+    toast.success("Nomor NTA berhasil disalin ke clipboard!");
+    setTimeout(() => setCopied(false), 2000);
+  };
   return (
     <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
       {/* Decorative Top Banner Strip - Rich Modern PMII Gradient */}
@@ -144,8 +156,8 @@ export function ProfileHeader({
                 </div>
               </div>
 
-              {/* Email & Commissariat info chips */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+              {/* Email, Commissariat, and NTA copy chip */}
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2.5 text-xs text-zinc-500 dark:text-zinc-400">
                 {currentCadre.email && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-full sm:rounded-none">
                     <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
@@ -157,12 +169,30 @@ export function ProfileHeader({
                   <Building className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                   <span>{currentCadre.commissariat}</span>
                 </span>
+                {memberNTA && memberNTA !== "-" && (
+                  <>
+                    <span className="hidden sm:inline text-zinc-300 dark:text-zinc-700">•</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyNta}
+                      title="Salin Nomor Tanda Anggota (NTA)"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 font-mono text-[11px] font-semibold hover:bg-amber-100 transition-colors cursor-pointer"
+                    >
+                      <span>NTA: {memberNTA}</span>
+                      {copied ? (
+                        <Check className="w-3 h-3 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      )}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right Side: Status Badge (Desktop Only) */}
-          <div className="hidden sm:flex items-center justify-end shrink-0">
+          {/* Right Side: Status Badge & Completion Progress (Desktop Only) */}
+          <div className="hidden sm:flex flex-col items-end justify-center shrink-0 space-y-2">
             <Badge
               className={`h-7 px-3 text-[11px] font-semibold rounded-full shadow-none ${
                 currentCadre.isGraduated
@@ -179,6 +209,20 @@ export function ProfileHeader({
                 ? "Peserta MAPABA"
                 : "Calon Kader"}
             </Badge>
+
+            {/* Profile Completion Bar */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/60 text-[11px] text-zinc-600 dark:text-zinc-300">
+              <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">
+                {completionScore}%
+              </span>
+              <span className="text-[10px] text-zinc-400">Lengkap</span>
+              <div className="w-16 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                <div
+                  className="h-full bg-blue-600 dark:bg-blue-400 rounded-full transition-all duration-500"
+                  style={{ width: `${completionScore}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>

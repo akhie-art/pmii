@@ -17,7 +17,8 @@ import {
 
 // LocalStorage Keys
 export const KEYS = {
-  CADRES: "PMII_FOLLOWUP_CADRES",
+  ANGGOTA: "PMII_ANGGOTA_DATA",
+  CADRES: "PMII_ANGGOTA_DATA",
   REQUIREMENTS: "PMII_FOLLOWUP_REQUIREMENTS",
   EVENTS: "PMII_KOMISARIAT_EVENTS",
   REGISTRATIONS: "PMII_KOMISARIAT_REGISTRATIONS",
@@ -77,6 +78,7 @@ export const DEFAULT_CERT_CONFIG: CertificateLayoutConfig = {
 };
 
 export const DEFAULT_CADRES: CadreFollowUp[] = [];
+export const DEFAULT_ANGGOTA: CadreFollowUp[] = DEFAULT_CADRES;
 export const DEFAULT_EVENTS: EventActivity[] = [];
 export const DEFAULT_REGISTRATIONS: ParticipantRegistration[] = [];
 

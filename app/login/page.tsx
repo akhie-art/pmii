@@ -228,7 +228,7 @@ export default function LoginPage() {
             commissariat: "Ki Ageng Getas Pendawa",
             status: "AKTIF",
             createdAt: matchedReg.dateApplied || new Date().toISOString(),
-            allowedMenus: ["/kader", "/kader/kegiatan", "/kader/profil"]
+            allowedMenus: ["/anggota", "/anggota/kegiatan", "/anggota/profil"]
           };
         }
       }
@@ -394,11 +394,11 @@ export default function LoginPage() {
                         "/dashboard/artikel"
                       ]
                     : [
-                        "/kader",
-                        "/kader/kegiatan",
-                        "/kader/materi",
-                        "/kader/profil",
-                        "/kader/laporan"
+                        "/anggota",
+                        "/anggota/kegiatan",
+                        "/anggota/materi",
+                        "/anggota/profil",
+                        "/anggota/laporan"
                       ]))
         };
 

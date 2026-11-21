@@ -19,8 +19,16 @@ import {
   UserCheck,
   Award,
   AlertCircle,
-  FileText
+  FileText,
+  MoreVertical
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,26 +65,30 @@ import {
   getTenantNameById,
   type TenantScoped
 } from "@/lib/tenancy";
-import * as XLSX from "xlsx";
-
+import dynamic from "next/dynamic";
 import type { Member, CadreHistory } from "./_components/types";
-import { mapCadreToMember, mapMemberToCadre } from "./_components/types";
-import MemberFormModal from "./_components/MemberFormModal";
-import MemberDetailModal from "./_components/MemberDetailModal";
-import DeleteMemberModal from "./_components/DeleteMemberModal";
-import ImportMemberModal, { type ImportAccountSettings } from "./_components/ImportMemberModal";
-import ShareMemberLinkModal from "./_components/ShareMemberLinkModal";
+import { mapCadreToMember, mapMemberToCadre, resolveMemberPhotoUrl, formatDateIndo } from "./_components/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MemberBulkActionBar } from "./_components/MemberBulkActionBar";
-import { MemberBulkDeleteDialog } from "./_components/MemberBulkDeleteDialog";
-import {
-  generateMemberCvPdf,
-  resolveMemberPhotoUrl,
-  getBase64Image,
-  generateFallbackFormalPhoto
-} from "./_components/generateCvPdf";
-import { CvTemplateModal, CV_TEMPLATE_STORAGE_KEY } from "./_components/CvTemplateModal";
-import { base64ToArrayBuffer, fillDocxTemplate } from "@/app/dashboard/surat/component/docx-template-helper";
+import type { ImportAccountSettings } from "./_components/ImportMemberModal";
+
+export const CV_TEMPLATE_STORAGE_KEY = "PMII_CUSTOM_CV_TEMPLATE";
+
+// Lazy-loaded modals to drastically optimize bundle size & First Contentful Paint
+const MemberFormModal = dynamic(() => import("./_components/MemberFormModal"), { ssr: false });
+const MemberDetailModal = dynamic(() => import("./_components/MemberDetailModal"), { ssr: false });
+const DeleteMemberModal = dynamic(() => import("./_components/DeleteMemberModal"), { ssr: false });
+const ImportMemberModal = dynamic(() => import("./_components/ImportMemberModal"), { ssr: false });
+const ShareMemberLinkModal = dynamic(() => import("./_components/ShareMemberLinkModal"), { ssr: false });
+const MemberBulkDeleteDialog = dynamic(
+  () => import("./_components/MemberBulkDeleteDialog").then((mod) => mod.MemberBulkDeleteDialog),
+  { ssr: false }
+);
+const CvChoiceModal = dynamic(() => import("./_components/CvChoiceModal"), { ssr: false });
+const CvTemplateModal = dynamic(
+  () => import("./_components/CvTemplateModal").then((mod) => mod.CvTemplateModal),
+  { ssr: false }
+);
 
 /**
  * Pemetaan kode resmi komisariat se-Cabang Grobogan untuk penomoran NIPA Nasional:
@@ -147,7 +159,7 @@ export default function AnggotaPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [komisariatFilter, setKomisariatFilter] = useState<string>("ALL");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -164,6 +176,9 @@ export default function AnggotaPage() {
   const [showCvTemplateModal, setShowCvTemplateModal] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [sharingMember, setSharingMember] = useState<Member | null>(null);
+
+  const [showCvChoiceModal, setShowCvChoiceModal] = useState(false);
+  const [cvTargetMember, setCvTargetMember] = useState<Member | null>(null);
 
   // UI state
   const [isExporting, setIsExporting] = useState(false);
@@ -284,7 +299,6 @@ export default function AnggotaPage() {
         tenant_id: member.tenant_id || member.komisariat_id,
         komisariat_id: member.tenant_id || member.komisariat_id,
         commissariat: member.komisariat,
-        komisariat: member.komisariat,
         campus: member.perguruanTinggi,
         perguruanTinggi: member.perguruanTinggi
       };
@@ -321,80 +335,93 @@ export default function AnggotaPage() {
     return Array.from(set);
   }, [commissariats, members]);
 
-  // Filtered members list
-  const filteredMembers = members.filter((member) => {
-    if (!member) return false;
+  // Filtered members list (Memoized for high-speed search and tenant switching)
+  const filteredMembers = useMemo(() => {
     const query = (searchTerm || "").trim().toLowerCase();
-    const name = (member.name || "").toLowerCase();
-    const nipa = (member.nipa || "").toLowerCase();
-    const email = (member.email || "").toLowerCase();
-    const phone = (member.phone || "").toLowerCase();
-    const kampus = (member.perguruanTinggi || "").toLowerCase();
+    const hasQuery = Boolean(query);
+    const hasLevel = Boolean(levelFilter && levelFilter !== "ALL");
+    const hasStatus = Boolean(statusFilter && statusFilter !== "ALL");
+    const isCabang = isCabangOrAdmin(currentUser);
+    const normalizedKomisariat =
+      komisariatFilter && komisariatFilter !== "ALL" ? normalizeTenantName(komisariatFilter) : null;
+    const lowerKomisariat =
+      komisariatFilter && komisariatFilter !== "ALL" ? komisariatFilter.toLowerCase() : null;
 
-    const matchesSearch =
-      !query ||
-      name.includes(query) ||
-      nipa.includes(query) ||
-      email.includes(query) ||
-      phone.includes(query) ||
-      kampus.includes(query);
+    return members.filter((member) => {
+      if (!member) return false;
 
-    const matchesLevel = !levelFilter || levelFilter === "ALL" || member.level === levelFilter;
+      if (hasQuery) {
+        const name = (member.name || "").toLowerCase();
+        const nipa = (member.nipa || "").toLowerCase();
+        const email = (member.email || "").toLowerCase();
+        const phone = (member.phone || "").toLowerCase();
+        const kampus = (member.perguruanTinggi || "").toLowerCase();
 
-    const matchesStatus =
-      !statusFilter ||
-      statusFilter === "ALL" ||
-      (statusFilter === "INCOMPLETE"
-        ? ((!member.nim && !member.nik) || !member.phone || !member.email)
-        : member.status === statusFilter);
+        const matchesSearch =
+          name.includes(query) ||
+          nipa.includes(query) ||
+          email.includes(query) ||
+          phone.includes(query) ||
+          kampus.includes(query);
 
-    // Tenant Scoping
-    const memberScoped: TenantScoped = {
-      tenant_id: member.tenant_id || member.komisariat_id,
-      komisariat_id: member.tenant_id || member.komisariat_id,
-      commissariat: member.komisariat,
-      komisariat: member.komisariat,
-      campus: member.perguruanTinggi,
-      perguruanTinggi: member.perguruanTinggi
-    };
-
-    let matchesTenant = false;
-    if (!isCabangOrAdmin(currentUser)) {
-      // Akun Pengurus / Kader / Anggota Komisariat: HANYA melihat data anggota komisariatnya sendiri!
-      matchesTenant = isRecordInTenant(currentUser, memberScoped);
-    } else {
-      // Akun Pengurus Cabang / Super Admin:
-      // 1. Filter dari Tenant Switcher di Header (activeTenant)
-      const matchesActiveTenant = isRecordInTenant(currentUser, memberScoped, activeTenant);
-
-      // 2. Filter tambahan dari dropdown komisariat di halaman
-      let matchesDropdown = true;
-      if (komisariatFilter && komisariatFilter !== "ALL") {
-        const memComm = member.komisariat || "";
-        matchesDropdown =
-          normalizeTenantName(memComm) === normalizeTenantName(komisariatFilter) ||
-          memComm.toLowerCase().includes(komisariatFilter.toLowerCase()) ||
-          komisariatFilter.toLowerCase().includes(memComm.toLowerCase());
+        if (!matchesSearch) return false;
       }
 
-      matchesTenant = matchesActiveTenant && matchesDropdown;
-    }
+      if (hasLevel && member.level !== levelFilter) {
+        return false;
+      }
 
-    return (
-      matchesSearch &&
-      matchesLevel &&
-      matchesStatus &&
-      matchesTenant
-    );
-  });
+      if (hasStatus) {
+        if (statusFilter === "INCOMPLETE") {
+          const isIncomplete = (!member.nim && !member.nik) || !member.phone || !member.email;
+          if (!isIncomplete) return false;
+        } else if (member.status !== statusFilter) {
+          return false;
+        }
+      }
+
+      // Tenant Scoping
+      const memberScoped: TenantScoped = {
+        tenant_id: member.tenant_id || member.komisariat_id,
+        komisariat_id: member.tenant_id || member.komisariat_id,
+        commissariat: member.komisariat,
+        campus: member.perguruanTinggi,
+        perguruanTinggi: member.perguruanTinggi
+      };
+
+      if (!isCabang) {
+        return isRecordInTenant(currentUser, memberScoped);
+      }
+
+      const matchesActiveTenant = isRecordInTenant(currentUser, memberScoped, activeTenant);
+      if (!matchesActiveTenant) return false;
+
+      if (normalizedKomisariat && lowerKomisariat) {
+        const memComm = member.komisariat || "";
+        const matchesDropdown =
+          normalizeTenantName(memComm) === normalizedKomisariat ||
+          memComm.toLowerCase().includes(lowerKomisariat) ||
+          lowerKomisariat.includes(memComm.toLowerCase());
+        if (!matchesDropdown) return false;
+      }
+
+      return true;
+    });
+  }, [members, searchTerm, levelFilter, statusFilter, currentUser, activeTenant, komisariatFilter]);
 
   const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentMembers = filteredMembers.slice(indexOfFirstItem, indexOfLastItem);
+  const currentMembers = useMemo(() => {
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    return filteredMembers.slice(indexOfFirstItem, indexOfLastItem);
+  }, [filteredMembers, currentPage, itemsPerPage]);
 
-  const isAllCurrentSelected =
-    currentMembers.length > 0 && currentMembers.every((m) => selectedMemberIds.includes(m.id));
+  const selectedMemberIdsSet = useMemo(() => new Set(selectedMemberIds), [selectedMemberIds]);
+
+  const isAllCurrentSelected = useMemo(
+    () => currentMembers.length > 0 && currentMembers.every((m) => selectedMemberIdsSet.has(m.id)),
+    [currentMembers, selectedMemberIdsSet]
+  );
   const isSomeCurrentSelected =
     selectedMemberIds.length > 0 && !isAllCurrentSelected;
 
@@ -656,12 +683,21 @@ export default function AnggotaPage() {
       return m;
     });
 
-    setMembers(updatedList);
-    await db.saveCadres(updatedList.map((m) => mapMemberToCadre(m)));
+    const targetMember = updatedList.find((m) => m.id === editingMember.id);
 
+    // Optimistic UI update: Close modal & notify immediately
+    setMembers(updatedList);
     setShowEditModal(false);
+    const memberName = editingMember.name;
     setEditingMember(null);
-    showToast(`Data ${editingMember.name} berhasil diperbarui.`);
+    showToast(`Data ${memberName} berhasil diperbarui.`);
+
+    // Fast Single-Row Update (O(1) in background, no lag)
+    if (targetMember) {
+      db.updateCadre(targetMember.id, mapMemberToCadre(targetMember)).catch((err) => {
+        console.warn("Background updateCadre notice:", err);
+      });
+    }
   };
 
   // Delete Member
@@ -816,11 +852,11 @@ export default function AnggotaPage() {
           status: "AKTIF",
           createdAt: new Date().toISOString(),
           allowedMenus: [
-            "/kader",
-            "/kader/kegiatan",
-            "/kader/materi",
-            "/kader/profil",
-            "/kader/laporan"
+            "/anggota",
+            "/anggota/kegiatan",
+            "/anggota/materi",
+            "/anggota/profil",
+            "/anggota/laporan"
           ]
         });
       }
@@ -840,24 +876,26 @@ export default function AnggotaPage() {
         const mergedUsers = [...filteredNewUsers, ...currentUsers];
         await db.saveUsers(mergedUsers);
 
-        // Sinkronkan ke Supabase Auth jika terkonfigurasi
+        // Sinkronkan ke Supabase Auth jika terkonfigurasi (secara batch/chunk untuk menghindari rate-limit)
         if (isSupabaseConfigured && supabase) {
-          for (const u of filteredNewUsers) {
-            try {
-              await supabase.auth.signUp({
-                email: u.email,
-                password: u.password || "pmii1960",
-                options: {
-                  data: {
-                    name: u.name,
-                    role: "anggota",
-                    commissariat: u.commissariat
+          const CHUNK_SIZE = 5;
+          for (let i = 0; i < filteredNewUsers.length; i += CHUNK_SIZE) {
+            const chunk = filteredNewUsers.slice(i, i + CHUNK_SIZE);
+            await Promise.allSettled(
+              chunk.map((u) =>
+                supabase!.auth.signUp({
+                  email: u.email,
+                  password: u.password || "pmii1960",
+                  options: {
+                    data: {
+                      name: u.name,
+                      role: "anggota",
+                      commissariat: u.commissariat
+                    }
                   }
-                }
-              });
-            } catch (authErr) {
-              console.warn("Supabase user create notice:", authErr);
-            }
+                })
+              )
+            );
           }
         }
       } catch (userErr) {
@@ -875,7 +913,7 @@ export default function AnggotaPage() {
   // Export Excel
   const handleExportExcel = () => {
     setIsExporting(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const headers = [
           "NIPA/NTA",
@@ -923,6 +961,7 @@ export default function AnggotaPage() {
           "Riwayat Penyakit": m.riwayatPenyakit || "-"
         }));
 
+        const XLSX = await import("xlsx");
         const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
 
         const objectWidths = headers.map((header) => {
@@ -1208,11 +1247,26 @@ export default function AnggotaPage() {
 
       if (customTemplateBase64) {
         // Gunakan template docx kustom pengurus
+        const { base64ToArrayBuffer, fillDocxTemplate } = await import(
+          "@/app/dashboard/surat/component/docx-template-helper"
+        );
+        const { getBase64Image, generateFallbackFormalPhoto } = await import(
+          "./_components/generateCvPdf"
+        );
+
         const buffer = base64ToArrayBuffer(customTemplateBase64);
+        const ttlParts: string[] = [];
+        if (member.tempatLahir) ttlParts.push(member.tempatLahir);
+        if (member.tanggalLahir) {
+          const formattedTgl = formatDateIndo(member.tanggalLahir);
+          if (formattedTgl && formattedTgl !== "-") ttlParts.push(formattedTgl);
+        }
+        const formattedTTL = ttlParts.length > 0 ? ttlParts.join(", ") : "-";
+
         const data = {
           nama: member.name || "-",
           nim: member.nim || member.nik || "-",
-          ttl: [member.tempatLahir, member.tanggalLahir].filter(Boolean).join(", ") || "-",
+          ttl: formattedTTL,
           alamat: member.alamatRumah || member.alamatDomisili || "-",
           phone: member.phone || "-",
           pendidikan: [
@@ -1263,12 +1317,29 @@ export default function AnggotaPage() {
         showToast(`CV resmi untuk ${member.name} berhasil diunduh (.docx).`);
       } else {
         // Gunakan template default PDF resmi PMII dengan Kop Surat
+        const { generateMemberCvPdf } = await import("./_components/generateCvPdf");
         await generateMemberCvPdf(member);
-        showToast(`CV resmi untuk ${member.name} berhasil diunduh (PDF).`);
+        showToast(`Membuka CV resmi ${member.name} di tab baru...`);
       }
     } catch (err) {
       console.error("Gagal membuat CV:", err);
-      showToast("Gagal mengunduh berkas CV.");
+      showToast("Gagal membuka berkas CV.");
+    }
+  };
+
+  const handleOpenCvChoice = (member: Member) => {
+    setCvTargetMember(member);
+    setShowCvChoiceModal(true);
+  };
+
+  const handleDownloadAtsCV = async (member: Member) => {
+    try {
+      showToast(`Membuka CV ATS ${member.name} di tab baru...`);
+      const { generateMemberCvAtsPdf } = await import("./_components/generateCvPdf");
+      await generateMemberCvAtsPdf(member);
+    } catch (err) {
+      console.error("Gagal membuka CV ATS:", err);
+      showToast("Gagal membuka berkas CV ATS.");
     }
   };
 
@@ -1513,7 +1584,9 @@ export default function AnggotaPage() {
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full md:w-auto">
             <Select value={levelFilter} onValueChange={(val) => setLevelFilter(val ?? "ALL")}>
               <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[130px]">
-                <SelectValue placeholder="Kaderisasi" />
+                <SelectValue placeholder="Kaderisasi">
+                  {levelFilter === "ALL" ? "Semua Tingkat" : levelFilter}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
                 <SelectItem value="ALL">Semua Tingkat</SelectItem>
@@ -1526,7 +1599,9 @@ export default function AnggotaPage() {
 
             <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val ?? "ALL")}>
               <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full sm:w-[130px]">
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Status">
+                  {statusFilter === "ALL" ? "Semua Status" : statusFilter === "INCOMPLETE" ? "Perlu Dilengkapi" : statusFilter}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
                 <SelectItem value="ALL">Semua Status</SelectItem>
@@ -1645,7 +1720,7 @@ export default function AnggotaPage() {
 
               const photoSrc = resolveMemberPhotoUrl(member);
 
-              const isSelected = selectedMemberIds.includes(member.id);
+              const isSelected = selectedMemberIdsSet.has(member.id);
               const isIncomplete = (!member.nim && !member.nik) || !member.phone || !member.email;
 
               return (
@@ -1739,9 +1814,9 @@ export default function AnggotaPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleDownloadCV(member)}
+                      onClick={() => handleOpenCvChoice(member)}
                       className="h-8 px-2.5 text-[11px] font-medium border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 gap-1 rounded-lg"
-                      title="Unduh CV Kader (PDF)"
+                      title="Unduh CV Kader (Organisasi / ATS)"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       <span className="text-[10px]">CV</span>
@@ -1879,7 +1954,7 @@ export default function AnggotaPage() {
 
                   const photoSrc = resolveMemberPhotoUrl(member);
 
-                  const isSelected = selectedMemberIds.includes(member.id);
+                  const isSelected = selectedMemberIdsSet.has(member.id);
 
                   return (
                     <TableRow
@@ -1966,19 +2041,6 @@ export default function AnggotaPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setSharingMember(member);
-                              setShowShareLinkModal(true);
-                            }}
-                            className="h-7 w-7 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
-                            title="Bagikan Tautan Lengkapi Data (WhatsApp / Link)"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
                               setDetailMember(member);
                               setShowDetailModal(true);
                             }}
@@ -1986,16 +2048,6 @@ export default function AnggotaPage() {
                             title="Detail Profil & KTA"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownloadCV(member)}
-                            className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
-                            title="Unduh CV Kader Resmi (PDF)"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
                           </Button>
 
                           <Button
@@ -2011,18 +2063,47 @@ export default function AnggotaPage() {
                             <Edit className="w-3.5 h-3.5" />
                           </Button>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setDeletingMember(member);
-                              setShowDeleteModal(true);
-                            }}
-                            className="h-7 w-7 p-0 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                            title="Hapus Anggota"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="h-7 w-7 p-0 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer outline-none">
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent 
+                              align="end" 
+                              className="w-44 p-1 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-lg shadow-zinc-950/5"
+                            >
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSharingMember(member);
+                                  setShowShareLinkModal(true);
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-600 dark:text-zinc-300 focus:bg-zinc-100 dark:focus:bg-zinc-800 focus:text-zinc-900 dark:focus:text-zinc-100 transition-colors"
+                              >
+                                <Share2 className="w-3.5 h-3.5 text-zinc-400" />
+                                <span>Bagikan Tautan</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() => handleOpenCvChoice(member)}
+                                className="px-2.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-600 dark:text-zinc-300 focus:bg-zinc-100 dark:focus:bg-zinc-800 focus:text-zinc-900 dark:focus:text-zinc-100 transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                                <span>Unduh CV</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator className="my-1 bg-zinc-100 dark:bg-zinc-800" />
+
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setDeletingMember(member);
+                                  setShowDeleteModal(true);
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer text-xs font-medium text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-950/30 focus:text-rose-600 dark:focus:text-rose-400 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-500/80" />
+                                <span>Hapus</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -2034,10 +2115,34 @@ export default function AnggotaPage() {
         </div>
 
         {/* PAGINATION (Responsive Stack on Mobile, Inline on Desktop) */}
-        <div className="p-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-0 text-xs text-zinc-500">
-          <span className="text-[11px] sm:text-xs text-zinc-400">
-            Menampilkan {currentMembers.length} dari {filteredMembers.length} kader
-          </span>
+        <div className="p-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] sm:text-xs text-zinc-400">
+              Menampilkan {currentMembers.length} dari {filteredMembers.length} kader
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-zinc-400 hidden sm:inline">Per halaman:</span>
+              <Select
+                value={String(itemsPerPage)}
+                onValueChange={(val) => {
+                  if (val) {
+                    setItemsPerPage(Number(val));
+                    setCurrentPage(1);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-7 w-[68px] text-[11px] bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                  <SelectItem value="10" className="text-xs">10</SelectItem>
+                  <SelectItem value="25" className="text-xs">25</SelectItem>
+                  <SelectItem value="50" className="text-xs">50</SelectItem>
+                  <SelectItem value="100" className="text-xs">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium text-zinc-400 mr-1">
@@ -2104,7 +2209,7 @@ export default function AnggotaPage() {
           setDetailMember(null);
         }}
         onDownloadKTA={handleDownloadKTA}
-        onDownloadCV={handleDownloadCV}
+        onDownloadCV={handleOpenCvChoice}
       />
 
       <DeleteMemberModal
@@ -2162,6 +2267,18 @@ export default function AnggotaPage() {
         selectedCount={selectedMemberIds.length}
         onConfirm={handleBulkDeleteMembers}
         isProcessing={isBulkProcessing}
+      />
+
+      {/* MODAL PILIH FORMAT CV (ORGANISASI vs ATS) */}
+      <CvChoiceModal
+        isOpen={showCvChoiceModal}
+        onClose={() => {
+          setShowCvChoiceModal(false);
+          setCvTargetMember(null);
+        }}
+        member={cvTargetMember}
+        onDownloadOrganisasi={handleDownloadCV}
+        onDownloadAts={handleDownloadAtsCV}
       />
 
       {FeedbackModalComponent}

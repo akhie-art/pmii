@@ -1,4 +1,4 @@
-import { getCadres, saveCadres, getAnggota, saveAnggota, deleteCadre, deleteAnggota } from "./cadres";
+import { getCadres, saveCadres, updateCadre, getAnggota, saveAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./cadres";
 import { getEvents, saveEvents, deleteEvent, getDefaultEventTimeline } from "./events";
 import { getRegistrations, saveRegistrations, deleteRegistration } from "./registrations";
 import { getRequirements, saveRequirements } from "./requirements";
@@ -8,7 +8,7 @@ import { getUsers, saveUsers } from "./users";
 import { getKaderisasi, saveKaderisasi } from "./kaderisasi";
 import { getKurikulum, saveKurikulum } from "./kurikulum";
 import { getSurat, saveSurat, deleteSurat, getSuratTemplates, saveSuratTemplates, deleteSuratTemplate } from "./letters";
-import { getArsip, saveArsip } from "./archive";
+import { getArsip, saveArsip, deleteArsip } from "./archive";
 import {
   getEvaluations,
   saveEvaluations,
@@ -30,7 +30,7 @@ import {
   updateAuthUser
 } from "./credentials";
 import { getRoles, getRoleByCode, getRoleById, upsertRole, deleteRole, DEFAULT_ROLES } from "./roles";
-import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow } from "./core";
+import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow, updateTableRow } from "./core";
 import { getPengajuanSK, savePengajuanSK, deletePengajuanSK } from "./pengajuan-sk";
 import {
   getGalleryItems,
@@ -52,12 +52,15 @@ export const db = {
   // Cadres / Anggota
   getCadres,
   saveCadres,
+  updateCadre,
   getAnggota,
   saveAnggota,
+  updateAnggota,
   deleteCadre,
   deleteAnggota,
   deleteTableRow,
   upsertTableRow,
+  updateTableRow,
 
   // Events / Kegiatan
   getEvents,
@@ -109,6 +112,7 @@ export const db = {
   // Arsip
   getArsip,
   saveArsip,
+  deleteArsip,
 
   // Evaluations / Penilaian Instruktur
   deduplicateEvaluations,
@@ -189,10 +193,14 @@ export {
   getGalleryByTenant,
   saveGalleryItems,
   upsertGalleryItem,
-  deleteGalleryItem
+  deleteGalleryItem,
+  deleteArsip
 };
 
 export { generateUUID, isValidUUID } from "../utils";
 export * from "./certificatePdf";
 export * from "./pengajuan-sk";
+export * from "./archive";
 export * from "./gallery";
+export * from "./anggota";
+export * from "./cadres";

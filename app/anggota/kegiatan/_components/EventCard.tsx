@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, ArrowRight, QrCode } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, QrCode, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ interface EventCardProps {
   isHighlighted: boolean;
   onOpenStages: (stage?: 1 | 2 | 3 | 4) => void;
   onViewCard: () => void;
+  onOpenTwibbon?: () => void;
 }
 
 export const EventCard: React.FC<EventCardProps> = ({
@@ -30,7 +31,8 @@ export const EventCard: React.FC<EventCardProps> = ({
   activeCadre,
   isHighlighted,
   onOpenStages,
-  onViewCard
+  onViewCard,
+  onOpenTwibbon
 }) => {
   const isOpen = event.status === "OPEN";
 
@@ -264,6 +266,19 @@ export const EventCard: React.FC<EventCardProps> = ({
                   </svg>
                 </button>
               )
+            )}
+
+            {event.twibbon?.isActive && event.twibbon?.frameUrl && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onOpenTwibbon}
+                className="h-9 w-9 rounded-xl border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/60 shrink-0 cursor-pointer shadow-none"
+                title="Buat Twibbon Resmi Kegiatan"
+              >
+                <Sparkles className="w-4 h-4" />
+              </Button>
             )}
 
             {myReg && myReg.status === "APPROVED" && (

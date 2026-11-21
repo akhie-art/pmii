@@ -1182,7 +1182,21 @@ export default function PengajuanSKPage() {
           <div className="sm:col-span-4">
             <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val || "ALL")}>
               <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full">
-                <SelectValue placeholder="Status Pengajuan" />
+                <SelectValue placeholder="Status Pengajuan">
+                  {statusFilter === "ALL"
+                    ? "Semua Status"
+                    : statusFilter === "DIAJUKAN"
+                    ? "Menunggu Verifikasi"
+                    : statusFilter === "REVISI"
+                    ? "Perlu Revisi"
+                    : statusFilter === "DISETUJUI"
+                    ? "SK Terbit (Disetujui)"
+                    : statusFilter === "DITOLAK"
+                    ? "Ditolak"
+                    : statusFilter === "DRAFT"
+                    ? "Draf"
+                    : statusFilter}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="border-zinc-200 dark:border-zinc-800">
                 <SelectItem value="ALL">Semua Status</SelectItem>

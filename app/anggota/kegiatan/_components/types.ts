@@ -3,7 +3,8 @@ import type {
   ParticipantRegistration,
   Requirement,
   CertificateLayoutConfig,
-  CertificateFieldConfig
+  CertificateFieldConfig,
+  TwibbonConfig
 } from "@/lib/db";
 
 export type {
@@ -11,7 +12,8 @@ export type {
   ParticipantRegistration,
   Requirement,
   CertificateLayoutConfig,
-  CertificateFieldConfig
+  CertificateFieldConfig,
+  TwibbonConfig
 };
 
 export const formatDateTimeIndo = (dateTimeStr?: string): string | null => {

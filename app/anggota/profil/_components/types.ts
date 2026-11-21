@@ -5,6 +5,8 @@ export interface ProfileHeaderProps {
   avatar: string;
   isUploadingPhoto: boolean;
   hasMapabaRegistration: boolean;
+  completionScore?: number;
+  memberNTA?: string;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemovePhoto: () => void;
@@ -40,6 +42,10 @@ export interface BiodataTabProps {
   setGolonganDarah: (val: string) => void;
   riwayatPenyakit: string;
   setRiwayatPenyakit: (val: string) => void;
+  pasFoto?: string;
+  isUploadingPasFoto?: boolean;
+  onPasFotoUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemovePasFoto?: () => void;
 }
 
 export interface AcademicTabProps {
@@ -50,6 +56,10 @@ export interface AcademicTabProps {
   setFakultas: (val: string) => void;
   jurusan: string;
   setJurusan: (val: string) => void;
+  tahunMasukPT?: string;
+  setTahunMasukPT?: (val: string) => void;
+  tahunLulusPT?: string;
+  setTahunLulusPT?: (val: string) => void;
   phone: string;
   setPhone: (val: string) => void;
   email: string;
@@ -70,10 +80,22 @@ export interface HistoryTabProps {
   isEditing: boolean;
   pendidikanSD: string;
   setPendidikanSD: (val: string) => void;
+  tahunMasukSD?: string;
+  setTahunMasukSD?: (val: string) => void;
+  tahunLulusSD?: string;
+  setTahunLulusSD?: (val: string) => void;
   pendidikanSMP: string;
   setPendidikanSMP: (val: string) => void;
+  tahunMasukSMP?: string;
+  setTahunMasukSMP?: (val: string) => void;
+  tahunLulusSMP?: string;
+  setTahunLulusSMP?: (val: string) => void;
   pendidikanSMA: string;
   setPendidikanSMA: (val: string) => void;
+  tahunMasukSMA?: string;
+  setTahunMasukSMA?: (val: string) => void;
+  tahunLulusSMA?: string;
+  setTahunLulusSMA?: (val: string) => void;
   organisasiSMP: string;
   setOrganisasiSMP: (val: string) => void;
   organisasiSMA: string;

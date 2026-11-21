@@ -34,6 +34,8 @@ import {
   getFacultiesForUniversity,
   getMajorsForFaculty,
 } from "@/lib/academic-data";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { toast } from "sonner";
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -67,6 +69,8 @@ export default function MemberFormModal({
   const [alamatDomisili, setAlamatDomisili] = useState("");
   const [golonganDarah, setGolonganDarah] = useState("O");
   const [avatar, setAvatar] = useState("");
+  const [pasFoto, setPasFoto] = useState("");
+  const [isUploadingPasFoto, setIsUploadingPasFoto] = useState(false);
   const [riwayatPenyakit, setRiwayatPenyakit] = useState("");
 
   // Step 2: Akademik & Kontak
@@ -114,6 +118,7 @@ export default function MemberFormModal({
       setAlamatDomisili(member.alamatDomisili || "");
       setGolonganDarah(member.golonganDarah || "O");
       setAvatar(member.avatar || "");
+      setPasFoto(member.pasFoto || "");
       setRiwayatPenyakit(member.riwayatPenyakit || "");
 
       setPerguruanTinggi(member.perguruanTinggi || "");
@@ -153,6 +158,7 @@ export default function MemberFormModal({
       setAlamatDomisili("");
       setGolonganDarah("O");
       setAvatar("");
+      setPasFoto("");
       setRiwayatPenyakit("");
 
       setPerguruanTinggi("");
@@ -185,16 +191,73 @@ export default function MemberFormModal({
     setActiveTab("diri");
   }, [isOpen, member, defaultKomisariat]);
 
-  const handlePasFotoUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setAvatar(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+  const handlePasFotoUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran pas foto maksimal 5 MB.");
+      return;
+    }
+
+    setIsUploadingPasFoto(true);
+    const toastId = toast.loading("Mengunggah pas foto ke bucket...");
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const fileId = member?.id || `new-${Date.now()}`;
+        const fileName = `${fileId}-${Date.now()}.${fileExt}`;
+
+        // 1. Unggah ke bucket 'pas-foto'
+        const { error: uploadErr } = await supabase.storage
+          .from("pas-foto")
+          .upload(fileName, file, {
+            contentType: file.type || "image/jpeg",
+            upsert: true,
+          });
+
+        if (!uploadErr) {
+          const { data } = supabase.storage.from("pas-foto").getPublicUrl(fileName);
+          if (data?.publicUrl) {
+            setPasFoto(data.publicUrl);
+            toast.success("Pas foto berhasil disimpan ke bucket!", { id: toastId });
+            return;
+          }
+        } else {
+          // Fallback to materials/pas-foto/
+          const fallbackPath = `pas-foto/${fileName}`;
+          const { error: fallbackErr } = await supabase.storage
+            .from("materials")
+            .upload(fallbackPath, file, {
+              contentType: file.type || "image/jpeg",
+              upsert: true,
+            });
+          if (!fallbackErr) {
+            const { data } = supabase.storage.from("materials").getPublicUrl(fallbackPath);
+            if (data?.publicUrl) {
+              setPasFoto(data.publicUrl);
+              toast.success("Pas foto berhasil disimpan ke bucket!", { id: toastId });
+              return;
+            }
+          }
+        }
+      }
+
+      // Fallback base64
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPasFoto(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+      toast.success("Pas foto berhasil dipilih.", { id: toastId });
+    } catch (err) {
+      console.error("Error uploading pas foto in modal:", err);
+      toast.error("Gagal mengunggah pas foto.", { id: toastId });
+    } finally {
+      setIsUploadingPasFoto(false);
+    }
   };
 
   const handleRemovePasFoto = () => {
-    setAvatar("");
+    setPasFoto("");
   };
 
   const handleKtmUpload = (file: File) => {
@@ -261,7 +324,8 @@ export default function MemberFormModal({
       alamatRumah: alamatRumah.trim(),
       alamatDomisili: alamatDomisili.trim(),
       golonganDarah,
-      avatar: resolvedPhotoUrl,
+      avatar: avatar || pasFoto || resolvedPhotoUrl,
+      pasFoto: pasFoto,
       riwayatPenyakit: riwayatPenyakit.trim(),
       perguruanTinggi: perguruanTinggi.trim(),
       fakultas: fakultas.trim(),
@@ -523,8 +587,8 @@ export default function MemberFormModal({
                   <DocumentAttachment
                     label="Pas Foto Resmi 3x4"
                     description="Format: JPG, PNG, atau WebP (Rasio 3:4 dengan pakaian rapi/jas PMII & background resmi)"
-                    fileName={resolvedPhotoUrl ? "pas_foto_resmi.jpg" : ""}
-                    fileUrl={resolvedPhotoUrl}
+                    fileName={pasFoto ? "pas_foto_resmi.jpg" : ""}
+                    fileUrl={pasFoto}
                     onUpload={handlePasFotoUpload}
                     onRemove={handleRemovePasFoto}
                     accept="image/png,image/jpeg,image/jpg,image/webp"

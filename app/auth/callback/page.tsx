@@ -157,7 +157,7 @@ export default function AuthCallbackPage() {
               ? matchedUser.allowedMenus
               : (Array.isArray((user as any)?.user_metadata?.allowedMenus)
                   ? (user as any).user_metadata.allowedMenus
-                  : (isCadreStaff ? [] : ["/kader", "/kader/kegiatan", "/kader/materi", "/kader/profil", "/kader/laporan"]))
+                  : (isCadreStaff ? [] : ["/anggota", "/anggota/kegiatan", "/anggota/materi", "/anggota/profil", "/anggota/laporan"]))
           };
           localStorage.setItem("PMII_ACTIVE_CADRE_ID", matchedKader.id);
           localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(cadreSession));

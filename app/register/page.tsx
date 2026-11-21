@@ -1107,7 +1107,7 @@ export default function RegisterPage() {
           status: "active" as const,
           avatar: googleAvatar || existingCadreObj?.avatar || "",
           needsOnboarding: false,
-          allowedMenus: ["/kader", "/kader/kegiatan", "/kader/materi", "/kader/profil", "/kader/laporan"]
+          allowedMenus: ["/anggota", "/anggota/kegiatan", "/anggota/materi", "/anggota/profil", "/anggota/laporan"]
         };
         localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInSession));
         localStorage.setItem("PMII_ACTIVE_CADRE_ID", activeUserId);

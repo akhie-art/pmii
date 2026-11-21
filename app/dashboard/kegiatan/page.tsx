@@ -13,7 +13,13 @@ import {
   CheckCircle2,
   ChevronRight,
   Building,
-  GraduationCap
+  GraduationCap,
+  Users,
+  Clock,
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+  Filter
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +59,7 @@ import ScreeningDetailModal from "./_components/ScreeningDetailModal";
 import AttendanceTab from "./_components/AttendanceTab";
 import AddParticipantModal from "./_components/AddParticipantModal";
 import TimelineTab, { ToggleSwitch } from "./_components/TimelineTab";
+import TwibbonTab from "./_components/TwibbonTab";
 
 export type { FormField, EventActivity, ParticipantRegistration };
 
@@ -67,8 +74,11 @@ export default function KomisariatKegiatanPage() {
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [kaderisasiList, setKaderisasiList] = useState<any[]>([]);
 
-  // Search filter
+  // Search & Filter state
   const [eventSearch, setEventSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<"hub" | "detail">("hub");
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -84,7 +94,7 @@ export default function KomisariatKegiatanPage() {
 
   const { showToast, FeedbackModalComponent } = useFeedbackModal();
   const [copiedId, setCopiedId] = useState<string>("");
-  const [selectedTab, setSelectedTab] = useState<"timeline" | "screening" | "absensi">("timeline");
+  const [selectedTab, setSelectedTab] = useState<"timeline" | "screening" | "absensi" | "twibbon">("timeline");
 
   const handleUpdateTimelineEvent = async (updatedEvent: EventActivity) => {
     const updatedEvents = events.map((e) => (String(e.id) === String(updatedEvent.id) ? updatedEvent : e));
@@ -305,10 +315,30 @@ export default function KomisariatKegiatanPage() {
     }, activeTenant)
   );
 
-  const filteredCampusEvents = campusEvents.filter((e) =>
-    e.name.toLowerCase().includes(eventSearch.toLowerCase()) ||
-    e.level.toLowerCase().includes(eventSearch.toLowerCase())
-  );
+  const filteredCampusEvents = campusEvents.filter((e) => {
+    const matchesSearch =
+      e.name.toLowerCase().includes(eventSearch.toLowerCase()) ||
+      e.level.toLowerCase().includes(eventSearch.toLowerCase()) ||
+      (e.commissariat || "").toLowerCase().includes(eventSearch.toLowerCase());
+    const matchesLevel = levelFilter === "ALL" || e.level === levelFilter;
+    const matchesStatus = statusFilter === "ALL" || e.status === statusFilter;
+    return matchesSearch && matchesLevel && matchesStatus;
+  });
+
+  const handleOpenDetail = (evtId: string) => {
+    setSelectedEventId(evtId);
+    setViewMode("detail");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleBackToHub = () => {
+    setViewMode("hub");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   const selectedEvent = campusEvents.find((e) => e.id === selectedEventId) || campusEvents[0];
   const activeRegistrations = registrations
@@ -320,6 +350,10 @@ export default function KomisariatKegiatanPage() {
         tenant_id: selectedEvent?.tenant_id || selectedEvent?.komisariat_id
       }, activeTenant)
     );
+
+  const pendingCount = activeRegistrations.filter((r) => r.status === "PENDING").length;
+  const approvedCount = activeRegistrations.filter((r) => r.status === "APPROVED").length;
+  const graduatedCount = activeRegistrations.filter((r) => r.isGraduated).length;
 
   const handleCopyLink = (eventId: string) => {
     if (typeof window !== "undefined") {
@@ -705,6 +739,20 @@ export default function KomisariatKegiatanPage() {
     showToast(`${pendingRegs.length} pendaftar berhasil disetujui sekaligus.`);
   };
 
+  // Delete participant registration
+  const handleDeleteRegistration = async (regId: string, cadreName?: string) => {
+    try {
+      await db.deleteRegistration(regId);
+      const remainingRegs = registrations.filter((r) => r.id !== regId);
+      setRegistrations(remainingRegs);
+      await db.saveRegistrations(remainingRegs);
+      showToast(`Data pendaftar ${cadreName ? `"${cadreName}" ` : ""}berhasil dihapus.`);
+    } catch (err) {
+      console.error("Error deleting registration:", err);
+      showToast("Gagal menghapus data pendaftar.");
+    }
+  };
+
   // Add participant directly and auto-approve
   const handleAddParticipant = async (data: {
     cadreName: string;
@@ -1013,324 +1061,565 @@ export default function KomisariatKegiatanPage() {
   }
 
   return (
-    <div className="space-y-4 select-none pb-8">
-      {/* BREADCRUMB & ACTION TOOLBAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500">
-          <Link
-            href="/dashboard"
-            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          >
-            Dashboard
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-            Kegiatan
-          </span>
-          <span className="inline-flex items-center gap-1.5 ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/80">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Live Sync
-          </span>
-        </nav>
+    <div className="space-y-5 select-none pb-12">
+      {viewMode === "hub" ? (
+        /* ========================================================================= */
+        /* TAMPILAN 1: HUB GRID KEGIATAN (OVERVIEW SEMUA KEGIATAN)                  */
+        /* ========================================================================= */
+        <div className="space-y-5">
+          {/* Header Toolbar Hub */}
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-3.5 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="space-y-1">
+                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500 font-normal">
+                  <Link
+                    href="/dashboard"
+                    className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                  <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                    Hub Kegiatan Kaderisasi
+                  </span>
+                  <span className="inline-flex items-center gap-1 ml-1 px-2 py-0.2 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Sync
+                  </span>
+                </nav>
+                <h1 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  Pusat Manajemen Kegiatan
+                </h1>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-normal">
+                  Kelola pendaftaran kader, verifikasi berkas screening, presensi QR, dan twibbon kegiatan.
+                </p>
+              </div>
 
-        <div>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs px-3.5 h-8.5 rounded-lg cursor-pointer flex items-center gap-1.5 transition-colors border-none"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Buat Kegiatan</span>
-          </Button>
-        </div>
-      </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Komisariat / Tenant Filter jika Admin/Cabang */}
+                {isCabangOrAdmin(currentUser) && (
+                  <div className="flex-1 sm:w-52">
+                    <Select
+                      value={activeTenant}
+                      onValueChange={(val) => {
+                        if (val) {
+                          setActiveTenant(val);
+                          setGlobalActiveTenant(val);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full">
+                        <SelectValue placeholder="Semua Komisariat">
+                          {activeTenant === "ALL" ? "Semua Komisariat / Cabang" : activeTenant}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
+                        <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
+                        <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
+                        {DEFAULT_KOMISARIAT_LIST.map((c) => (
+                          <SelectItem key={c} value={c} className="text-xs">
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
+                <Button
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs px-3 sm:px-3.5 h-8.5 rounded-lg cursor-pointer flex items-center gap-1.5 transition-colors border-none shadow-2xs shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Buat Kegiatan Baru</span>
+                  <span className="sm:hidden">Buat Kegiatan</span>
+                </Button>
+              </div>
+            </div>
 
+            {/* Search & Filter Controls */}
+            <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 pt-0.5">
+              <div className="col-span-2 sm:col-span-6 relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  type="text"
+                  placeholder="Cari nama kegiatan atau komisariat..."
+                  value={eventSearch}
+                  onChange={(e) => setEventSearch(e.target.value)}
+                  className="pl-8.5 h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 w-full"
+                />
+              </div>
 
-      {/* MAIN LAYOUT: SIDEBAR & WORKSPACE */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        {/* LEFT COLUMN: EVENTS LIST */}
-        <div className="lg:col-span-1 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-              Daftar Kegiatan ({campusEvents.length})
-            </span>
+              <div className="col-span-1 sm:col-span-3">
+                <Select value={levelFilter} onValueChange={(val) => setLevelFilter(val || "ALL")}>
+                  <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full">
+                    <SelectValue placeholder="Semua Tingkat">
+                      {levelFilter === "ALL" ? "Semua Tingkat" : levelFilter}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="ALL" className="text-xs">Semua Tingkat</SelectItem>
+                    <SelectItem value="MAPABA" className="text-xs">MAPABA</SelectItem>
+                    <SelectItem value="PKD" className="text-xs">PKD</SelectItem>
+                    <SelectItem value="PKL" className="text-xs">PKL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="col-span-1 sm:col-span-3">
+                <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || "ALL")}>
+                  <SelectTrigger className="h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg w-full">
+                    <SelectValue placeholder="Semua Status">
+                      {statusFilter === "ALL"
+                        ? "Semua Status"
+                        : statusFilter === "OPEN"
+                        ? "Buka"
+                        : "Tutup"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                    <SelectItem value="ALL" className="text-xs">Semua Status</SelectItem>
+                    <SelectItem value="OPEN" className="text-xs">Pendaftaran Buka</SelectItem>
+                    <SelectItem value="CLOSED" className="text-xs">Pendaftaran Tutup</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Indikator Filter Aktif & Reset */}
+            {(eventSearch.trim() !== "" || levelFilter !== "ALL" || statusFilter !== "ALL") && (
+              <div className="flex items-center justify-between gap-2 text-xs pt-1 px-0.5 text-zinc-500">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-zinc-400">Filter aktif:</span>
+                  {eventSearch.trim() !== "" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10.5px]">
+                      &ldquo;{eventSearch}&rdquo;
+                      <button
+                        type="button"
+                        onClick={() => setEventSearch("")}
+                        className="hover:text-rose-500 cursor-pointer ml-0.5 text-zinc-400"
+                        title="Hapus pencarian"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                  {levelFilter !== "ALL" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10.5px]">
+                      Tingkat: {levelFilter}
+                      <button
+                        type="button"
+                        onClick={() => setLevelFilter("ALL")}
+                        className="hover:text-rose-500 cursor-pointer ml-0.5 text-blue-400"
+                        title="Reset tingkat"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                  {statusFilter !== "ALL" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10.5px]">
+                      Status: {statusFilter === "OPEN" ? "Buka" : "Tutup"}
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("ALL")}
+                        className="hover:text-rose-500 cursor-pointer ml-0.5 text-emerald-400"
+                        title="Reset status"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEventSearch("");
+                    setLevelFilter("ALL");
+                    setStatusFilter("ALL");
+                  }}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 underline cursor-pointer ml-auto shrink-0"
+                >
+                  Reset Filter
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Komisariat / Tenant Filter */}
-          {isCabangOrAdmin(currentUser) && (
-            <Select
-              value={activeTenant}
-              onValueChange={(val) => {
-                if (val) {
-                  setActiveTenant(val);
-                  setGlobalActiveTenant(val);
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg w-full">
-                <SelectValue placeholder="Semua Komisariat" />
-              </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg max-h-60">
-                <SelectItem value="ALL" className="text-xs">Semua Komisariat / Cabang</SelectItem>
-                <SelectItem value="Pengurus Cabang Grobogan" className="text-xs">Pengurus Cabang Grobogan</SelectItem>
-                {DEFAULT_KOMISARIAT_LIST.map((c) => (
-                  <SelectItem key={c} value={c} className="text-xs">
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* Minimal Search Input */}
-          {campusEvents.length > 2 && (
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <Input
-                type="text"
-                placeholder="Cari kegiatan..."
-                value={eventSearch}
-                onChange={(e) => setEventSearch(e.target.value)}
-                className="pl-8 h-8 text-xs bg-white dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 rounded-lg placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100"
-              />
+          {/* Grid Kartu Kegiatan (Hub Cards) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-0.5">
+              <h2 className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                Daftar Kegiatan ({filteredCampusEvents.length})
+              </h2>
             </div>
-          )}
 
-          <div className="space-y-2 max-h-[640px] overflow-y-auto">
             {filteredCampusEvents.length === 0 ? (
-              <div className="py-10 text-center text-xs text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-                Tidak ada kegiatan.
+              <div className="py-16 text-center bg-white dark:bg-zinc-900 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl p-6 space-y-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center mx-auto">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                  Tidak Ada Kegiatan yang Sesuai
+                </h3>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto font-normal">
+                  Coba ubah kata kunci pencarian atau buat kegiatan kaderisasi baru dengan mengklik tombol di bawah.
+                </p>
+                <Button
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs px-3.5 h-8.5 rounded-lg cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  <span>Buat Kegiatan Baru</span>
+                </Button>
               </div>
             ) : (
-              filteredCampusEvents.map((evt) => {
-                const isActive = selectedEvent?.id === evt.id;
-                const evtRegs = registrations.filter((r) => r.eventId === evt.id);
-                const pendingCount = evtRegs.filter((r) => r.status === "PENDING").length;
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+                {filteredCampusEvents.map((evt) => {
+                  const evtRegs = registrations.filter((r) => r.eventId === evt.id);
+                  const pCount = evtRegs.filter((r) => r.status === "PENDING").length;
+                  const aCount = evtRegs.filter((r) => r.status === "APPROVED").length;
 
-                return (
-                  <div
-                    key={evt.id}
-                    onClick={() => setSelectedEventId(evt.id)}
-                    className={`p-3 rounded-lg border transition-colors cursor-pointer text-left ${
-                      isActive
-                        ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/40"
-                        : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase">
-                          {evt.level}
-                        </span>
-                        <span
-                          className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded ${
-                            evt.status === "OPEN"
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500"
-                          }`}
-                        >
-                          {evt.status === "OPEN" ? "BUKA" : "TUTUP"}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono text-zinc-400">
-                        {evt.date}
-                      </span>
-                    </div>
+                  return (
+                    <Card
+                      key={evt.id}
+                      className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors flex flex-col justify-between group space-y-3"
+                    >
+                      {/* Card Header */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/60 shrink-0">
+                              {evt.level}
+                            </span>
+                            <span
+                              className={`text-[10px] font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                                evt.status === "OPEN"
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60"
+                                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
+                              }`}
+                            >
+                              {evt.status === "OPEN" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              )}
+                              <span>{evt.status === "OPEN" ? "BUKA" : "TUTUP"}</span>
+                            </span>
+                          </div>
 
-                    <h4 className="text-xs font-semibold text-zinc-900 dark:text-white mt-1 truncate">
-                      {evt.name}
-                    </h4>
-
-                    <div className="flex items-center gap-1 mt-1">
-                      {evt.komisariat_id === null || (evt.commissariat && evt.commissariat.toLowerCase().includes("cabang")) ? (
-                        <span className="inline-flex items-center gap-1 text-[8.5px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40">
-                          <Building className="w-2.5 h-2.5" />
-                          <span>Tingkat Cabang</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[8.5px] text-zinc-500 dark:text-zinc-400 truncate max-w-[170px]">
-                          <GraduationCap className="w-2.5 h-2.5 shrink-0" />
-                          <span className="truncate">{evt.commissariat}</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
-                      <span>{evtRegs.length} Pendaftar</span>
-                      <div className="flex items-center gap-1.5">
-                        {pendingCount > 0 && (
-                          <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400">
-                            {pendingCount} Verifikasi
+                          <span className="text-[11px] font-mono text-zinc-400 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {evt.date}
                           </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopyLink(evt.id);
-                          }}
-                          className="px-1.5 py-0.5 rounded text-[9.5px] border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-blue-600 cursor-pointer"
-                        >
-                          {copiedId === evt.id ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
-                        </button>
+                        </div>
+
+                        {/* Title & Commissariat */}
+                        <div>
+                          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug">
+                            {evt.name}
+                          </h3>
+
+                          <div className="flex items-center gap-1.5 mt-1 text-xs text-zinc-500 font-normal">
+                            {evt.komisariat_id === null || (evt.commissariat && evt.commissariat.toLowerCase().includes("cabang")) ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
+                                <Building className="w-3.5 h-3.5" />
+                                <span>Tingkat Cabang Grobogan</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 truncate">
+                                <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">{evt.commissariat || "Komisariat PMII"}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Progress / Quick Stats Box */}
+                        <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                              {evtRegs.length}
+                            </span>
+                            <span className="text-zinc-400 ml-1">Pendaftar</span>
+                            <span className="text-zinc-300 dark:text-zinc-700 mx-1.5">•</span>
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                              {aCount} Lolos
+                            </span>
+                          </div>
+
+                          {pCount > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+                              {pCount} Perlu Cek
+                            </span>
+                          ) : (
+                            <span className="text-[10.5px] text-zinc-400">
+                              Verifikasi Beres
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })
+
+                      {/* Card Footer: Quick Actions & Primary CTA */}
+                      <div className="pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyLink(evt.id);
+                            }}
+                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-blue-600 cursor-pointer transition-colors"
+                            title="Salin Tautan Form Pendaftaran"
+                          >
+                            {copiedId === evt.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditEventId(evt.id);
+                              setShowEditModal(true);
+                            }}
+                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 cursor-pointer transition-colors"
+                            title="Edit Kegiatan"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteEventId(evt.id);
+                              setDeleteEventName(evt.name);
+                              setShowDeleteConfirmModal(true);
+                            }}
+                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-zinc-400 hover:text-rose-600 cursor-pointer transition-colors"
+                            title="Hapus Kegiatan"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Primary Button to Open Detail */}
+                        <Button
+                          type="button"
+                          onClick={() => handleOpenDetail(evt.id)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs h-8 px-3 rounded-lg cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <span>Kelola</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
+      ) : (
+        /* ========================================================================= */
+        /* TAMPILAN 2: DETAIL WORKSPACE KEGIATAN TERPILIH (100% LEBAR PENUH)       */
+        /* ========================================================================= */
+        selectedEvent && (
+          <div className="space-y-5">
+            {/* Navigasi Kembali ke Hub */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleBackToHub}
+                className="h-8 px-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-medium flex items-center gap-1.5 cursor-pointer w-fit"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Kembali ke Semua Kegiatan</span>
+              </Button>
 
-        {/* RIGHT COLUMN: EVENT WORKSPACE */}
-        <div className="lg:col-span-2 space-y-4">
-          {selectedEvent ? (
-            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 sm:p-5 shadow-none space-y-4 text-zinc-900 dark:text-zinc-100">
-              {/* Event Header */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                <div className="space-y-1 min-w-0">
+              <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-zinc-500 font-normal">
+                <Link
+                  href="/dashboard"
+                  className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                >
+                  Dashboard
+                </Link>
+                <ChevronRight className="w-3 h-3 text-zinc-400 shrink-0" />
+                <button
+                  type="button"
+                  onClick={handleBackToHub}
+                  className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                >
+                  Kegiatan
+                </button>
+                <ChevronRight className="w-3 h-3 text-zinc-400 shrink-0" />
+                <span className="font-medium text-zinc-800 dark:text-zinc-200 truncate max-w-[200px]">
+                  {selectedEvent.name}
+                </span>
+                <span className="inline-flex items-center gap-1 ml-1 px-2 py-0.2 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Sync
+                </span>
+              </nav>
+            </div>
+
+            {/* Header Kegiatan Terpilih */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 sm:p-5 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Info Kegiatan */}
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-md">
+                    <h1 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                      {selectedEvent.name}
+                    </h1>
+                    <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold uppercase bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200/60">
                       {selectedEvent.level}
-                    </Badge>
-                    {selectedEvent.komisariat_id === null || (selectedEvent.commissariat && selectedEvent.commissariat.toLowerCase().includes("cabang")) ? (
-                      <Badge className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 text-[9px] font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-                        <Building className="w-2.5 h-2.5" />
-                        <span>Tingkat Cabang (PC Grobogan)</span>
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 text-[9px] font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1">
-                        <GraduationCap className="w-2.5 h-2.5" />
-                        <span>{selectedEvent.commissariat || "Komisariat"}</span>
-                      </Badge>
-                    )}
-                    <Badge
-                      className={
-                        selectedEvent.status === "OPEN"
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-semibold px-2 py-0.5 rounded-md"
-                          : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[9px] font-semibold px-2 py-0.5 rounded-md"
-                      }
-                    >
-                      {selectedEvent.status === "OPEN" ? "DIBUKA" : "DITUTUP"}
-                    </Badge>
-                    <span className="text-[10px] font-mono text-zinc-500 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> {selectedEvent.date}
                     </span>
                   </div>
 
-                  <h2 className="text-sm font-bold text-zinc-900 dark:text-white truncate">
-                    {selectedEvent.name}
-                  </h2>
+                  <div className="flex items-center gap-2.5 text-xs text-zinc-500 flex-wrap font-normal">
+                    <span className="font-mono text-[11px] flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                      {selectedEvent.date}
+                    </span>
+                    {selectedEvent.commissariat && (
+                      <>
+                        <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                        <span className="flex items-center gap-1">
+                          <GraduationCap className="w-3.5 h-3.5 text-zinc-400" />
+                          {selectedEvent.commissariat}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-shrink-0 self-end sm:self-auto flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleEventStatus(selectedEvent.status !== "OPEN")}
-                    className={`flex items-center gap-2 px-2.5 h-8 rounded-lg border shadow-2xs cursor-pointer transition-colors ${
-                      selectedEvent.status === "OPEN"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
-                        : "bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
-                    }`}
-                  >
-                    <span className="text-[11px] font-semibold select-none">
-                      {selectedEvent.status === "OPEN" ? "Buka Kegiatan" : "Tutup Kegiatan"}
-                    </span>
+                {/* Quick Actions Toolbar */}
+                <div className="flex items-center gap-2 flex-wrap sm:self-center">
+                  {/* Toggle Status Pendaftaran */}
+                  <div className="flex items-center gap-2 px-2.5 h-8.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs">
+                    <span className="text-[11px] text-zinc-500 font-normal">Pendaftaran:</span>
                     <ToggleSwitch
                       checked={selectedEvent.status === "OPEN"}
                       onChange={handleToggleEventStatus}
                     />
-                  </button>
+                    <span className={`text-[11px] font-medium ${
+                      selectedEvent.status === "OPEN" ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"
+                    }`}>
+                      {selectedEvent.status === "OPEN" ? "Buka" : "Tutup"}
+                    </span>
+                  </div>
 
+                  {/* Edit Event */}
                   <Button
-                    onClick={() => handleCopyLink(selectedEvent.id)}
-                    size="sm"
-                    className="h-8 px-2.5 rounded-lg font-medium text-[11px] cursor-pointer bg-blue-600 hover:bg-blue-700 text-white border-none"
-                  >
-                    {copiedId === selectedEvent.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedId === selectedEvent.id ? "Tersalin" : "Salin Link"}</span>
-                  </Button>
-
-                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
                       setEditEventId(selectedEvent.id);
                       setShowEditModal(true);
                     }}
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-8 p-0 rounded-lg cursor-pointer border border-zinc-200 dark:border-zinc-700 text-zinc-600 hover:text-zinc-900 dark:text-zinc-300"
-                    title="Edit"
+                    className="h-8.5 px-3 rounded-lg cursor-pointer border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 text-xs font-medium flex items-center gap-1.5 transition-colors"
                   >
-                    <Edit className="w-3.5 h-3.5" />
+                    <Edit className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Edit</span>
                   </Button>
 
+                  {/* Hapus Event */}
                   <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
                       setDeleteEventId(selectedEvent.id);
                       setDeleteEventName(selectedEvent.name);
                       setShowDeleteConfirmModal(true);
                     }}
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-8 p-0 rounded-lg cursor-pointer border border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:text-rose-600"
-                    title="Hapus"
+                    className="h-8.5 w-8.5 p-0 rounded-lg cursor-pointer border border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:text-rose-600 hover:border-rose-200 dark:hover:border-rose-900/50 transition-colors"
+                    title="Hapus Kegiatan"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>
+            </div>
 
-              {/* CLEAN MINIMAL TABS */}
-              <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-6 pt-1">
+            {/* Full-Width Workspace Card (4 Tabs Kerja) */}
+            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 sm:p-5 shadow-2xs space-y-5 text-zinc-900 dark:text-zinc-100">
+              {/* CLEAN MINIMALIST TABS */}
+              <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-4 sm:gap-6 overflow-x-auto pb-px">
                 <button
                   type="button"
                   onClick={() => setSelectedTab("timeline")}
-                  className={`pb-2 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+                  className={`pb-2.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap px-0.5 ${
                     selectedTab === "timeline"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
                 >
-                  Alur & Timeline
+                  <span>Alur & Timeline</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setSelectedTab("screening")}
-                  className={`pb-2 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+                  className={`pb-2.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap px-0.5 ${
                     selectedTab === "screening"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
                 >
-                  Screening Berkas ({activeRegistrations.length})
+                  <span>Screening Berkas</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10.5px] font-medium ${
+                    selectedTab === "screening"
+                      ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                  }`}>
+                    {activeRegistrations.length}
+                  </span>
+                  {pendingCount > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title={`${pendingCount} pendaftar perlu verifikasi`} />
+                  )}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setSelectedTab("absensi")}
-                  className={`pb-2 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+                  className={`pb-2.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap px-0.5 ${
                     selectedTab === "absensi"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
                 >
-                  Presensi & QR
+                  <span>Presensi & QR</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTab("twibbon")}
+                  className={`pb-2.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap px-0.5 ${
+                    selectedTab === "twibbon"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  <span>Twibbon Kampanye</span>
+                  {selectedEvent.twibbon?.isActive && selectedEvent.twibbon?.frameUrl && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Twibbon Aktif" />
+                  )}
                 </button>
               </div>
 
-              {/* TAB 0: ALUR & TIMELINE */}
+              {/* TAB CONTENTS */}
               {selectedTab === "timeline" && (
                 <TimelineTab
                   event={selectedEvent}
                   onUpdateEvent={handleUpdateTimelineEvent}
                   registrationsCount={activeRegistrations.length}
-                  approvedCount={activeRegistrations.filter((r) => r.status === "APPROVED").length}
-                  pendingCount={activeRegistrations.filter((r) => r.status === "PENDING").length}
+                  approvedCount={approvedCount}
+                  pendingCount={pendingCount}
                 />
               )}
 
-              {/* TAB 1: SCREENING BERKAS */}
               {selectedTab === "screening" && (
                 <ScreeningTab
                   event={
@@ -1349,10 +1638,10 @@ export default function KomisariatKegiatanPage() {
                   onQuickApprove={handleQuickApprove}
                   onBatchApprove={handleBatchApprove}
                   onOpenAddParticipant={() => setShowAddParticipantModal(true)}
+                  onDeleteRegistration={handleDeleteRegistration}
                 />
               )}
 
-              {/* TAB 2: ABSENSI QR & SESI */}
               {selectedTab === "absensi" && (
                 <AttendanceTab
                   event={selectedEvent}
@@ -1360,14 +1649,17 @@ export default function KomisariatKegiatanPage() {
                   onScanCode={handleScanCode}
                 />
               )}
+
+              {selectedTab === "twibbon" && (
+                <TwibbonTab
+                  event={selectedEvent}
+                  onUpdateEvent={handleUpdateTimelineEvent}
+                />
+              )}
             </Card>
-          ) : (
-            <div className="py-20 text-center text-xs text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-              Pilih kegiatan untuk melihat data.
-            </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )
+      )}
 
       {/* CREATE EVENT MODAL */}
       {showCreateModal && (

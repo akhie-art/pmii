@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { FolderOpen, Search, Grid, List, Info, Star, ChevronLeft, MoreVertical, Share2, Trash2, FileText, FileSpreadsheet, FileImage, File, ShieldCheck, Eye } from "lucide-react";
+import { Folder, FolderOpen, Search, Grid, List, Info, Star, ChevronLeft, MoreVertical, Share2, Trash2, FileText, FileSpreadsheet, FileImage, File, ShieldCheck, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -159,7 +159,7 @@ const renderFileHeaderIcon = (type: string) => {
 const renderFilePreview = (fileMeta: { type: string; url: string }, doc: DocumentItem) => {
   const titleLower = doc.title.toLowerCase();
 
-  // If a real public file URL is present, ALWAYS render the actual file content inside the card thumbnail
+  // If a real public file URL is present and is an image, render the actual image thumbnail
   if (fileMeta.url && (fileMeta.url.startsWith("http://") || fileMeta.url.startsWith("https://"))) {
     const getCleanExtension = (url: string) => {
       try {
@@ -171,9 +171,6 @@ const renderFilePreview = (fileMeta: { type: string; url: string }, doc: Documen
     };
     const ext = getCleanExtension(fileMeta.url);
     const isImage = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"].includes(ext);
-    const isPdf = ext === ".pdf";
-    const isExcel = ext === ".xlsx" || ext === ".xls" || ext === ".csv";
-    const isWord = ext === ".docx" || ext === ".doc";
 
     if (isImage) {
       return (
@@ -192,28 +189,8 @@ const renderFilePreview = (fileMeta: { type: string; url: string }, doc: Documen
         </div>
       );
     }
-
-    if (isPdf) {
-      return (
-        <iframe 
-          src={`${fileMeta.url}#toolbar=0&navpanes=0&scrollbar=0`}
-          className="w-full h-full border-none pointer-events-none scale-90 origin-top bg-white select-none"
-          title={doc.title}
-          scrolling="no"
-        />
-      );
-    }
-
-    if (isExcel || isWord) {
-      return (
-        <iframe
-          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileMeta.url)}`}
-          className="w-full h-full border-none pointer-events-none scale-75 origin-top bg-white select-none"
-          title={doc.title}
-          scrolling="no"
-        />
-      );
-    }
+    // Note: To avoid browser performance freezing from multiple simultaneous external iframes,
+    // PDF and Office Online iframes are rendered inside the preview modal/detail panel only.
   }
 
   // Fallback to gorgeous high-fidelity PMII mockups if fileMeta.url is not present (e.g. sample local files)
@@ -578,14 +555,23 @@ export default function DrivePage() {
       await deleteStorageFile(u);
     }
 
-    // 2. Remove document from state and database
-    const updated = documents.filter(d => d.id !== docToDelete.id);
-    await updateDocuments(updated);
-    if (selectedDoc?.id === docToDelete.id) {
-      setSelectedDoc(updated[0] || null);
+    try {
+      // 2. Remove document from Supabase database and local cache
+      await db.deleteArsip(docToDelete.id);
+
+      // 3. Remove document from state and update database list
+      const updated = documents.filter(d => d.id !== docToDelete.id);
+      await updateDocuments(updated);
+      if (selectedDoc?.id === docToDelete.id) {
+        setSelectedDoc(updated[0] || null);
+      }
+      toast.success(`Berkas "${docToDelete.title}" berhasil dihapus.`);
+    } catch (err) {
+      console.error("Gagal menghapus berkas:", err);
+      toast.error("Gagal menghapus berkas.");
+    } finally {
+      setDocToDelete(null);
     }
-    setDocToDelete(null);
-    toast.success("Berkas dan file di storage Supabase berhasil dihapus.");
   }, [docToDelete, documents, selectedDoc]);
 
   useEffect(() => {
@@ -607,10 +593,11 @@ export default function DrivePage() {
     window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
     const loadData = async () => {
+      let parsedDocs: DocumentItem[] = [];
       try {
         const docs = await db.getArsip();
         const docList = Array.isArray(docs) ? docs : [];
-        const parsedDocs = docList.map((doc: any) => {
+        parsedDocs = docList.map((doc: any) => {
           let uploaderAvatar = doc.uploaderAvatar || "";
           let uploaderName = doc.uploader || "Admin";
           if (doc.description && typeof doc.description === "string" && doc.description.startsWith("{")) {
@@ -642,20 +629,56 @@ export default function DrivePage() {
         "Publikasi"
       ];
 
+      let loadedFolders: FolderItem[] = [];
       const storedFolders = localStorage.getItem("pmii_drive_folders");
       if (storedFolders) {
         try {
           const parsed: FolderItem[] = JSON.parse(storedFolders);
-          const cleaned = parsed.filter((f) => !DUMMY_FOLDER_NAMES.includes(f.name));
-          setFolders(cleaned);
-          localStorage.setItem("pmii_drive_folders", JSON.stringify(cleaned));
+          loadedFolders = parsed.filter((f) => !DUMMY_FOLDER_NAMES.includes(f.name));
         } catch (e) {
-          setFolders([]);
-          localStorage.setItem("pmii_drive_folders", JSON.stringify([]));
+          loadedFolders = [];
         }
-      } else {
-        setFolders([]);
-        localStorage.setItem("pmii_drive_folders", JSON.stringify([]));
+      }
+
+      // Restore and sync folders from documents stored in database
+      parsedDocs.forEach((doc: any) => {
+        const cat = (doc.category || "").trim();
+        if (
+          cat &&
+          !DUMMY_FOLDER_NAMES.includes(cat) &&
+          !loadedFolders.some((f) => f.name.toLowerCase() === cat.toLowerCase())
+        ) {
+          loadedFolders.push({
+            name: cat,
+            color: "bg-zinc-500/[0.02]",
+            borderColor: "border-zinc-500/20",
+            iconColor: "text-zinc-500",
+            parent: doc.parent || null,
+            uploader: doc.uploader || "Admin",
+            uploaderAvatar: doc.uploaderAvatar || "",
+            access: doc.access || "Internal"
+          });
+        }
+      });
+
+      setFolders(loadedFolders);
+      localStorage.setItem("pmii_drive_folders", JSON.stringify(loadedFolders));
+
+      // Handle URL deep-linking (?folder=... or ?file=...)
+      if (typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetFolder = urlParams.get("folder");
+        if (targetFolder) {
+          setSelectedFolder(targetFolder);
+        }
+        const targetFile = urlParams.get("file");
+        if (targetFile) {
+          const matched = parsedDocs.find((d: any) => d.id === targetFile);
+          if (matched) {
+            setSelectedDoc(matched);
+            setIsPreviewOpen(true);
+          }
+        }
       }
     };
     loadData();
@@ -677,16 +700,33 @@ export default function DrivePage() {
 
     const matchesSearch =
       doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.code.toLowerCase().includes(searchTerm.toLowerCase());
+      doc.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.category.toLowerCase().includes(searchTerm.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (activeTab === "MY_DRIVE" && selectedFolder && doc.category !== selectedFolder) return false;
-    if (activeTab !== "MY_DRIVE" && selectedFolder && doc.category !== selectedFolder) return false;
+    // Jika sedang mencari berkas, tampilkan semua hasil pencarian
+    if (searchTerm.trim() !== "") {
+      return true;
+    }
+
+    // Tab Berbintang (Starred) dan Baru Diunggah (Recent) menampilkan berkas langsung
+    if (activeTab === "STARRED") return doc.isStarred;
+    if (activeTab === "RECENT") return doc.year === new Date().getFullYear().toString();
+
+    // Jika sedang di dalam folder tertentu, hanya tampilkan berkas di folder tersebut
+    if (selectedFolder) {
+      return doc.category === selectedFolder;
+    }
+
+    // Jika di root (Arsip Utama / Publik / Internal tanpa folder yang dipilih):
+    // Berkas yang ada di dalam folder TIDAK tampil di root (yang tampil adalah foldernya)
+    const isInsideFolder = Boolean(doc.category && doc.category.trim() !== "");
+    if (isInsideFolder) {
+      return false;
+    }
 
     switch (activeTab) {
       case "PUBLIC": return doc.access === "Public";
-      case "STARRED": return doc.isStarred;
-      case "RECENT": return doc.year === new Date().getFullYear().toString();
       case "INTERNAL": return doc.access === "Internal";
       default: return true;
     }
@@ -699,9 +739,31 @@ export default function DrivePage() {
   };
 
   const handleDownload = (docId: string) => {
-    const updated = documents.map(d => d.id === docId ? { ...d, downloads: d.downloads + 1 } : d);
+    const targetDoc = documents.find(d => d.id === docId);
+    if (!targetDoc) return;
+
+    const updated = documents.map(d => d.id === docId ? { ...d, downloads: (d.downloads || 0) + 1 } : d);
     updateDocuments(updated);
-    alert("Mengunduh berkas PDF resmi...");
+
+    const meta = getFileMeta(targetDoc);
+    const fileUrl = meta.url || (targetDoc as any).url;
+
+    if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://") || fileUrl.startsWith("data:") || fileUrl.startsWith("blob:"))) {
+      toast.success(`Mengunduh berkas "${targetDoc.title}"...`);
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      const ext = fileUrl.split(/[?#]/)[0].split('.').pop() || "pdf";
+      link.download = targetDoc.title.includes(".") ? targetDoc.title : `${targetDoc.title}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      toast.info(`Membuka pratinjau "${targetDoc.title}"...`);
+      setSelectedDoc(targetDoc);
+      setIsPreviewOpen(true);
+    }
   };
 
   const handleDeleteFolder = (folderName: string, e: React.MouseEvent) => {
@@ -720,15 +782,28 @@ export default function DrivePage() {
       setSelectedFolder(null);
     }
     setFolderToDelete(null);
+    toast.success(`Folder "${folderToDelete}" berhasil dihapus.`);
   }, [folderToDelete, folders, documents, selectedFolder]);
 
   const handleShareLink = (type: "folder" | "file", idOrName: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (typeof window !== "undefined") {
-      const shareUrl = `${window.location.origin}/drive/${type}?id=${encodeURIComponent(idOrName)}`;
+      let shareUrl = "";
+      if (type === "file") {
+        const doc = documents.find(d => d.id === idOrName);
+        const meta = doc ? getFileMeta(doc) : null;
+        if (meta?.url && (meta.url.startsWith("http://") || meta.url.startsWith("https://"))) {
+          shareUrl = meta.url;
+        } else {
+          shareUrl = `${window.location.origin}/dashboard/arsip?file=${encodeURIComponent(idOrName)}`;
+        }
+      } else {
+        shareUrl = `${window.location.origin}/dashboard/arsip?folder=${encodeURIComponent(idOrName)}`;
+      }
+
       navigator.clipboard.writeText(shareUrl)
-        .then(() => alert(`Link ${type === "folder" ? "Folder" : "Berkas"} berhasil disalin:\n${shareUrl}`))
-        .catch(() => alert("Gagal menyalin link otomatis."));
+        .then(() => toast.success(`Tautan ${type === "folder" ? "folder" : "berkas"} berhasil disalin!`))
+        .catch(() => toast.error("Gagal menyalin tautan."));
     }
   };
 
@@ -793,8 +868,8 @@ export default function DrivePage() {
 
         <div className={showRightPanel ? "lg:col-span-7 space-y-5" : "lg:col-span-10 space-y-5"}>
           
-          {/* FOLDERS GRID */}
-          {currentFolders.length > 0 && (
+          {/* FOLDERS GRID (Tampil pada mode GRID kartu) */}
+          {currentFolders.length > 0 && viewMode === "GRID" && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                {currentFolders.map(folder => (
                   <div
@@ -846,7 +921,7 @@ export default function DrivePage() {
                 ) : (
                   <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Semua Berkas</span>
                 )}
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md font-medium ml-1">{filteredDocs.length}</span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md font-medium ml-1">{filteredDocs.length + currentFolders.length}</span>
               </div>
 
               <div className="flex items-center gap-1.5 pr-1">
@@ -887,87 +962,91 @@ export default function DrivePage() {
               </div>
           </div>
 
-          {filteredDocs.length === 0 ? (
-            <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-xl p-12 text-center shadow-none">
-              <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">Tidak ada berkas di direktori ini.</p>
-            </Card>
-                    ) : viewMode === "GRID" ? (
-             <div className={`grid grid-cols-1 sm:grid-cols-2 ${showRightPanel ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-3 lg:grid-cols-4"} gap-4`}>
-                {filteredDocs.map((doc) => {
-                  const fileMeta = getFileMeta(doc);
-                  return (
-                    <div
-                      key={doc.id}
-                      onClick={() => setSelectedDoc(doc)}
-                      onDoubleClick={() => { setSelectedDoc(doc); setIsPreviewOpen(true); }}
-                      className={`flex flex-col rounded-xl bg-white dark:bg-zinc-900 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 p-3 select-none transition-all cursor-pointer relative shadow-2xs hover:shadow-xs group/card ${
-                        selectedDoc?.id === doc.id 
-                          ? "ring-2 ring-blue-600 dark:ring-blue-500 bg-blue-50/20 dark:bg-blue-950/20 border-blue-500/40" 
-                          : ""
-                      }`}
-                    >
-                      {/* CARD HEADER */}
-                      <div className="flex justify-between items-center gap-2">
-                        <div className="flex items-center gap-2 truncate flex-1">
-                          {renderFileHeaderIcon(fileMeta.type)}
-                          <h4 className="text-[11.5px] font-bold truncate text-zinc-800 dark:text-zinc-200 flex-1 text-left" title={doc.title}>
-                            {doc.title}
-                          </h4>
+          {viewMode === "GRID" ? (
+            currentFolders.length === 0 && filteredDocs.length === 0 ? (
+              <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-xl p-12 text-center shadow-none">
+                <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">Tidak ada berkas atau folder di direktori ini.</p>
+              </Card>
+            ) : (
+              filteredDocs.length > 0 && (
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${showRightPanel ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-3 lg:grid-cols-4"} gap-4`}>
+                  {filteredDocs.map((doc) => {
+                    const fileMeta = getFileMeta(doc);
+                    return (
+                      <div
+                        key={doc.id}
+                        onClick={() => setSelectedDoc(doc)}
+                        onDoubleClick={() => { setSelectedDoc(doc); setIsPreviewOpen(true); }}
+                        className={`flex flex-col rounded-xl bg-white dark:bg-zinc-900 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 p-3 select-none transition-all cursor-pointer relative shadow-2xs hover:shadow-xs group/card ${
+                          selectedDoc?.id === doc.id 
+                            ? "ring-2 ring-blue-600 dark:ring-blue-500 bg-blue-50/20 dark:bg-blue-950/20 border-blue-500/40" 
+                            : ""
+                        }`}
+                      >
+                        {/* CARD HEADER */}
+                        <div className="flex justify-between items-center gap-2">
+                          <div className="flex items-center gap-2 truncate flex-1">
+                            {renderFileHeaderIcon(fileMeta.type)}
+                            <h4 className="text-[11.5px] font-bold truncate text-zinc-800 dark:text-zinc-200 flex-1 text-left" title={doc.title}>
+                              {doc.title}
+                            </h4>
+                          </div>
+
+                          {/* Options Ellipsis Menu */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="h-6 w-6 rounded-full flex items-center justify-center outline-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all cursor-pointer border-none shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <MoreVertical className="w-3.5 h-3.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-md">
+                              <DropdownMenuItem onClick={(e) => handleShareLink("file", doc.id, e)} className="cursor-pointer text-xs font-semibold gap-2 text-zinc-700 dark:text-zinc-200 focus:bg-zinc-100 dark:focus:bg-zinc-800">
+                                <Share2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Bagikan Link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => handleToggleStar(doc.id, e)} className="cursor-pointer text-xs font-semibold gap-2 text-zinc-700 dark:text-zinc-200 focus:bg-zinc-100 dark:focus:bg-zinc-800">
+                                <Star className={`w-3.5 h-3.5 ${doc.isStarred ? "text-amber-500 fill-amber-500" : "text-zinc-400"}`} /> Beri Bintang
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDoc(doc); setShowRightPanel(true); }} className="cursor-pointer text-xs font-semibold gap-2 text-zinc-700 dark:text-zinc-200 focus:bg-zinc-100 dark:focus:bg-zinc-800">
+                                <Info className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Detail Info
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteDoc(doc.id); }} className="cursor-pointer text-xs font-semibold gap-2 text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/20 focus:text-rose-500">
+                                <Trash2 className="w-3.5 h-3.5" /> Hapus Berkas
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
 
-                        {/* Options Ellipsis Menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="h-6 w-6 rounded-full flex items-center justify-center outline-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all cursor-pointer border-none shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <MoreVertical className="w-3.5 h-3.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-md">
-                            <DropdownMenuItem onClick={(e) => handleShareLink("file", doc.id, e)} className="cursor-pointer text-xs font-semibold gap-2 text-zinc-700 dark:text-zinc-200 focus:bg-zinc-100 dark:focus:bg-zinc-800">
-                              <Share2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Bagikan Link
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => handleToggleStar(doc.id, e)} className="cursor-pointer text-xs font-semibold gap-2 text-zinc-700 dark:text-zinc-200 focus:bg-zinc-100 dark:focus:bg-zinc-800">
-                              <Star className={`w-3.5 h-3.5 ${doc.isStarred ? "text-amber-500 fill-amber-500" : "text-zinc-400"}`} /> Beri Bintang
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDoc(doc); setShowRightPanel(true); }} className="cursor-pointer text-xs font-semibold gap-2 text-zinc-700 dark:text-zinc-200 focus:bg-zinc-100 dark:focus:bg-zinc-800">
-                              <Info className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Detail Info
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDeleteDoc(doc.id); }} className="cursor-pointer text-xs font-semibold gap-2 text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/20 focus:text-rose-500">
-                              <Trash2 className="w-3.5 h-3.5" /> Hapus Berkas
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                        {/* CARD BODY (Checkerboard preview/thumbnail area) */}
+                        <div className="h-36 w-full rounded-lg bg-zinc-50 dark:bg-zinc-950/60 flex items-center justify-center overflow-hidden border border-zinc-200/80 dark:border-zinc-800/80 relative shadow-inner mt-2.5 mb-2">
+                          {renderFilePreview(fileMeta, doc)}
+                        </div>
 
-                      {/* CARD BODY (Checkerboard preview/thumbnail area) */}
-                      <div className="h-36 w-full rounded-lg bg-zinc-50 dark:bg-zinc-950/60 flex items-center justify-center overflow-hidden border border-zinc-200/80 dark:border-zinc-800/80 relative shadow-inner mt-2.5 mb-2">
-                        {renderFilePreview(fileMeta, doc)}
-                      </div>
-
-                      {/* CARD FOOTER */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <UserUploaderAvatar name={doc.uploader} avatar={doc.uploaderAvatar} size="md" />
-                          <div className="flex flex-col min-w-0 text-left leading-tight">
-                            <span 
-                              className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 truncate"
-                              title={`Diupload oleh: ${doc.uploader || "Admin"}`}
-                            >
-                              {doc.uploader || "Admin"}
-                            </span>
-                            <span className="text-[8.5px] text-zinc-400 dark:text-zinc-500 font-medium truncate">
-                              {doc.uploadedDate}
-                            </span>
+                        {/* CARD FOOTER */}
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <UserUploaderAvatar name={doc.uploader} avatar={doc.uploaderAvatar} size="md" />
+                            <div className="flex flex-col min-w-0 text-left leading-tight">
+                              <span 
+                                className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 truncate"
+                                title={`Diupload oleh: ${doc.uploader || "Admin"}`}
+                              >
+                                {doc.uploader || "Admin"}
+                              </span>
+                              <span className="text-[8.5px] text-zinc-400 dark:text-zinc-500 font-medium truncate">
+                                {doc.uploadedDate}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="shrink-0 scale-90">
+                            <AccessBadge access={doc.access} />
                           </div>
                         </div>
-                        
-                        <div className="shrink-0 scale-90">
-                          <AccessBadge access={doc.access} />
-                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-             </div>
+                    );
+                  })}
+                </div>
+              )
+            )
           ) : (
             <Card className="border border-zinc-200 dark:border-zinc-800 shadow-none bg-white dark:bg-zinc-900 rounded-xl overflow-hidden">
               <Table>
@@ -981,44 +1060,147 @@ export default function DrivePage() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {filteredDocs.map(doc => (
-                          <TableRow 
-                            key={doc.id} 
-                            onClick={() => setSelectedDoc(doc)} 
-                            onDoubleClick={() => { setSelectedDoc(doc); setIsPreviewOpen(true); }}
-                            className={`cursor-pointer border-zinc-100 dark:border-zinc-800/60 transition-colors ${selectedDoc?.id === doc.id ? "bg-blue-50/40 dark:bg-blue-950/30" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/40"}`}
-                          >
-                              <TableCell className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">
-                                <div className="flex items-center gap-3">
-                                  <div className="p-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 shrink-0">
-                                    <FileText className="w-4 h-4" />
+                      {currentFolders.length === 0 && filteredDocs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-12 text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                            Tidak ada berkas atau folder di direktori ini.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {/* Folder Rows */}
+                          {currentFolders.map(folder => {
+                            const folderDocs = documents.filter(d => d.category?.toLowerCase() === folder.name.toLowerCase());
+                            const firstDoc = folderDocs[0];
+                            const folderUploader = folder.uploader || firstDoc?.uploader || currentUser?.name || "Admin";
+                            const folderUploaderAvatar = folder.uploaderAvatar || firstDoc?.uploaderAvatar || currentUser?.avatar || "";
+                            const folderAccess: "Public" | "Internal" = folder.access || (folderDocs.some(d => d.access === "Public") ? "Public" : "Internal");
+
+                            return (
+                              <TableRow 
+                                key={`folder-${folder.name}`} 
+                                onClick={() => setSelectedFolder(folder.name)} 
+                                className="cursor-pointer border-zinc-100 dark:border-zinc-800/60 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40 group"
+                              >
+                                <TableCell className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-500 dark:text-amber-400 rounded-lg shrink-0">
+                                      <Folder className="w-4 h-4 fill-amber-500/20" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="truncate max-w-[240px] text-zinc-800 dark:text-zinc-200 font-semibold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                        {folder.name}
+                                      </span>
+                                      <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-normal">
+                                        {folderDocs.length > 0 ? `${folderDocs.length} berkas` : "Folder"}
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div className="flex flex-col">
-                                    <span className="truncate max-w-[200px]">{doc.title}</span>
-                                    <span className="text-[9px] font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">{doc.code}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                    Folder
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <UserUploaderAvatar name={folderUploader} avatar={folderUploaderAvatar} size="sm" />
+                                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium truncate max-w-[130px]">
+                                      {folderUploader}
+                                    </span>
                                   </div>
-                                </div>
-                              </TableCell>
-                              <TableCell><CategoryBadge category={doc.category} /></TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <UserUploaderAvatar name={doc.uploader} avatar={doc.uploaderAvatar} size="sm" />
-                                  <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium truncate max-w-[130px]">{doc.uploader || "Admin"}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell><AccessBadge access={doc.access} /></TableCell>
-                              <TableCell className="text-right">
-                                  <div className="flex justify-end gap-0.5">
-                                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDocToChangeAccess(doc); }} className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg shadow-none border-none cursor-pointer">
-                                        <Share2 className="w-4 h-4" />
+                                </TableCell>
+                                <TableCell>
+                                  <AccessBadge access={folderAccess} />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end items-center gap-1">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      onClick={(e) => handleShareLink("folder", folder.name, e)} 
+                                      className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg shadow-none border-none cursor-pointer"
+                                      title="Bagikan Link Folder"
+                                    >
+                                      <Share2 className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={(e) => handleToggleStar(doc.id, e)} className="h-8 w-8 p-0 rounded-lg shadow-none border-none cursor-pointer">
-                                        <Star className={`w-4 h-4 ${doc.isStarred ? "text-amber-500 fill-amber-500" : "text-zinc-400 dark:text-zinc-500"}`} />
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      onClick={(e) => handleDeleteFolder(folder.name, e)} 
+                                      className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 rounded-lg shadow-none border-none cursor-pointer"
+                                      title="Hapus Folder"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
                                     </Button>
                                   </div>
-                              </TableCell>
-                          </TableRow>
-                      ))}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+
+                          {/* File Rows */}
+                          {filteredDocs.map(doc => (
+                            <TableRow 
+                              key={doc.id} 
+                              onClick={() => setSelectedDoc(doc)} 
+                              onDoubleClick={() => { setSelectedDoc(doc); setIsPreviewOpen(true); }}
+                              className={`cursor-pointer border-zinc-100 dark:border-zinc-800/60 transition-colors ${selectedDoc?.id === doc.id ? "bg-blue-50/40 dark:bg-blue-950/30" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/40"}`}
+                            >
+                                <TableCell className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 shrink-0">
+                                      <FileText className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="truncate max-w-[200px]">{doc.title}</span>
+                                      <span className="text-[9px] font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">{doc.code}</span>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell><CategoryBadge category={doc.category} /></TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <UserUploaderAvatar name={doc.uploader} avatar={doc.uploaderAvatar} size="sm" />
+                                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium truncate max-w-[130px]">{doc.uploader || "Admin"}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell><AccessBadge access={doc.access} /></TableCell>
+                                <TableCell className="text-right">
+                                    <div className="flex justify-end items-center gap-1">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={(e) => { e.stopPropagation(); setDocToChangeAccess(doc); }} 
+                                        className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg shadow-none border-none cursor-pointer"
+                                        title="Ubah Hak Akses"
+                                      >
+                                          <Share2 className="w-4 h-4" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={(e) => handleToggleStar(doc.id, e)} 
+                                        className="h-8 w-8 p-0 rounded-lg shadow-none border-none cursor-pointer"
+                                        title="Beri Bintang"
+                                      >
+                                          <Star className={`w-4 h-4 ${doc.isStarred ? "text-amber-500 fill-amber-500" : "text-zinc-400 dark:text-zinc-500"}`} />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteDoc(doc.id); }} 
+                                        className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 rounded-lg shadow-none border-none cursor-pointer"
+                                        title="Hapus Berkas"
+                                      >
+                                          <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                          ))}
+                        </>
+                      )}
                   </TableBody>
               </Table>
             </Card>

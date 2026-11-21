@@ -57,24 +57,40 @@ export function ProfileField({
 }
 
 /**
- * Format string tanggal YYYY-MM-DD menjadi format bahasa Indonesia yang mudah dibaca.
- * Contoh: "2003-05-14" -> "14 Mei 2003"
+ * Format string tanggal YYYY-MM-DD, DD/MM/YYYY, atau ISO string menjadi format bahasa Indonesia yang mudah dibaca.
+ * Contoh: "2006-03-17" -> "17 Maret 2006"
  */
 export function formatIndonesianDate(dateStr?: string | null): string {
   if (!dateStr || !dateStr.trim()) return "";
-  const parts = dateStr.trim().split("-");
-  if (parts.length === 3) {
+  const clean = dateStr.trim().split("T")[0]; // Hilangkan komponen jam jika format ISO
+  const months = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+
+  // Format YYYY-MM-DD
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(clean)) {
+    const parts = clean.split("-");
     const year = parts[0];
     const monthIdx = parseInt(parts[1], 10) - 1;
     const day = parseInt(parts[2], 10);
-    const months = [
-      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-    ];
     if (monthIdx >= 0 && monthIdx < 12 && !isNaN(day)) {
       return `${day} ${months[monthIdx]} ${year}`;
     }
   }
+
+  // Format DD/MM/YYYY atau DD-MM-YYYY
+  if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(clean)) {
+    const separator = clean.includes("/") ? "/" : "-";
+    const parts = clean.split(separator);
+    const day = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const year = parts[2];
+    if (monthIdx >= 0 && monthIdx < 12 && !isNaN(day)) {
+      return `${day} ${months[monthIdx]} ${year}`;
+    }
+  }
+
   return dateStr;
 }
 

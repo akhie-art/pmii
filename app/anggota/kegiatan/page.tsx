@@ -18,6 +18,7 @@ import { CertificateModal } from "./_components/CertificateModal";
 import { ParticipantCardModal } from "./_components/ParticipantCardModal";
 import { RegistrationModal } from "./_components/RegistrationModal";
 import { RegistrationSuccessModal } from "./_components/RegistrationSuccessModal";
+import { TwibbonModal } from "./_components/TwibbonModal";
 
 export default function KaderKegiatanPage() {
   const pathname = usePathname();
@@ -63,6 +64,15 @@ export default function KaderKegiatanPage() {
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
   const [certEvent, setCertEvent] = useState<EventActivity | null>(null);
   const [certReg, setCertReg] = useState<ParticipantRegistration | null>(null);
+
+  // Twibbon Modal State
+  const [isTwibbonModalOpen, setIsTwibbonModalOpen] = useState(false);
+  const [selectedTwibbonEvent, setSelectedTwibbonEvent] = useState<EventActivity | null>(null);
+
+  const handleOpenTwibbon = (event: EventActivity) => {
+    setSelectedTwibbonEvent(event);
+    setIsTwibbonModalOpen(true);
+  };
 
   useEffect(() => {
     // 0. Instant Cache Hydration: langsung render dari data lokal agar tidak menunggu network request
@@ -520,6 +530,7 @@ export default function KaderKegiatanPage() {
                 const reg = getMyRegistration(ev.id);
                 if (reg) handleViewParticipantCard(ev, reg);
               }}
+              onOpenTwibbon={() => handleOpenTwibbon(ev)}
             />
           ))}
         </div>
@@ -535,6 +546,9 @@ export default function KaderKegiatanPage() {
         activeCadre={activeCadre}
         currentStageTab={currentStageTab}
         onStageTabChange={setCurrentStageTab}
+        onOpenTwibbon={() => {
+          if (selectedStagesEvent) handleOpenTwibbon(selectedStagesEvent);
+        }}
         onOpenRegister={() => {
           setIsStagesModalOpen(false);
           if (selectedStagesEvent) handleOpenRegisterModal(selectedStagesEvent);
@@ -599,6 +613,14 @@ export default function KaderKegiatanPage() {
         onOpenChange={setIsCardModalOpen}
         event={selectedCardEvent}
         registration={selectedCardReg}
+        activeCadre={activeCadre}
+      />
+
+      {/* 8. MODAL: TWIBBON KAMPANYE RESMI */}
+      <TwibbonModal
+        isOpen={isTwibbonModalOpen}
+        onOpenChange={setIsTwibbonModalOpen}
+        event={selectedTwibbonEvent}
         activeCadre={activeCadre}
       />
     </div>

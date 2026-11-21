@@ -120,24 +120,11 @@ export function DocumentAttachment({
   }[accentColor];
 
   return (
-    <div className="space-y-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-      {/* Label and Badge */}
-      <div className="flex items-center justify-between">
-        <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <span>{label}</span>
-          {hasFile && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>Terlampir</span>
-            </span>
-          )}
-        </label>
-        {badgeLabel && (
-          <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-            {badgeLabel}
-          </span>
-        )}
-      </div>
+    <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+      {/* Label Sederhana Tanpa Badge */}
+      <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">
+        {label}
+      </label>
 
       {/* Hidden File Input */}
       <input
@@ -149,141 +136,98 @@ export function DocumentAttachment({
       />
 
       {hasFile ? (
-        /* Attached Document Card */
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl gap-3 shadow-xs transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
-          {/* File Thumbnail & Info */}
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            {/* Thumbnail */}
-            {fileUrl && isImage && !hasImgError ? (
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setIsPreviewOpen(true)}
-                title="Klik untuk memperbesar pratinjau"
-                className="relative group w-16 h-12 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 shrink-0 cursor-pointer shadow-xs"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={fileUrl}
-                  alt={fileName || "Pratinjau Berkas"}
-                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                  onError={() => setHasImgError(true)}
-                />
-                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                  <ZoomIn className="w-4 h-4 drop-shadow" />
-                </div>
-              </div>
-            ) : (
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => fileUrl && !hasImgError && setIsPreviewOpen(true)}
-                className={`w-16 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border ${
-                  isPdf
-                    ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400"
-                    : isImage
-                    ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400"
-                    : "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                } ${fileUrl && !hasImgError ? "cursor-pointer" : ""}`}
-              >
-                {isPdf ? (
-                  <FileText className="w-5 h-5" />
-                ) : isImage ? (
-                  <ImageIcon className="w-5 h-5" />
-                ) : (
-                  <FileText className="w-5 h-5" />
-                )}
-                <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">
-                  {isPdf ? "PDF" : isImage ? "FOTO" : "Berkas"}
-                </span>
-              </div>
-            )}
-
-            {/* Name & Metadata */}
-            <div className="min-w-0 flex-1">
-              <span className="truncate block text-zinc-900 dark:text-zinc-100 font-medium text-xs">
-                {fileName || "Berkas Terlampir"}
-              </span>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
-                  <FileCheck className="w-3 h-3 text-emerald-500" />
-                  {fileUrl?.startsWith("data:")
-                    ? "Berkas lokal siap simpan"
-                    : "Tersimpan di Cloud Storage"}
-                </span>
-                {isPdf && (
-                  <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/30">
-                    PDF
-                  </Badge>
-                )}
-                {isImage && (
-                  <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/30">
-                    Gambar
-                  </Badge>
-                )}
+        fileUrl && isImage && !hasImgError ? (
+          /* HANYA TAMPIL GAMBAR LANGSUNG */
+          <div className="space-y-2">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setIsPreviewOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setIsPreviewOpen(true);
+              }}
+              title="Klik gambar untuk melihat pratinjau penuh"
+              className="group relative max-w-sm rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 cursor-pointer shadow-none transition-all hover:border-blue-500/60"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={fileUrl}
+                alt={fileName || "Kartu Tanda Mahasiswa (KTM)"}
+                className="w-full h-auto max-h-56 object-contain mx-auto transition-transform duration-200 group-hover:scale-[1.01]"
+                onError={() => setHasImgError(true)}
+              />
+              <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-medium gap-1.5 backdrop-blur-[1px]">
+                <ZoomIn className="w-4 h-4" />
+                <span>Klik untuk Memperbesar</span>
               </div>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-1 sm:gap-1.5 self-end sm:self-center shrink-0">
-            {/* Pratinjau Modal Trigger */}
-            {fileUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsPreviewOpen(true)}
-                className="h-8 px-2 sm:px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1 rounded-lg shrink-0"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Pratinjau</span>
-              </Button>
-            )}
-
-            {/* Buka Tab Baru */}
-            {fileUrl && (
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Buka dokumen di tab baru"
-                className="inline-flex items-center justify-center h-8 w-8 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-
-            {/* Ganti Berkas */}
             {isEditing && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                title="Ganti berkas ini dengan berkas baru"
-                className="h-8 px-2 sm:px-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1 rounded-lg shrink-0"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Ganti</span>
-              </Button>
-            )}
-
-            {/* Hapus Berkas */}
-            {isEditing && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onRemove}
-                title="Hapus lampiran ini"
-                className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-7.5 px-3 text-xs rounded-md border-zinc-200 dark:border-zinc-800 cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3 h-3 text-zinc-500" />
+                  <span>Ganti Gambar</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRemove}
+                  className="h-7.5 px-3 text-xs rounded-md border-zinc-200 dark:border-zinc-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Hapus</span>
+                </Button>
+              </div>
             )}
           </div>
-        </div>
+        ) : (
+          /* Fallback untuk format non-gambar (misal berkas PDF) */
+          <div className="flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg gap-2.5">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setIsPreviewOpen(true)}
+              className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400">
+                <FileText className="w-4 h-4" />
+              </div>
+              <span className="truncate block text-zinc-900 dark:text-zinc-100 font-medium text-xs">
+                {fileName || "Dokumen PDF"}
+              </span>
+            </div>
+
+            {isEditing && (
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-7.5 px-2 text-xs rounded-md"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRemove}
+                  className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-rose-600 rounded-md"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )
       ) : isEditing ? (
         /* Empty Upload Dropzone */
         <div
@@ -296,7 +240,7 @@ export function DocumentAttachment({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`relative flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-3 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+          className={`relative flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-3 p-3.5 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
             isDragging
               ? colorStyles.activeBorder
               : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-950/50 hover:bg-zinc-50 dark:hover:bg-zinc-950"
@@ -333,60 +277,35 @@ export function DocumentAttachment({
 
       {/* In-App Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-2xl p-4 sm:p-6 overflow-hidden">
-          <DialogHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-center justify-between gap-3 pr-6">
-              <div className="min-w-0">
-                <DialogTitle className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white truncate">
-                  {label}
-                </DialogTitle>
-                <p className="text-xs text-zinc-500 font-mono truncate mt-0.5">
-                  {fileName || "Dokumen Lampiran"}
-                </p>
-              </div>
-              {fileUrl && (
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 font-semibold hover:underline px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 shrink-0"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Buka Penuh</span>
-                </a>
-              )}
-            </div>
+        <DialogContent className="max-w-xl p-4 sm:p-5 overflow-hidden">
+          <DialogHeader className="pb-2.5 border-b border-zinc-100 dark:border-zinc-800 pr-8">
+            <DialogTitle className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">
+              {label.replace(/^Unggah\s+/i, "Pratinjau ")}
+            </DialogTitle>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Identitas resmi mahasiswa aktif
+            </p>
           </DialogHeader>
 
           {/* Modal Preview Body */}
-          <div className="my-2 max-h-[65vh] overflow-auto flex items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 p-2">
+          <div className="my-1 max-h-[75vh] overflow-auto flex items-center justify-center rounded-lg bg-zinc-50 dark:bg-zinc-950 p-1.5 sm:p-2">
             {isImage && fileUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={fileUrl}
                 alt={fileName || "Pratinjau Dokumen"}
-                className="max-h-[60vh] max-w-full object-contain rounded-md shadow-md"
+                className="max-h-[70vh] max-w-full object-contain rounded-md"
               />
             ) : isPdf && fileUrl ? (
               <iframe
                 src={fileUrl}
                 title={fileName || "PDF Preview"}
-                className="w-full h-[55vh] rounded border-0"
+                className="w-full h-[60vh] rounded border-0"
               />
             ) : (
               <div className="py-12 text-center text-zinc-500 text-xs">
                 <FileText className="w-10 h-10 mx-auto text-zinc-400 mb-2" />
                 <p>Pratinjau langsung tidak tersedia untuk format ini.</p>
-                {fileUrl && (
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block mt-3 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
-                  >
-                    Unduh / Buka Dokumen
-                  </a>
-                )}
               </div>
             )}
           </div>

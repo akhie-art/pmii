@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Building, BookOpen, GraduationCap, Phone, Mail } from "lucide-react";
+import { Building, BookOpen, GraduationCap, Phone, Mail, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -83,6 +83,10 @@ export function AcademicTab({
   setFakultas,
   jurusan,
   setJurusan,
+  tahunMasukPT,
+  setTahunMasukPT,
+  tahunLulusPT,
+  setTahunLulusPT,
   phone,
   setPhone,
   email,
@@ -143,7 +147,7 @@ export function AcademicTab({
           >
             <SelectTrigger
               title={matchedUniv?.name || perguruanTinggi || undefined}
-              className="w-full h-9.5 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-xl"
+              className="w-full h-9 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-md"
             >
               <SelectValue placeholder="Pilih Perguruan Tinggi" className="truncate text-left" />
             </SelectTrigger>
@@ -178,7 +182,7 @@ export function AcademicTab({
             >
               <SelectTrigger
                 title={fakultas || undefined}
-                className="w-full h-9.5 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-xl"
+                className="w-full h-9 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-md"
               >
                 <SelectValue placeholder="Pilih Fakultas" className="truncate text-left" />
               </SelectTrigger>
@@ -205,7 +209,7 @@ export function AcademicTab({
                   ? "-"
                   : "Pilih Kampus terlebih dahulu"
               }
-              className="w-full h-9.5 text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-500 rounded-xl cursor-not-allowed truncate"
+              className="w-full h-9 text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-500 rounded-md cursor-not-allowed truncate"
             />
           )}
         </ProfileField>
@@ -227,7 +231,7 @@ export function AcademicTab({
             >
               <SelectTrigger
                 title={jurusan || undefined}
-                className="w-full h-9.5 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-xl"
+                className="w-full h-9 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-md"
               >
                 <SelectValue
                   placeholder={
@@ -267,6 +271,66 @@ export function AcademicTab({
               />
             </InputGroup>
           )}
+        </ProfileField>
+      </div>
+
+      {/* Periode Kuliah: Tahun Mulai & Tahun Selesai */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+        <ProfileField
+          label="Tahun Mulai Kuliah"
+          isEditing={isEditing}
+          value={tahunMasukPT}
+          emptyPlaceholder="Tahun mulai belum diisi"
+          displayValue={
+            tahunMasukPT ? (
+              <span className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Tahun Masuk: {tahunMasukPT}</span>
+              </span>
+            ) : undefined
+          }
+        >
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Calendar className="size-4 text-zinc-400" />
+            </InputGroupAddon>
+            <InputGroupInput
+              type="number"
+              min="1980"
+              max="2099"
+              placeholder="Contoh: 2021"
+              value={tahunMasukPT || ""}
+              onChange={(e) => setTahunMasukPT && setTahunMasukPT(e.target.value)}
+              className="font-mono text-xs sm:text-sm"
+            />
+          </InputGroup>
+        </ProfileField>
+
+        <ProfileField
+          label="Tahun Selesai / Target Lulus"
+          isEditing={isEditing}
+          value={tahunLulusPT}
+          emptyPlaceholder="Belum diisi / Masih aktif kuliah"
+          displayValue={
+            tahunLulusPT ? (
+              <span className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Tahun Selesai: {tahunLulusPT}</span>
+              </span>
+            ) : undefined
+          }
+        >
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <Calendar className="size-4 text-zinc-400" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="Contoh: 2025 atau Sekarang"
+              value={tahunLulusPT || ""}
+              onChange={(e) => setTahunLulusPT && setTahunLulusPT(e.target.value)}
+              className="font-mono text-xs sm:text-sm"
+            />
+          </InputGroup>
         </ProfileField>
       </div>
 
@@ -414,8 +478,7 @@ export function AcademicTab({
       {/* 4. BERKAS IDENTITAS KAMPUS (KTM) */}
       <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
         <DocumentAttachment
-          label="Unggah Kartu Tanda Mahasiswa (KTM Asli / Scan)"
-          badgeLabel="Identitas Mahasiswa Aktif"
+          label="Kartu Tanda Mahasiswa (KTM Asli / Scan)"
           fileName={ktmName}
           fileUrl={ktmFileUrl}
           isEditing={isEditing}

@@ -115,25 +115,58 @@ export default function DashboardProfilPage() {
         } catch (e) {}
       }
       
-      const [allCadres, allBoards] = await Promise.all([
-        db.getCadres([]),
-        db.getBoards([])
-      ]);
+      let mine: CadreFollowUp | null = null;
+      let allCadres: CadreFollowUp[] = [];
 
-      // Check matching cadre record
-      let mine: CadreFollowUp | null = 
-        (activeId ? allCadres.find(c => c.id === activeId) : null) || 
-        (loggedInUser ? allCadres.find(c => c.id === loggedInUser.id || (c.email && c.email.toLowerCase() === loggedInUser.email?.toLowerCase())) : null) || 
-        allCadres[0] || null;
+      // 1. High-Performance Targeted Query: Coba ambil data spesifik 1 kader langsung
+      if (isSupabaseConfigured && supabase) {
+        try {
+          if (activeId) {
+            const { data } = await supabase.from("anggota").select("*").eq("id", activeId).maybeSingle();
+            if (data) mine = data;
+          }
+          if (!mine && loggedInUser?.email) {
+            const { data } = await supabase.from("anggota").select("*").ilike("email", loggedInUser.email.trim()).maybeSingle();
+            if (data) mine = data;
+          }
+          if (!mine && loggedInUser?.id) {
+            const { data } = await supabase.from("anggota").select("*").eq("id", loggedInUser.id).maybeSingle();
+            if (data) mine = data;
+          }
+        } catch (err) {
+          console.warn("[DashboardProfil] Targeted cadre fetch error:", err);
+        }
+      }
 
-      // Check matching board record
-      const matchedBoard = allBoards.find(
-        (b) =>
-          (mine && b.anggota_id && b.anggota_id === mine.id) ||
-          (loggedInUser && (b as any).user_id && (b as any).user_id === loggedInUser.id) ||
-          (loggedInUser && b.email && b.email.toLowerCase() === loggedInUser.email?.toLowerCase()) ||
-          (loggedInUser && b.name && b.name.toLowerCase() === loggedInUser.name?.toLowerCase())
-      );
+      // Fallback ke db.getCadres jika query spesifik tidak menemukan hasil (mode offline/mock)
+      if (!mine) {
+        allCadres = await db.getCadres([]);
+        mine = 
+          (activeId ? allCadres.find(c => c.id === activeId) : null) || 
+          (loggedInUser ? allCadres.find(c => c.id === loggedInUser.id || (c.email && c.email.toLowerCase() === loggedInUser.email?.toLowerCase())) : null) || 
+          allCadres[0] || null;
+      } else {
+        allCadres = [mine];
+      }
+
+      // 2. Targeted Board Record Fetching
+      let matchedBoard: any = null;
+      if (isSupabaseConfigured && supabase && mine?.id) {
+        try {
+          const { data } = await supabase.from("pengurus").select("*").eq("anggota_id", mine.id).maybeSingle();
+          if (data) matchedBoard = data;
+        } catch {}
+      }
+      if (!matchedBoard) {
+        const allBoards = await db.getBoards([]).catch(() => []);
+        matchedBoard = allBoards.find(
+          (b) =>
+            (mine && b.anggota_id && b.anggota_id === mine.id) ||
+            (loggedInUser && (b as any).user_id && (b as any).user_id === loggedInUser.id) ||
+            (loggedInUser && b.email && b.email.toLowerCase() === loggedInUser.email?.toLowerCase()) ||
+            (loggedInUser && b.name && b.name.toLowerCase() === loggedInUser.name?.toLowerCase())
+        );
+      }
 
       // Auto-fallback from loggedInUser to guarantee full operational record
       if (!mine && loggedInUser) {
@@ -512,9 +545,10 @@ export default function DashboardProfilPage() {
 
       setCurrentCadre(updatedCadre);
 
-      // Save Cadres Table
+      // Fast Targeted Single-Row Update (O(1))
+      await db.updateCadre(currentCadre.id, updatedCadre);
       const updatedCadres = cadres.map(c => c.id === currentCadre.id ? updatedCadre : c);
-      await db.saveCadres(updatedCadres);
+      setCadres(updatedCadres);
 
       // Sync Session and Users Table
       const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");

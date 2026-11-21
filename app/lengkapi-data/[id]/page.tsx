@@ -130,24 +130,11 @@ export default function LengkapiDataPage() {
 
         // Coba cari dari Supabase terlebih dahulu
         if (isSupabaseConfigured && supabase) {
-          let { data, error } = await supabase
+          const { data, error } = await supabase
             .from("anggota")
             .select("*")
             .eq("id", memberId)
             .maybeSingle();
-
-          if (error) {
-            // Fallback ke tabel kader jika belum di-rename
-            const altRes = await supabase
-              .from("kader")
-              .select("*")
-              .eq("id", memberId)
-              .maybeSingle();
-            if (!altRes.error && altRes.data) {
-              data = altRes.data;
-              error = null;
-            }
-          }
 
           if (!error && data) {
             foundCadre = data;
@@ -318,13 +305,7 @@ export default function LengkapiDataPage() {
           .eq("id", memberId);
 
         if (dbError) {
-          const altRes = await supabase
-            .from("kader")
-            .update(payload)
-            .eq("id", memberId);
-          if (altRes.error) {
-            console.warn("Notice Supabase direct update, falling back to db helper:", altRes.error.message);
-          }
+          console.warn("Notice Supabase direct update on anggota:", dbError.message);
         }
       }
 

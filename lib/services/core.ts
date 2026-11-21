@@ -84,7 +84,7 @@ export function broadcastTableSync(tableName: string, localStorageKey?: string) 
   } catch (e) {}
 }
 
-let _resolvedAnggotaTable: string | null = null;
+let _resolvedAnggotaTable: string | null = "anggota";
 
 export async function getEffectiveTableName(tableName: string): Promise<string> {
   if (tableName === "anggota" || tableName === "kader") return "anggota";
@@ -107,6 +107,7 @@ export function extractMissingColumn(errorMessage: string): string | null {
 
 // Global cache for remote schema columns that do not exist on PostgreSQL
 const missingColumnsCache: Record<string, Set<string>> = {
+  arsip: new Set(["komisariat", "commissariat", "komisariat_id"]),
   pengurus: new Set(["rayon", "order", "phoneNumber", "phone", "email", "gender", "user_id", "role"]),
   anggota: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"]),
   kader: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"])
@@ -141,15 +142,6 @@ export async function getTableData<T>(
   if (isSupabaseConfigured && supabase) {
     try {
       let { data, error } = await supabase.from(effectiveTable).select("*");
-      if (error && (effectiveTable === "anggota" || effectiveTable === "kader")) {
-        const altTable = effectiveTable === "anggota" ? "kader" : "anggota";
-        const altRes = await supabase.from(altTable).select("*");
-        if (!altRes.error && altRes.data) {
-          data = altRes.data;
-          error = null;
-          _resolvedAnggotaTable = altTable;
-        }
-      }
 
       if (error) {
         console.warn(`[Supabase Read Warning] ${effectiveTable}: ${error.message}. Mencoba REST anon key...`);
@@ -214,7 +206,7 @@ export async function getTableData<T>(
             mergedData = data;
             localStorage.setItem(localStorageKey, JSON.stringify(data));
           } else {
-            const stored = localStorage.getItem(localStorageKey);
+            const stored = localStorage.getItem(localStorageKey) || (localStorageKey === "PMII_ANGGOTA_DATA" ? localStorage.getItem("PMII_FOLLOWUP_CADRES") : null);
             if (stored) {
               try {
                 const localList = JSON.parse(stored) as any[];
@@ -273,7 +265,7 @@ export async function getTableData<T>(
 
   // Fallback to LocalStorage
   if (localStorageKey && typeof window !== "undefined") {
-    const stored = localStorage.getItem(localStorageKey);
+    const stored = localStorage.getItem(localStorageKey) || (localStorageKey === "PMII_ANGGOTA_DATA" ? localStorage.getItem("PMII_FOLLOWUP_CADRES") : null);
     if (stored) {
       try {
         let parsed = JSON.parse(stored) as any[];
@@ -364,6 +356,13 @@ export async function deleteTableRow(
   id: string,
   localStorageKey?: string
 ): Promise<boolean> {
+  // Guard against swapped arguments if caller passed deleteTableRow(tableName, localStorageKey, id)
+  if (localStorageKey && isValidUUID(localStorageKey) && !isValidUUID(id)) {
+    const temp = id;
+    id = localStorageKey;
+    localStorageKey = temp;
+  }
+
   const effectiveTable = await getEffectiveTableName(tableName);
 
   // Update local cache
@@ -384,7 +383,7 @@ export async function deleteTableRow(
   if (isSupabaseConfigured && supabase) {
     try {
       // Clean up files before deleting record
-      if (effectiveTable === "anggota" || effectiveTable === "kader") {
+      if (effectiveTable === "anggota") {
         const { data: c } = await supabase
           .from(effectiveTable)
           .select('id, avatar, "ktmFileUrl"')
@@ -463,6 +462,78 @@ export async function upsertTableRow<T extends { id: string | number }>(
   return saveTableData(tableName, localStorageKey, [record], { allowDeletion: false });
 }
 
+/**
+ * Update a single row in Supabase and local cache with high performance (O(1) update)
+ */
+export async function updateTableRow(
+  tableName: string,
+  id: string,
+  updates: Record<string, any>,
+  localStorageKey?: string
+): Promise<boolean> {
+  const effectiveTable = await getEffectiveTableName(tableName);
+
+  // 1. Update local cache immediately
+  if (localStorageKey && typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(localStorageKey);
+      if (stored) {
+        const list = JSON.parse(stored) as any[];
+        const updatedList = list.map((item) =>
+          String(item.id) === String(id) ? { ...item, ...updates } : item
+        );
+        localStorage.setItem(localStorageKey, JSON.stringify(updatedList));
+        broadcastTableSync(effectiveTable, localStorageKey);
+      }
+    } catch (e) {
+      console.warn(`Error updating local cache for ${localStorageKey}:`, e);
+    }
+  }
+
+  // 2. Fast single-row update in Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const copy = { ...updates };
+      delete copy.id;
+      delete copy.password;
+      delete copy.allowedMenus;
+      delete copy.role_detail;
+      delete copy.needsOnboarding;
+      delete copy.provinsi;
+      delete copy.kabupaten;
+      delete copy.kecamatan;
+      delete copy.organisasiSD;
+
+      // Clean empty dates to null
+      for (const key of Object.keys(copy)) {
+        if (
+          (key.toLowerCase().includes("date") || key.toLowerCase().includes("tanggal")) &&
+          typeof copy[key] === "string" &&
+          copy[key].trim() === ""
+        ) {
+          copy[key] = null;
+        }
+      }
+
+      const { error } = await supabase
+        .from(effectiveTable)
+        .update(copy)
+        .eq("id", id);
+
+      if (error) {
+        console.warn(`Supabase error updating ${id} in ${effectiveTable}:`, error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`Error updating ${id} in ${effectiveTable}:`, err);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export async function saveTableData<T extends { id: string | number }>(
   tableName: string,
   localStorageKey: string,
@@ -528,8 +599,8 @@ export async function saveTableData<T extends { id: string | number }>(
           }
         }
 
-        // Auto-cleanup storage files for anggota / kader
-        if (effectiveTable === "anggota" || effectiveTable === "kader") {
+        // Auto-cleanup storage files for anggota
+        if (effectiveTable === "anggota") {
           try {
             const { data: toDeleteCadres } = await supabase
               .from(effectiveTable)
@@ -625,7 +696,7 @@ export async function saveTableData<T extends { id: string | number }>(
             delete copy.readTime;
           } else if (effectiveTable === "arsip") {
             copy.created_at = copy.created_at || new Date().toISOString();
-          } else if (effectiveTable === "kader" || effectiveTable === "anggota" || tableName === "kader" || tableName === "anggota") {
+          } else if (effectiveTable === "anggota" || tableName === "anggota") {
             delete copy.allowedMenus;
             delete copy.role_detail;
             delete copy.needsOnboarding;
@@ -701,9 +772,10 @@ export async function saveTableData<T extends { id: string | number }>(
             }
           }
 
-          // 4. Hapus kolom 'commissariat' & 'komisariat_id' untuk tabel operasional yang sudah menggunakan Foreign Key murni (tenant_id)
+          // 4. Hapus kolom 'commissariat', 'komisariat', & 'komisariat_id' untuk tabel operasional yang sudah menggunakan Foreign Key murni (tenant_id)
           if (TABLES_WITHOUT_COMMISSARIAT.includes(effectiveTable) || TABLES_WITHOUT_COMMISSARIAT.includes(tableName)) {
             delete copy.commissariat;
+            delete copy.komisariat;
             delete copy.komisariat_id;
           }
 

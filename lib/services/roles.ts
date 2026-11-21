@@ -44,7 +44,7 @@ export const DEFAULT_ROLES: Role[] = [
     id: "b0000000-0000-0000-0000-000000000005",
     code: "anggota",
     allowed_menus: [
-      "/kader", "/kader/kegiatan", "/kader/tugas", "/kader/sertifikat", "/kader/profil"
+      "/anggota", "/anggota/kegiatan", "/anggota/tugas", "/anggota/sertifikat", "/anggota/profil"
     ]
   },
   {
@@ -177,5 +177,5 @@ export async function upsertRole(role: Role): Promise<boolean> {
  * Menghapus role kustom (role sistem tidak boleh dihapus)
  */
 export async function deleteRole(id: string): Promise<boolean> {
-  return deleteTableRow("roles", ROLES_STORAGE_KEY, id);
+  return deleteTableRow("roles", id, ROLES_STORAGE_KEY);
 }

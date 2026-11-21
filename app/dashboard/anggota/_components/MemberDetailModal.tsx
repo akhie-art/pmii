@@ -24,7 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Member } from "./types";
-import { resolveMemberPhotoUrl } from "./generateCvPdf";
+import { resolveMemberPhotoUrl, formatDateIndo } from "./generateCvPdf";
+import { parseOrgItems } from "@/app/anggota/profil/_components/HistoryTab";
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -202,7 +203,7 @@ export default function MemberDetailModal({
                     <div>
                       <span className="text-zinc-500 block text-[11px]">Tempat, Tanggal Lahir</span>
                       <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                        {member.tempatLahir || "-"}, {member.tanggalLahir || "-"}
+                        {[member.tempatLahir, formatDateIndo(member.tanggalLahir)].filter((v) => v && v !== "-").join(", ") || "-"}
                       </span>
                     </div>
                   </div>
@@ -275,6 +276,11 @@ export default function MemberDetailModal({
                   <div>
                     <span className="text-zinc-500 block text-[11px]">Perguruan Tinggi</span>
                     <span className="font-semibold text-zinc-900 dark:text-zinc-100">{member.perguruanTinggi || "-"}</span>
+                    {(member.tahunMasukPT || member.tahunLulusPT) && (
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block font-mono mt-0.5">
+                        Masa Studi: {member.tahunMasukPT || "..."} — {member.tahunLulusPT || "Sekarang"}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="text-zinc-500 block text-[11px]">Fakultas</span>
@@ -343,14 +349,29 @@ export default function MemberDetailModal({
                   <div>
                     <span className="text-zinc-500 block text-[11px]">SD / MI</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-100">{member.pendidikanSD || "-"}</span>
+                    {(member.tahunMasukSD || member.tahunLulusSD) && (
+                      <span className="text-[10px] text-zinc-400 block font-mono mt-0.5">
+                        Tahun: {member.tahunMasukSD || "..."} – {member.tahunLulusSD || "..."}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="text-zinc-500 block text-[11px]">SMP / MTs</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-100">{member.pendidikanSMP || "-"}</span>
+                    {(member.tahunMasukSMP || member.tahunLulusSMP) && (
+                      <span className="text-[10px] text-zinc-400 block font-mono mt-0.5">
+                        Tahun: {member.tahunMasukSMP || "..."} – {member.tahunLulusSMP || "..."}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="text-zinc-500 block text-[11px]">SMA / SMK / MA</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-100">{member.pendidikanSMA || "-"}</span>
+                    {(member.tahunMasukSMA || member.tahunLulusSMA) && (
+                      <span className="text-[10px] text-zinc-400 block font-mono mt-0.5">
+                        Tahun: {member.tahunMasukSMA || "..."} – {member.tahunLulusSMA || "..."}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -359,18 +380,48 @@ export default function MemberDetailModal({
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                   Riwayat Organisasi
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div>
-                    <span className="text-zinc-500 block text-[11px]">Organisasi SMP</span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{member.organisasiSMP || "-"}</span>
+                    <span className="text-zinc-500 block text-[11px] mb-1">Organisasi SMP</span>
+                    {parseOrgItems(member.organisasiSMP).length > 0 ? (
+                      <div className="space-y-1">
+                        {parseOrgItems(member.organisasiSMP).map((item, idx) => (
+                          <div key={idx} className="font-medium text-zinc-900 dark:text-zinc-100">
+                            • {item.nama} {item.tahunMulai || item.tahunSelesai ? `(${[item.tahunMulai, item.tahunSelesai].filter(Boolean).join(" - ")})` : ""}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400">-</span>
+                    )}
                   </div>
                   <div>
-                    <span className="text-zinc-500 block text-[11px]">Organisasi SMA</span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{member.organisasiSMA || "-"}</span>
+                    <span className="text-zinc-500 block text-[11px] mb-1">Organisasi SMA</span>
+                    {parseOrgItems(member.organisasiSMA).length > 0 ? (
+                      <div className="space-y-1">
+                        {parseOrgItems(member.organisasiSMA).map((item, idx) => (
+                          <div key={idx} className="font-medium text-zinc-900 dark:text-zinc-100">
+                            • {item.nama} {item.tahunMulai || item.tahunSelesai ? `(${[item.tahunMulai, item.tahunSelesai].filter(Boolean).join(" - ")})` : ""}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400">-</span>
+                    )}
                   </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-zinc-500 block text-[11px]">Organisasi Kampus / Lainnya</span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{member.organisasiPT || "-"}</span>
+                  <div>
+                    <span className="text-zinc-500 block text-[11px] mb-1">Organisasi Kampus / Lainnya</span>
+                    {parseOrgItems(member.organisasiPT).length > 0 ? (
+                      <div className="space-y-1">
+                        {parseOrgItems(member.organisasiPT).map((item, idx) => (
+                          <div key={idx} className="font-medium text-zinc-900 dark:text-zinc-100">
+                            • {item.nama} {item.tahunMulai || item.tahunSelesai ? `(${[item.tahunMulai, item.tahunSelesai].filter(Boolean).join(" - ")})` : ""}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400">-</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -494,7 +545,7 @@ export default function MemberDetailModal({
                     className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    <span>Unduh CV Resmi (PDF)</span>
+                    <span>Unduh Curriculum Vitae (CV)</span>
                   </Button>
                 )}
 
