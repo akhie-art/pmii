@@ -19,7 +19,6 @@ import {
   Copy,
   FileCheck,
   FileDown,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -174,7 +173,7 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
                 </div>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
                   {hasCustomTemplate
-                    ? "Template Word kustom tersimpan di browser"
+                    ? "Template Word kustom aktif tersimpan di browser"
                     : "Format resmi standar Kop PMII"}
                 </p>
               </div>
@@ -186,8 +185,17 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
                   type="button"
                   variant="outline"
                   size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-7 px-2 text-[11px] font-normal gap-1 rounded-md text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <Upload className="w-3 h-3 text-zinc-500" />
+                  <span>Ganti</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={handleDownloadCustomTemplate}
-                  title="Unduh berkas template kustom saat ini"
                   className="h-7 px-2 text-[11px] font-normal gap-1 rounded-md text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
                   <Download className="w-3 h-3 text-zinc-500" />
@@ -198,7 +206,6 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
                   variant="ghost"
                   size="sm"
                   onClick={handleResetToDefault}
-                  title="Kembalikan ke template standar PMII"
                   className="h-7 px-2 text-[11px] font-normal gap-1 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -208,7 +215,7 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
             )}
           </div>
 
-          {/* Area Unggah File Word */}
+          {/* Hidden File Input */}
           <input
             type="file"
             ref={fileInputRef}
@@ -221,37 +228,40 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
             }}
           />
 
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragging(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) handleFileUpload(file);
-            }}
-            className={`border border-dashed rounded-lg p-4 sm:p-5 text-center cursor-pointer transition-all ${
-              isDragging
-                ? "border-zinc-900 bg-zinc-100/70 dark:border-zinc-300 dark:bg-zinc-800/50"
-                : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-900/30"
-            }`}
-          >
-            <div className="w-8 h-8 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 mx-auto flex items-center justify-center mb-1.5 shadow-xs">
-              <Upload className="w-4 h-4" />
+          {/* Area Unggah File Word: HANYA TAMPIL JIKA BELUM ADA FILE KUSTOM */}
+          {!hasCustomTemplate && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleFileUpload(file);
+              }}
+              className={`border border-dashed rounded-lg p-5 text-center cursor-pointer transition-all ${
+                isDragging
+                  ? "border-zinc-900 bg-zinc-100/70 dark:border-zinc-300 dark:bg-zinc-800/50"
+                  : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-900/30"
+              }`}
+            >
+              <div className="w-8 h-8 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 mx-auto flex items-center justify-center mb-1.5 shadow-xs">
+                <Upload className="w-4 h-4" />
+              </div>
+              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                Pilih berkas Word atau seret ke sini
+              </p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                Hanya format berkas <span className="font-mono text-zinc-600 dark:text-zinc-400">.docx</span>
+              </p>
             </div>
-            <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
-              Pilih berkas Word atau seret ke sini
-            </p>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-              Hanya format berkas <span className="font-mono text-zinc-600 dark:text-zinc-400">.docx</span>
-            </p>
-          </div>
+          )}
 
           {/* Tag & Placeholder Panduan (Click to Copy) */}
           <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/30 space-y-2">
@@ -268,7 +278,6 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
                     type="button"
                     onClick={() => handleCopyTag(item.tag)}
                     className="group relative flex flex-col items-start p-1.5 sm:p-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all text-left focus:outline-none"
-                    title={`Klik untuk menyalin ${item.tag}`}
                   >
                     <div className="w-full flex items-center justify-between gap-1">
                       <span className="font-mono text-[11px] font-medium text-zinc-900 dark:text-zinc-100">
