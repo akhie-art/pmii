@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import type { Member, CadreHistory } from "./types";
 import { DocumentAttachment } from "@/components/ui/document-attachment";
+import { RepeatableOrgSection } from "@/app/anggota/profil/_components/HistoryTab";
 import {
   UNIVERSITY_NAMES,
   findUniversity,
@@ -87,8 +88,17 @@ export default function MemberFormModal({
 
   // Step 3: Pendidikan & Organisasi
   const [pendidikanSD, setPendidikanSD] = useState("");
+  const [tahunMasukSD, setTahunMasukSD] = useState("");
+  const [tahunLulusSD, setTahunLulusSD] = useState("");
+
   const [pendidikanSMP, setPendidikanSMP] = useState("");
+  const [tahunMasukSMP, setTahunMasukSMP] = useState("");
+  const [tahunLulusSMP, setTahunLulusSMP] = useState("");
+
   const [pendidikanSMA, setPendidikanSMA] = useState("");
+  const [tahunMasukSMA, setTahunMasukSMA] = useState("");
+  const [tahunLulusSMA, setTahunLulusSMA] = useState("");
+
   const [organisasiSMP, setOrganisasiSMP] = useState("");
   const [organisasiSMA, setOrganisasiSMA] = useState("");
   const [organisasiPT, setOrganisasiPT] = useState("");
@@ -133,8 +143,17 @@ export default function MemberFormModal({
       setFacebook(member.facebook || "");
 
       setPendidikanSD(member.pendidikanSD || "");
+      setTahunMasukSD(member.tahunMasukSD || "");
+      setTahunLulusSD(member.tahunLulusSD || "");
+
       setPendidikanSMP(member.pendidikanSMP || "");
+      setTahunMasukSMP(member.tahunMasukSMP || "");
+      setTahunLulusSMP(member.tahunLulusSMP || "");
+
       setPendidikanSMA(member.pendidikanSMA || "");
+      setTahunMasukSMA(member.tahunMasukSMA || "");
+      setTahunLulusSMA(member.tahunLulusSMA || "");
+
       setOrganisasiSMP(member.organisasiSMP || "");
       setOrganisasiSMA(member.organisasiSMA || "");
       setOrganisasiPT(member.organisasiPT || "");
@@ -173,8 +192,17 @@ export default function MemberFormModal({
       setFacebook("");
 
       setPendidikanSD("");
+      setTahunMasukSD("");
+      setTahunLulusSD("");
+
       setPendidikanSMP("");
+      setTahunMasukSMP("");
+      setTahunLulusSMP("");
+
       setPendidikanSMA("");
+      setTahunMasukSMA("");
+      setTahunLulusSMA("");
+
       setOrganisasiSMP("");
       setOrganisasiSMA("");
       setOrganisasiPT("");
@@ -338,8 +366,14 @@ export default function MemberFormModal({
       twitter: twitter.trim(),
       facebook: facebook.trim(),
       pendidikanSD: pendidikanSD.trim(),
+      tahunMasukSD: tahunMasukSD.trim(),
+      tahunLulusSD: tahunLulusSD.trim(),
       pendidikanSMP: pendidikanSMP.trim(),
+      tahunMasukSMP: tahunMasukSMP.trim(),
+      tahunLulusSMP: tahunLulusSMP.trim(),
       pendidikanSMA: pendidikanSMA.trim(),
+      tahunMasukSMA: tahunMasukSMA.trim(),
+      tahunLulusSMA: tahunLulusSMA.trim(),
       organisasiSMP: organisasiSMP.trim(),
       organisasiSMA: organisasiSMA.trim(),
       organisasiPT: organisasiPT.trim(),
@@ -356,16 +390,12 @@ export default function MemberFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <Card className="w-full max-w-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden relative max-h-[92vh] flex flex-col text-zinc-900 dark:text-zinc-100">
+      <Card className="w-full max-w-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-2xl overflow-hidden relative max-h-[92vh] flex flex-col text-zinc-900 dark:text-zinc-100">
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           {/* Header */}
           <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-950">
             <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                isEdit 
-                  ? "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60" 
-                  : "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60"
-              }`}>
+              <div className="w-8 h-8 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0">
                 {isEdit ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
               </div>
               <div>
@@ -373,11 +403,7 @@ export default function MemberFormModal({
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
                     {isEdit ? "Edit Profil Anggota" : "Registrasi Anggota Baru"}
                   </h3>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                    isEdit
-                      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
-                      : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/60"
-                  }`}>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                     {isEdit ? (member?.name ? member.name.slice(0, 22) : "Mode Edit") : "Kader Baru"}
                   </span>
                 </div>
@@ -410,9 +436,9 @@ export default function MemberFormModal({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`py-2.5 px-2 cursor-pointer border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`py-2.5 px-2.5 cursor-pointer border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                     isActive
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400 font-semibold"
+                      ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                   }`}
                 >
@@ -428,7 +454,7 @@ export default function MemberFormModal({
 
           {/* Validation Alert Banner */}
           {validationAlert && (
-            <div className="mx-4 mt-3 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300 animate-fadeIn">
+            <div className="mx-4 mt-3 p-2.5 rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300 animate-fadeIn">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
                 <span>{validationAlert}</span>
@@ -464,7 +490,7 @@ export default function MemberFormModal({
                         setName(e.target.value);
                         if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
                       }}
-                      className={`h-8.5 text-xs bg-white dark:bg-zinc-900 rounded-lg text-zinc-900 dark:text-zinc-100 ${
+                      className={`h-8.5 text-xs bg-white dark:bg-zinc-900 rounded-md text-zinc-900 dark:text-zinc-100 ${
                         formErrors.name ? "border-rose-500 focus-visible:ring-rose-500/20" : "border-zinc-200 dark:border-zinc-800"
                       }`}
                     />
@@ -475,7 +501,7 @@ export default function MemberFormModal({
                       Jenis Kelamin
                     </label>
                     <Select value={gender} onValueChange={(val) => { if (val) setGender(val as any); }}>
-                      <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
                         <SelectValue placeholder="Pilih Jenis Kelamin" />
                       </SelectTrigger>
                       <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
@@ -495,7 +521,7 @@ export default function MemberFormModal({
                     placeholder="Masukkan NIM (contoh: 21010123)"
                     value={nim}
                     onChange={(e) => setNim(e.target.value)}
-                    className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                    className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                   />
                 </div>
 
@@ -508,7 +534,7 @@ export default function MemberFormModal({
                       placeholder="Misal: Semarang"
                       value={tempatLahir}
                       onChange={(e) => setTempatLahir(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
 
@@ -520,7 +546,7 @@ export default function MemberFormModal({
                       type="date"
                       value={tanggalLahir}
                       onChange={(e) => setTanggalLahir(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
@@ -534,7 +560,7 @@ export default function MemberFormModal({
                       placeholder="Alamat asal sesuai KTP"
                       value={alamatRumah}
                       onChange={(e) => setAlamatRumah(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
 
@@ -546,7 +572,7 @@ export default function MemberFormModal({
                       placeholder="Alamat domisili saat ini"
                       value={alamatDomisili}
                       onChange={(e) => setAlamatDomisili(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
@@ -557,7 +583,7 @@ export default function MemberFormModal({
                       Golongan Darah
                     </label>
                     <Select value={golonganDarah} onValueChange={(val) => { if (val) setGolonganDarah(val); }}>
-                      <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
                         <SelectValue placeholder="Golongan Darah" />
                       </SelectTrigger>
                       <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
@@ -577,23 +603,89 @@ export default function MemberFormModal({
                       placeholder="Misal: Asma, Alergi (jika ada)"
                       value={riwayatPenyakit}
                       onChange={(e) => setRiwayatPenyakit(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
 
-                {/* Upload Dokumen Resmi: Pas Foto 3x4 & KTP (Full Width, Consistent, No Cramping) */}
-                <div className="space-y-3 pt-2">
-                  <DocumentAttachment
-                    label="Pas Foto Resmi 3x4"
-                    description="Format: JPG, PNG, atau WebP (Rasio 3:4 dengan pakaian rapi/jas PMII & background resmi)"
-                    fileName={pasFoto ? "pas_foto_resmi.jpg" : ""}
-                    fileUrl={pasFoto}
-                    onUpload={handlePasFotoUpload}
-                    onRemove={handleRemovePasFoto}
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
-                    accentColor="blue"
-                  />
+                {/* Upload Dokumen Resmi: Pas Foto 3x4 (Compact & Clean) */}
+                <div className="pt-2">
+                  <div className="p-3.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                        Pas Foto Resmi 3×4
+                      </label>
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        Rasio 3:4 (Maks 5 MB)
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3.5">
+                      {/* 3x4 Preview Box */}
+                      <div className="relative w-22 h-28 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center shadow-2xs">
+                        {pasFoto ? (
+                          <img
+                            src={pasFoto}
+                            alt="Pas Foto Resmi"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-zinc-400 p-2 text-center">
+                            <User className="w-7 h-7 stroke-1 mb-1 text-zinc-400" />
+                            <span className="text-[9px]">Belum ada foto</span>
+                          </div>
+                        )}
+                        {isUploadingPasFoto && (
+                          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center text-white text-[10px] font-medium">
+                            Mengunggah...
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info & Action Buttons */}
+                      <div className="flex-1 space-y-2 text-center sm:text-left">
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                          Gunakan pas foto formal berlatar belakang merah/biru dengan pakaian rapi atau jas PMII. Pas foto ini digunakan pada kartu tanda anggota (KTA) dan Curriculum Vitae resmi.
+                        </p>
+                        <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                          <input
+                            type="file"
+                            id="member-modal-pasfoto-input"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handlePasFotoUpload(file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById("member-modal-pasfoto-input")?.click()}
+                            disabled={isUploadingPasFoto}
+                            className="h-8 px-3 text-xs rounded-md border-zinc-200 dark:border-zinc-800 flex items-center gap-1.5 cursor-pointer bg-white dark:bg-zinc-900 shadow-none"
+                          >
+                            <Upload className="w-3.5 h-3.5 text-zinc-500" />
+                            <span>{pasFoto ? "Ganti Pas Foto" : "Pilih Pas Foto"}</span>
+                          </Button>
+                          {pasFoto && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleRemovePasFoto}
+                              className="h-8 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md cursor-pointer flex items-center gap-1"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -636,7 +728,7 @@ export default function MemberFormModal({
                     >
                       <SelectTrigger
                         title={matchedUniv?.name || perguruanTinggi || undefined}
-                        className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md"
                       >
                         <SelectValue placeholder="Pilih Perguruan Tinggi" className="truncate text-left" />
                       </SelectTrigger>
@@ -669,7 +761,7 @@ export default function MemberFormModal({
                       >
                         <SelectTrigger
                           title={fakultas || undefined}
-                          className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                          className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md"
                         >
                           <SelectValue placeholder="Pilih Fakultas" className="truncate text-left" />
                         </SelectTrigger>
@@ -701,7 +793,7 @@ export default function MemberFormModal({
                             ? "- (Tanpa Fakultas)"
                             : undefined
                         }
-                        className="w-full min-w-0 max-w-full h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-500 rounded-lg cursor-not-allowed truncate"
+                        className="w-full min-w-0 max-w-full h-8.5 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-500 rounded-md cursor-not-allowed truncate"
                       />
                     )}
                   </div>
@@ -721,7 +813,7 @@ export default function MemberFormModal({
                       >
                         <SelectTrigger
                           title={jurusan || undefined}
-                          className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                          className="w-full min-w-0 max-w-full h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md"
                         >
                           <SelectValue
                             placeholder={
@@ -754,7 +846,7 @@ export default function MemberFormModal({
                         }
                         value={jurusan}
                         onChange={(e) => setJurusan(e.target.value)}
-                        className="w-full min-w-0 h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                        className="w-full min-w-0 h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                       />
                     )}
                   </div>
@@ -777,7 +869,7 @@ export default function MemberFormModal({
                         setEmail(e.target.value);
                         if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
                       }}
-                      className={`h-8.5 text-xs bg-white dark:bg-zinc-900 rounded-lg text-zinc-900 dark:text-zinc-100 ${
+                      className={`h-8.5 text-xs bg-white dark:bg-zinc-900 rounded-md text-zinc-900 dark:text-zinc-100 ${
                         formErrors.email ? "border-rose-500 focus-visible:ring-rose-500/20" : "border-zinc-200 dark:border-zinc-800"
                       }`}
                     />
@@ -791,7 +883,7 @@ export default function MemberFormModal({
                       placeholder="0812-xxxx-xxxx"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
@@ -805,7 +897,7 @@ export default function MemberFormModal({
                       placeholder="@username"
                       value={instagram}
                       onChange={(e) => setInstagram(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
 
@@ -817,7 +909,7 @@ export default function MemberFormModal({
                       placeholder="@username"
                       value={twitter}
                       onChange={(e) => setTwitter(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
 
@@ -829,7 +921,7 @@ export default function MemberFormModal({
                       placeholder="Nama Akun"
                       value={facebook}
                       onChange={(e) => setFacebook(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
@@ -851,90 +943,176 @@ export default function MemberFormModal({
 
             {/* TAB 3: RIWAYAT PENDIDIKAN & ORGANISASI */}
             {activeTab === "riwayat" && (
-              <div className="space-y-3.5">
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block">
-                    Riwayat Pendidikan Formal
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Sekolah Dasar (SD/MI)
-                      </label>
-                      <Input
-                        placeholder="Nama SD/MI"
-                        value={pendidikanSD}
-                        onChange={(e) => setPendidikanSD(e.target.value)}
-                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                      />
+              <div className="space-y-4">
+                {/* 1. Riwayat Pendidikan Formal */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      Riwayat Pendidikan Formal
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* SD / MI */}
+                    <div className="p-3 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Sekolah Dasar (SD/MI)
+                        </label>
+                        <Input
+                          placeholder="Nama SD / MI"
+                          value={pendidikanSD}
+                          onChange={(e) => setPendidikanSD(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Tahun Mulai</label>
+                          <Input
+                            type="number"
+                            min="1980"
+                            max="2099"
+                            placeholder="2009"
+                            value={tahunMasukSD}
+                            onChange={(e) => setTahunMasukSD(e.target.value)}
+                            className="h-7.5 text-xs font-mono bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Tahun Selesai</label>
+                          <Input
+                            type="number"
+                            min="1980"
+                            max="2099"
+                            placeholder="2015"
+                            value={tahunLulusSD}
+                            onChange={(e) => setTahunLulusSD(e.target.value)}
+                            className="h-7.5 text-xs font-mono bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        SMP / MTs
-                      </label>
-                      <Input
-                        placeholder="Nama SMP/MTs"
-                        value={pendidikanSMP}
-                        onChange={(e) => setPendidikanSMP(e.target.value)}
-                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                      />
+                    {/* SMP / MTs */}
+                    <div className="p-3 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          SMP / MTs
+                        </label>
+                        <Input
+                          placeholder="Nama SMP / MTs"
+                          value={pendidikanSMP}
+                          onChange={(e) => setPendidikanSMP(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Tahun Mulai</label>
+                          <Input
+                            type="number"
+                            min="1980"
+                            max="2099"
+                            placeholder="2015"
+                            value={tahunMasukSMP}
+                            onChange={(e) => setTahunMasukSMP(e.target.value)}
+                            className="h-7.5 text-xs font-mono bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Tahun Selesai</label>
+                          <Input
+                            type="number"
+                            min="1980"
+                            max="2099"
+                            placeholder="2018"
+                            value={tahunLulusSMP}
+                            onChange={(e) => setTahunLulusSMP(e.target.value)}
+                            className="h-7.5 text-xs font-mono bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        SMA / SMK / MA
-                      </label>
-                      <Input
-                        placeholder="Nama SMA/SMK/MA"
-                        value={pendidikanSMA}
-                        onChange={(e) => setPendidikanSMA(e.target.value)}
-                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                      />
+                    {/* SMA / SMK / MA */}
+                    <div className="p-3 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          SMA / SMK / MA
+                        </label>
+                        <Input
+                          placeholder="Nama SMA / SMK / MA"
+                          value={pendidikanSMA}
+                          onChange={(e) => setPendidikanSMA(e.target.value)}
+                          className="h-8.5 text-xs bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Tahun Mulai</label>
+                          <Input
+                            type="number"
+                            min="1980"
+                            max="2099"
+                            placeholder="2018"
+                            value={tahunMasukSMA}
+                            onChange={(e) => setTahunMasukSMA(e.target.value)}
+                            className="h-7.5 text-xs font-mono bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Tahun Selesai</label>
+                          <Input
+                            type="number"
+                            min="1980"
+                            max="2099"
+                            placeholder="2021"
+                            value={tahunLulusSMA}
+                            onChange={(e) => setTahunLulusSMA(e.target.value)}
+                            className="h-7.5 text-xs font-mono bg-zinc-50/60 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 rounded-md"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block">
-                    Riwayat Organisasi
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Organisasi Tingkat SMP / MTs
-                      </label>
-                      <Input
-                        placeholder="Misal: OSIS, Pramuka"
-                        value={organisasiSMP}
-                        onChange={(e) => setOrganisasiSMP(e.target.value)}
-                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                      />
-                    </div>
+                {/* 2. Riwayat Organisasi */}
+                <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      Pengalaman Organisasi (Dapat Diulang)
+                    </span>
+                  </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Organisasi Tingkat SMA / SMK / MA
-                      </label>
-                      <Input
-                        placeholder="Misal: IPNU/IPPNU, OSIS"
-                        value={organisasiSMA}
-                        onChange={(e) => setOrganisasiSMA(e.target.value)}
-                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                      />
-                    </div>
+                  <div className="space-y-3">
+                    <RepeatableOrgSection
+                      title="Organisasi Tingkat SMP / MTs"
+                      rawString={organisasiSMP}
+                      onChange={setOrganisasiSMP}
+                      isEditing={true}
+                      placeholder="Contoh: OSIS, Pramuka, PMR"
+                      defaultAddName="Organisasi SMP"
+                    />
 
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Organisasi di Perguruan Tinggi (Lainnya)
-                      </label>
-                      <Input
-                        placeholder="Misal: BEM, Himpunan Mahasiswa Jurusan"
-                        value={organisasiPT}
-                        onChange={(e) => setOrganisasiPT(e.target.value)}
-                        className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
-                      />
-                    </div>
+                    <RepeatableOrgSection
+                      title="Organisasi Tingkat SMA / SMK / MA"
+                      rawString={organisasiSMA}
+                      onChange={setOrganisasiSMA}
+                      isEditing={true}
+                      placeholder="Contoh: IPNU / IPPNU, OSIS, Rohis"
+                      defaultAddName="Organisasi SMA"
+                    />
+
+                    <RepeatableOrgSection
+                      title="Organisasi di Perguruan Tinggi / Lainnya"
+                      rawString={organisasiPT}
+                      onChange={setOrganisasiPT}
+                      isEditing={true}
+                      placeholder="Contoh: BEM, Himpunan Mahasiswa (HIMIKOM), UKM"
+                      defaultAddName="Organisasi Kampus"
+                    />
                   </div>
                 </div>
               </div>
@@ -949,7 +1127,7 @@ export default function MemberFormModal({
                       Tingkat Kaderisasi
                     </label>
                     <Select value={level} onValueChange={(val) => { if (val) setLevel(val as any); }}>
-                      <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                      <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
                         <SelectValue placeholder="Tingkat" />
                       </SelectTrigger>
                       <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
@@ -969,7 +1147,7 @@ export default function MemberFormModal({
                       placeholder="2026"
                       value={angkatan}
                       onChange={(e) => setAngkatan(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
 
@@ -981,7 +1159,7 @@ export default function MemberFormModal({
                       placeholder="Misal: Anggota, Pengurus"
                       value={jabatan}
                       onChange={(e) => setJabatan(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
@@ -995,7 +1173,7 @@ export default function MemberFormModal({
                       value={komisariat}
                       onChange={(e) => setKomisariat(e.target.value)}
                       disabled={!isAdmin}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 disabled:opacity-70"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100 disabled:opacity-70"
                     />
                   </div>
 
@@ -1005,7 +1183,7 @@ export default function MemberFormModal({
                         Status Anggota
                       </label>
                       <Select value={status} onValueChange={(val) => { if (val) setStatus(val as any); }}>
-                        <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                        <SelectTrigger className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
@@ -1027,7 +1205,7 @@ export default function MemberFormModal({
                       placeholder="Misal: Intelektual, Akademik, Advokasi, Keagamaan"
                       value={orientasiProfetik}
                       onChange={(e) => setOrientasiProfetik(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
 
@@ -1039,7 +1217,7 @@ export default function MemberFormModal({
                       placeholder="Alasan & motivasi mengikuti kaderisasi PMII"
                       value={motivasiMapaba}
                       onChange={(e) => setMotivasiMapaba(e.target.value)}
-                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100"
+                      className="h-8.5 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                 </div>
@@ -1060,7 +1238,7 @@ export default function MemberFormModal({
                     if (activeTab === "riwayat") setActiveTab("akademik");
                     if (activeTab === "kaderisasi") setActiveTab("riwayat");
                   }}
-                  className="text-xs h-8 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                  className="text-xs h-8 px-3 rounded-md border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 cursor-pointer bg-white dark:bg-zinc-900 shadow-none"
                 >
                   Sebelumnya
                 </Button>
@@ -1073,7 +1251,7 @@ export default function MemberFormModal({
                 variant="outline"
                 size="sm"
                 onClick={onClose}
-                className="text-xs h-8 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                className="text-xs h-8 px-3 rounded-md border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 cursor-pointer bg-white dark:bg-zinc-900 shadow-none"
               >
                 Batal
               </Button>
@@ -1083,7 +1261,7 @@ export default function MemberFormModal({
                 <Button
                   type="submit"
                   size="sm"
-                  className="text-xs font-semibold h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-xs"
+                  className="text-xs font-medium h-8 px-3.5 rounded-md text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 border-none cursor-pointer shadow-none"
                 >
                   Simpan Perubahan
                 </Button>
@@ -1115,7 +1293,7 @@ export default function MemberFormModal({
                       setActiveTab("kaderisasi");
                     }
                   }}
-                  className="text-xs font-medium h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-xs"
+                  className="text-xs font-medium h-8 px-3.5 rounded-md text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 border-none cursor-pointer shadow-none"
                 >
                   Selanjutnya
                 </Button>
@@ -1125,7 +1303,7 @@ export default function MemberFormModal({
                 <Button
                   type="submit"
                   size="sm"
-                  className="text-xs font-semibold h-8 px-3.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-xs"
+                  className="text-xs font-medium h-8 px-3.5 rounded-md text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 border-none cursor-pointer shadow-none"
                 >
                   Daftarkan Anggota
                 </Button>
