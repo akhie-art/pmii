@@ -708,10 +708,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-1.5rem)] sm:max-w-2xl w-full p-0 overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl">
-        <div className="flex flex-col max-h-[85vh] min-w-0 overflow-hidden">
+      <DialogContent className="max-w-none w-[calc(100vw-1.5rem)] h-[calc(100dvh-1.5rem)] sm:w-[calc(100vw-3rem)] sm:h-[calc(100dvh-3rem)] p-0 gap-0 overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl">
+        <div className="flex flex-col h-full min-w-0 overflow-hidden">
           {/* MODAL HEADER */}
-          <div className="p-4 sm:p-6 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/30 space-y-3 sm:space-y-4">
+          <div className="px-4 py-4 sm:py-5 sm:px-[max(1.5rem,calc((100%-56rem)/2))] border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/30 space-y-3 sm:space-y-4 shrink-0">
             <div className="flex items-start justify-between gap-3 min-w-0">
               <div className="space-y-1 min-w-0 pr-6">
                 <DialogTitle className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 break-words">
@@ -773,7 +773,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
           </div>
 
           {/* MODAL BODY (TAB CONTENT) */}
-          <div className="p-3.5 sm:p-6 overflow-y-auto overflow-x-hidden max-h-[65vh] sm:max-h-[60vh] space-y-4 min-w-0">
+          <div className="px-3.5 py-3.5 sm:py-6 sm:px-[max(1.5rem,calc((100%-56rem)/2))] overflow-y-auto overflow-x-hidden flex-1 min-h-0 space-y-4 min-w-0">
             {/* TAHAP 1: FORMULIR PENDAFTARAN */}
             {currentStageTab === 1 && (
               <div className="space-y-4 min-w-0">
