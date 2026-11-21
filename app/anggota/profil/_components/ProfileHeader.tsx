@@ -4,16 +4,15 @@ import React, { useState } from "react";
 import {
   Camera,
   Trash2,
-  ShieldCheck,
   Mail,
   Building,
   Copy,
   Check,
-  Sparkles,
   ChevronDown,
   FileText,
   Building2,
-  FileCheck
+  FileCheck,
+  ImageUp
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,9 +21,11 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ProfileHeaderProps } from "./types";
+
+const menuItemClass =
+  "px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800";
 
 export function ProfileHeader({
   currentCadre,
@@ -48,265 +49,192 @@ export function ProfileHeader({
     toast.success("Nomor NTA berhasil disalin ke clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const statusLabel = currentCadre.isGraduated
+    ? "Kader Resmi"
+    : hasMapabaRegistration
+    ? "Peserta MAPABA"
+    : "Calon Kader";
+
+  const statusDot = currentCadre.isGraduated
+    ? "bg-emerald-500"
+    : hasMapabaRegistration
+    ? "bg-amber-500"
+    : "bg-zinc-400";
+
+  const initials =
+    currentCadre.name
+      .split(" ")
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase() || "KD";
+
+  const hasCvActions = Boolean(onDownloadOrganisasiCV || onDownloadAtsCV);
+  const score = Math.min(100, Math.max(0, completionScore));
+
   return (
-    <div className="relative overflow-hidden rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
-      {/* Decorative Top Banner Strip - Clean Flat Neutral */}
-      <div className="h-20 sm:h-24 w-full bg-zinc-900 dark:bg-zinc-950 border-b border-zinc-800 relative">
-        {/* Subtle Right Watermark */}
-        <div className="absolute right-4 top-3 hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800/90 border border-zinc-700/80 text-zinc-300 text-[11px] font-medium tracking-wide">
-          <Building className="w-3 h-3 text-zinc-400" />
-          <span>PMII Ki Ageng Getas Pendawa</span>
-        </div>
-      </div>
+    <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      {/* Identity row */}
+      <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-5">
+        {/* Avatar */}
+        <div className="relative shrink-0 self-center sm:self-auto">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+            }}
+            title="Klik untuk mengubah foto profil"
+            className="group relative w-20 h-20 sm:w-[88px] sm:h-[88px] rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-lg font-semibold text-zinc-600 dark:text-zinc-300 ring-1 ring-zinc-200 dark:ring-zinc-700 cursor-pointer select-none"
+          >
+            {avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatar} alt={currentCadre.name} className="w-full h-full object-cover" />
+            ) : (
+              <span>{initials}</span>
+            )}
 
-      {/* Profile Info Bar */}
-      <div className="px-4 sm:px-6 pb-5 pt-0">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          {/* Avatar & Main Identity */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-end gap-3.5 sm:gap-4 text-center sm:text-left">
-            {/* Avatar with Camera Trigger */}
-            <div className="relative group flex-shrink-0 -mt-10 sm:-mt-12 z-10">
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => fileInputRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    fileInputRef.current?.click();
-                  }
-                }}
-                title="Klik untuk mengubah foto profil"
-                className="w-22 h-22 sm:w-24 sm:h-24 rounded-full bg-zinc-800 dark:bg-zinc-700 flex items-center justify-center text-zinc-200 font-bold text-xl border-4 border-white dark:border-zinc-900 shadow-xs overflow-hidden cursor-pointer relative select-none"
-              >
-                {avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatar}
-                    alt={currentCadre.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>
-                    {currentCadre.name
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase() || "KD"}
-                  </span>
-                )}
+            <div className="absolute inset-0 bg-zinc-900/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+              <Camera className="w-5 h-5" />
+            </div>
 
-                {/* Hover Overlay */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
-                  <Camera className="w-4 h-4" />
-                  <span className="text-[10px] font-medium mt-0.5">Ubah</span>
-                </div>
-
-                {/* Loading Spinner */}
-                {isUploadingPhoto && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
+            {isUploadingPhoto && (
+              <div className="absolute inset-0 bg-zinc-900/60 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               </div>
+            )}
+          </div>
 
-              {/* Camera button in bottom-right corner */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title="Ubah foto profil"
-                className="absolute bottom-0 right-0 w-7 h-7 sm:w-7.5 sm:h-7.5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-full border-2 border-white dark:border-zinc-900 shadow-xs cursor-pointer transition-colors"
-              >
-                <Camera className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Trash button in bottom-left corner */}
+          {/* Photo menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              title="Kelola foto profil"
+              className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full flex items-center justify-center bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 shadow-xs hover:bg-zinc-50 dark:hover:bg-zinc-700 cursor-pointer transition-colors outline-none"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-44 p-1 rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-md"
+            >
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className={menuItemClass}>
+                <ImageUp className="w-3.5 h-3.5 text-zinc-500" />
+                <span>{avatar ? "Ganti foto" : "Unggah foto"}</span>
+              </DropdownMenuItem>
               {avatar && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemovePhoto();
-                  }}
+                <DropdownMenuItem
+                  onClick={() => onRemovePhoto()}
                   disabled={isUploadingPhoto}
-                  title="Hapus foto profil"
-                  className="absolute bottom-0 left-0 w-7 h-7 sm:w-7.5 sm:h-7.5 flex items-center justify-center bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-750 text-zinc-600 hover:text-rose-600 dark:text-zinc-300 dark:hover:text-rose-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-xs cursor-pointer transition-colors"
+                  className="px-2.5 py-2 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                  <span>Hapus foto</span>
+                </DropdownMenuItem>
               )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-              {/* Hidden File Input */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={onPhotoUpload}
-                accept="image/png,image/jpeg,image/jpg,image/webp"
-                className="hidden"
-              />
-            </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={onPhotoUpload}
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            className="hidden"
+          />
+        </div>
 
-            {/* Name, Status Badge & Basic Info */}
-            <div className="space-y-1.5 sm:space-y-1 pt-1 sm:pt-0">
-              <div className="flex flex-col sm:flex-row items-center sm:items-baseline justify-center sm:justify-start gap-2">
-                <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                  {currentCadre.name}
-                </h1>
-
-                {/* Status Badge & CV Dropdown on Mobile */}
-                <div className="sm:hidden flex items-center gap-1.5 justify-center">
-                  <Badge
-                    variant="outline"
-                    className="h-6 px-2 text-[11px] font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
-                  >
-                    <ShieldCheck className="w-3 h-3 mr-1 text-zinc-500 dark:text-zinc-400" />
-                    {currentCadre.isGraduated
-                      ? "Kader Resmi"
-                      : hasMapabaRegistration
-                      ? "Peserta MAPABA"
-                      : "Calon Kader"}
-                  </Badge>
-
-                  {(onDownloadOrganisasiCV || onDownloadAtsCV) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        className="h-6 px-2 text-[11px] font-medium border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                        title="Pilih Format CV"
-                      >
-                        <FileText className="w-3 h-3 text-zinc-500" />
-                        <span>CV</span>
-                        <ChevronDown className="w-2.5 h-2.5 text-zinc-400" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="center" className="w-44 p-1 rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-md">
-                        <DropdownMenuLabel className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1">
-                          Pilih Format CV
-                        </DropdownMenuLabel>
-                        {onDownloadOrganisasiCV && (
-                          <DropdownMenuItem
-                            onClick={onDownloadOrganisasiCV}
-                            className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                          >
-                            <Building2 className="w-3.5 h-3.5 text-zinc-500" />
-                            <span>CV Organisasi</span>
-                          </DropdownMenuItem>
-                        )}
-                        {onDownloadAtsCV && (
-                          <DropdownMenuItem
-                            onClick={onDownloadAtsCV}
-                            className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                          >
-                            <FileCheck className="w-3.5 h-3.5 text-zinc-500" />
-                            <span>CV ATS Friendly</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </div>
-
-              {/* Email, Commissariat, and NTA copy chip */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2.5 text-xs text-zinc-500 dark:text-zinc-400">
-                {currentCadre.email && (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-md sm:rounded-none">
-                    <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span className="truncate max-w-[210px] sm:max-w-none">{currentCadre.email}</span>
-                  </span>
-                )}
-                <span className="hidden sm:inline text-zinc-300 dark:text-zinc-700">•</span>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-md sm:rounded-none">
-                  <Building className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span>{currentCadre.commissariat}</span>
-                </span>
-                {memberNTA && memberNTA !== "-" && (
-                  <>
-                    <span className="hidden sm:inline text-zinc-300 dark:text-zinc-700">•</span>
-                    <button
-                      type="button"
-                      onClick={handleCopyNta}
-                      title="Salin Nomor Tanda Anggota (NTA)"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-mono text-[11px] font-medium transition-colors cursor-pointer"
-                    >
-                      <span>NTA: {memberNTA}</span>
-                      {copied ? (
-                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3 text-zinc-400" />
-                      )}
-                    </button>
-                  </>
-                )}
-              </div>
+        {/* Identity */}
+        <div className="min-w-0 flex-1 text-center sm:text-left space-y-2">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 truncate">
+              {currentCadre.name}
+            </h1>
+            <div className="inline-flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+              <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
+              <span className="font-medium">{statusLabel}</span>
             </div>
           </div>
 
-          {/* Right Side: Status Badge, CV Dropdown & Completion Progress (Desktop Only) */}
-          <div className="hidden sm:flex flex-col items-end justify-center shrink-0 space-y-2">
-            <div className="flex items-center gap-2">
-              {(onDownloadOrganisasiCV || onDownloadAtsCV) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    className="h-7 px-2.5 text-xs font-medium border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
-                    title="Pilih Format CV (Organisasi / ATS)"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>Curriculum Vitae</span>
-                    <ChevronDown className="w-3 h-3 text-zinc-400" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 p-1 rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-md">
-                    <DropdownMenuLabel className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1">
-                      Pilih Format CV
-                    </DropdownMenuLabel>
-                    {onDownloadOrganisasiCV && (
-                      <DropdownMenuItem
-                        onClick={onDownloadOrganisasiCV}
-                        className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      >
-                        <Building2 className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>CV Organisasi</span>
-                      </DropdownMenuItem>
-                    )}
-                    {onDownloadAtsCV && (
-                      <DropdownMenuItem
-                        onClick={onDownloadAtsCV}
-                        className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      >
-                        <FileCheck className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>CV ATS Friendly</span>
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-
-              <Badge
-                variant="outline"
-                className="h-7 px-2.5 text-xs font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-zinc-500 dark:text-zinc-400" />
-                {currentCadre.isGraduated
-                  ? "Kader Resmi"
-                  : hasMapabaRegistration
-                  ? "Peserta MAPABA"
-                  : "Calon Kader"}
-              </Badge>
-            </div>
-
-            {/* Profile Completion Bar */}
-            <div className="flex items-center gap-2.5 px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300">
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-xs">
-                {completionScore}%
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            {currentCadre.email && (
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <Mail className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+                <span className="truncate">{currentCadre.email}</span>
               </span>
-              <span className="text-[10px] text-zinc-400">Lengkap</span>
-              <div className="w-20 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-                <div
-                  className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all duration-500"
-                  style={{ width: `${completionScore}%` }}
-                />
-              </div>
-            </div>
+            )}
+            {currentCadre.commissariat && (
+              <span className="inline-flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+                <span>{currentCadre.commissariat}</span>
+              </span>
+            )}
+            {memberNTA && memberNTA !== "-" && (
+              <button
+                type="button"
+                onClick={handleCopyNta}
+                title="Salin Nomor Tanda Anggota (NTA)"
+                className="inline-flex items-center gap-1.5 font-mono text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <span>NTA {memberNTA}</span>
+                {copied ? (
+                  <Check className="w-3 h-3 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3 h-3 text-zinc-400" />
+                )}
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Actions */}
+        {hasCvActions && (
+          <div className="shrink-0 flex justify-center sm:justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                title="Pilih format CV"
+                className="h-9 px-3.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-medium inline-flex items-center gap-2 cursor-pointer transition-colors outline-none"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Curriculum Vitae</span>
+                <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-52 p-1 rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-md"
+              >
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
+                  Pilih format CV
+                </DropdownMenuLabel>
+                {onDownloadOrganisasiCV && (
+                  <DropdownMenuItem onClick={onDownloadOrganisasiCV} className={menuItemClass}>
+                    <Building2 className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>CV Organisasi</span>
+                  </DropdownMenuItem>
+                )}
+                {onDownloadAtsCV && (
+                  <DropdownMenuItem onClick={onDownloadAtsCV} className={menuItemClass}>
+                    <FileCheck className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>CV ATS Friendly</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+      </div>
+
+      {/* Completion row */}
+      <div className="px-5 sm:px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-3">
+        <span className="text-xs text-zinc-500 dark:text-zinc-400 shrink-0">Kelengkapan profil</span>
+        <div className="flex-1 h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500"
+            style={{ width: `${score}%` }}
+          />
+        </div>
+        <span className="text-xs font-medium tabular-nums text-zinc-900 dark:text-zinc-100 shrink-0">{score}%</span>
       </div>
     </div>
   );
