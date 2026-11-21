@@ -248,6 +248,10 @@ export default function ProfilPage() {
         setOrganisasiSMA(mine.organisasiSMA || "");
         setOrganisasiPT(mine.organisasiPT || "");
 
+        setOrientasiProfetik(mine.orientasiProfetik || "");
+        setMinatPassion(mine.minatPassion || "");
+        setMotivasiMapaba(mine.motivasiMapaba || "");
+
         // Auto-fill Tahun Angkatan PMII if already graduated
         const graduationYear = mine.startDate
           ? mine.startDate.includes("-")
