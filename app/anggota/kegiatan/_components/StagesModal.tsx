@@ -27,9 +27,7 @@ import {
   Compass,
   Brain,
   TrendingUp,
-  Loader2,
-  Maximize2,
-  Minimize2
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -118,7 +116,6 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     sessionTitle?: string;
     isRef?: boolean;
   } | null>(null);
-  const [isReaderFullscreen, setIsReaderFullscreen] = useState(false);
   const [isReaderLoading, setIsReaderLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -2160,19 +2157,12 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     <Dialog
       open={Boolean(activeReadingModal)}
       onOpenChange={(open) => {
-        if (!open) {
-          setActiveReadingModal(null);
-          setIsReaderFullscreen(false);
-        }
+        if (!open) setActiveReadingModal(null);
       }}
     >
       <DialogContent
         showCloseButton={false}
-        className={
-          isReaderFullscreen
-            ? "w-[calc(100vw-1rem)] h-[calc(100dvh-1rem)] sm:w-[calc(100vw-2rem)] sm:h-[calc(100dvh-2rem)] max-w-none max-h-none flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl transition-all duration-150"
-            : "max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl transition-all duration-150"
-        }
+        className="max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl"
       >
         {activeReadingModal && (() => {
           const fileName = activeReadingModal.fileName || "Modul Materi";
@@ -2228,57 +2218,27 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                 {/* Header Actions */}
                 <div className="flex items-center gap-1.5 shrink-0">
                   {fileUrl && fileUrl !== "#" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isDownloading}
-                        onClick={() => handleDownloadMaterial(fileUrl, fileName)}
-                        className="h-7.5 px-2.5 text-xs font-medium gap-1.5 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 border-zinc-200 dark:border-zinc-800 rounded-md cursor-pointer shadow-none"
-                        title="Unduh untuk baca luring (offline)"
-                      >
-                        {isDownloading ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Download className="w-3.5 h-3.5" />
-                        )}
-                        <span className="hidden sm:inline">Unduh</span>
-                      </Button>
-
-                      <a
-                        href={fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-7.5 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:text-blue-600 border border-zinc-200 dark:border-zinc-800 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                        title="Buka dokumen di tab baru"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Tab Baru</span>
-                      </a>
-                    </>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isDownloading}
+                      onClick={() => handleDownloadMaterial(fileUrl, fileName)}
+                      className="h-7.5 px-2.5 text-xs font-medium gap-1.5 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 border-zinc-200 dark:border-zinc-800 rounded-md cursor-pointer shadow-none"
+                      title="Unduh untuk baca luring (offline)"
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      <span className="hidden sm:inline">Unduh</span>
+                    </Button>
                   )}
 
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setIsReaderFullscreen(!isReaderFullscreen)}
-                    className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-md cursor-pointer"
-                    title={isReaderFullscreen ? "Perkecil tampilan" : "Layar penuh (fullscreen)"}
-                  >
-                    {isReaderFullscreen ? (
-                      <Minimize2 className="w-3.5 h-3.5" />
-                    ) : (
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    )}
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setActiveReadingModal(null);
-                      setIsReaderFullscreen(false);
-                    }}
+                    onClick={() => setActiveReadingModal(null)}
                     className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-md cursor-pointer"
                     title="Tutup penampil modul"
                   >
