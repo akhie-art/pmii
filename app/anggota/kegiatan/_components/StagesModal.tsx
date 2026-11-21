@@ -776,30 +776,22 @@ export const StagesModal: React.FC<StagesModalProps> = ({
           <div className="px-3.5 py-3.5 sm:py-6 sm:px-[max(1.5rem,calc((100%-56rem)/2))] overflow-y-auto overflow-x-hidden flex-1 min-h-0 space-y-4 min-w-0">
             {/* TAHAP 1: FORMULIR PENDAFTARAN */}
             {currentStageTab === 1 && (
-              <div className="space-y-4 min-w-0">
+              <div className="space-y-3 min-w-0">
                 {/* Banner Twibbon Kampanye Resmi */}
                 {event?.twibbon?.isActive && event?.twibbon?.frameUrl && (
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-amber-50/70 dark:from-blue-950/40 dark:to-amber-950/20 border border-blue-200/80 dark:border-blue-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-850/60 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="p-2 rounded-xl bg-blue-600 text-white shadow-2xs shrink-0">
-                        <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                        Twibbon {event.name}
                       </span>
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block truncate">
-                          Twibbon Kampanye {event.name}
-                        </span>
-                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
-                          Semarakkan kaderisasi! Unduh twibbon & salin caption medsos.
-                        </p>
-                      </div>
                     </div>
                     <Button
                       type="button"
                       size="sm"
                       onClick={onOpenTwibbon}
-                      className="h-8 px-3 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shrink-0 cursor-pointer shadow-none transition-colors"
+                      className="h-7.5 px-3 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-md shrink-0 cursor-pointer shadow-none transition-colors"
                     >
-                      <Sparkles className="w-3.5 h-3.5 mr-1" />
                       Buat Twibbon
                     </Button>
                   </div>
@@ -807,13 +799,13 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
                 {myReg ? (
                   <div className="space-y-3 min-w-0">
-                    <div className="p-3.5 sm:p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 space-y-3 min-w-0">
+                    <div className="p-3.5 sm:p-4 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 space-y-3 min-w-0">
                       <div className="flex items-center justify-between pb-2.5 border-b border-zinc-200/60 dark:border-zinc-800/60 gap-2">
                         <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 shrink-0">
-                          Status & Data Pendaftaran
+                          Data Pendaftaran
                         </span>
                         <span
-                          className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 text-center ${
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 text-center ${
                             myReg.status === "APPROVED"
                               ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-900/60"
                               : myReg.status === "REJECTED"
@@ -833,7 +825,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                           <span className="text-zinc-400 text-[10px] block">
                             No. Registrasi
                           </span>
-                          <span className="font-bold text-zinc-900 dark:text-zinc-100 font-mono text-[11px] truncate block">
+                          <span className="font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-[11px] truncate block">
                             {myReg.registrationNumber || "REG-TERCATAT"}
                           </span>
                         </div>
@@ -865,12 +857,12 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                     </div>
 
                     {/* CARD TES ANALISIS PREFERENSI KOGNITIF & ARAH KARIER MAHASISWA - ULTRA CLEAN & MINIMALIST */}
-                    <div className="p-3.5 sm:p-4 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900 min-w-0">
+                    <div className="p-3 sm:p-3.5 rounded-lg bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900 min-w-0">
                       <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-                        <div className="w-8.5 h-8.5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shrink-0 shadow-2xs mt-0.5 sm:mt-0">
+                        <div className="w-8 h-8 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
                           <Compass className="w-4 h-4" />
                         </div>
-                        <div className="min-w-0 flex-1 space-y-1">
+                        <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
                               Preferensi Kognitif & Arah Karier
@@ -893,12 +885,12 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                           </div>
 
                           {careerResult ? (
-                            <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 leading-snug break-words">
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug truncate">
                               <span className="text-zinc-700 dark:text-zinc-300 font-medium">Bakat:</span> {careerResult.talent} <span className="text-zinc-300 dark:text-zinc-600 mx-1">•</span> <span className="text-zinc-700 dark:text-zinc-300 font-medium">Minat:</span> {careerResult.interest}
                             </p>
                           ) : (
-                            <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 leading-snug break-words">
-                              Kuesioner pemetaan potensi berpikir & rekomendasi arah karier mahasiswa.
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
+                              Pemetaan potensi berpikir & rekomendasi arah karier mahasiswa.
                             </p>
                           )}
                         </div>
@@ -915,9 +907,9 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                           }
                           setIsCareerModalOpen(true);
                         }}
-                        className={`w-full sm:w-auto h-8.5 sm:h-8 px-3.5 text-xs font-medium rounded-lg shrink-0 cursor-pointer shadow-none transition-colors justify-center ${
+                        className={`w-full sm:w-auto h-7.5 px-3 text-xs font-medium rounded-md shrink-0 cursor-pointer shadow-none transition-colors justify-center ${
                           careerResult
-                            ? "bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-750 text-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700"
+                            ? "bg-white hover:bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700"
                             : "bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 border-transparent"
                         }`}
                       >
@@ -933,47 +925,32 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                     </div>
 
                     {myReg.status === "APPROVED" && (
-                      <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+                      <div className="p-3 sm:p-3.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
                         <div className="space-y-0.5 min-w-0">
                           <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 block">
-                            Kartu Peserta Resmi Siap
+                            Kartu Peserta Resmi
                           </span>
-                          <span className="text-[11px] text-emerald-700/90 dark:text-emerald-400 block leading-relaxed break-words">
-                            Buka atau simpan kartu peserta ber-QR code untuk presensi kegiatan di lokasi.
+                          <span className="text-[11px] text-emerald-700/90 dark:text-emerald-400 block leading-relaxed truncate">
+                            Gunakan kartu peserta ber-QR code untuk presensi kegiatan di lokasi.
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 sm:flex sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0 pt-0.5 sm:pt-0">
+                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                           {event.waGroupLink ? (
                             <a
                               href={event.waGroupLink}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-xs h-8.5 sm:h-8 px-3.5 rounded-xl shrink-0 cursor-pointer shadow-none transition-colors w-full sm:w-auto"
+                              className="inline-flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-medium text-xs h-7.5 px-3 rounded-md shrink-0 cursor-pointer shadow-none transition-colors"
                             >
                               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                               </svg>
-                              <span>Masuk Grup WA</span>
+                              <span>Grup WA</span>
                             </a>
-                          ) : (
-                            <Button
-                              type="button"
-                              onClick={() =>
-                                toast.info(
-                                  "Link grup WhatsApp kegiatan belum dicantumkan oleh panitia."
-                                )
-                              }
-                              className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-xs h-8.5 sm:h-8 px-3.5 rounded-xl shrink-0 cursor-pointer shadow-none transition-colors w-full sm:w-auto justify-center"
-                            >
-                              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                              </svg>
-                              <span>Masuk Grup WA</span>
-                            </Button>
-                          )}
+                          ) : null}
                           <Button
                             onClick={onViewCard}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8.5 sm:h-8 px-4 rounded-xl shrink-0 cursor-pointer shadow-none w-full sm:w-auto justify-center"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-7.5 px-3 rounded-md shrink-0 cursor-pointer shadow-none"
                           >
                             <QrCode className="w-3.5 h-3.5 mr-1.5" />
                             <span>Kartu Peserta</span>
@@ -983,29 +960,29 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="p-5 sm:p-8 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 text-center space-y-3 min-w-0">
-                    <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
+                  <div className="p-6 sm:p-8 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 text-center space-y-3 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
                       <FileText className="w-5 h-5" />
                     </div>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 break-words">
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 break-words">
                         Formulir Pendaftaran {event.name}
                       </h4>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                        Silakan isi formulir data diri dan berkas persyaratan pendaftaran untuk diverifikasi panitia.
+                        Lengkapi formulir pendaftaran untuk mengikuti kegiatan ini.
                       </p>
                     </div>
                     {isOpenForReg ? (
                       <Button
                         type="button"
                         onClick={onOpenRegister}
-                        className="bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 font-semibold text-xs h-9 px-6 rounded-xl cursor-pointer shadow-none w-full sm:w-auto"
+                        className="bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 font-medium text-xs h-8 px-5 rounded-md cursor-pointer shadow-none w-full sm:w-auto"
                       >
-                        Isi Formulir Pendaftaran Sekarang
+                        Daftar Sekarang
                       </Button>
                     ) : (
-                      <span className="inline-block text-xs text-zinc-400 font-medium py-1 px-3 rounded-lg bg-zinc-200/60 dark:bg-zinc-800">
-                        Pendaftaran Kegiatan Ini Telah Ditutup
+                      <span className="inline-block text-xs text-zinc-400 font-medium py-1 px-3 rounded-md bg-zinc-200/60 dark:bg-zinc-800">
+                        Pendaftaran Telah Ditutup
                       </span>
                     )}
                   </div>
@@ -1027,7 +1004,6 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               const levelMaterials: any[] = levelKurikulum?.materials || [];
               const levelSyllabus: any[] = levelKurikulum?.syllabus || [];
               const levelQuizzes: QuizQuestion[] = levelKurikulum?.quiz || [];
-              const matchedKaderisasi = kaderisasi.find((k: any) => k.nama === event?.level || k.id === event?.level);
 
               // Helper pencocokan judul materi, silabus, dan kuis secara akurat tanpa false positive kata sambung
               const STOP_WORDS = new Set([
@@ -1056,14 +1032,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                 const normB = normalizeText(titleB);
                 if (!normA || !normB) return false;
 
-                // 1. Kesamaan persis setelah normalisasi
                 if (normA === normB) return true;
-
-                // 2. Substring penuh untuk judul yang cukup panjang (minimal 6 karakter)
                 if (normA.length >= 6 && normB.includes(normA)) return true;
                 if (normB.length >= 6 && normA.includes(normB)) return true;
 
-                // 3. Irisan kata kunci bermakna (menghindari false positive kata umum seperti 'dan')
                 const keysA = extractMeaningfulKeywords(titleA);
                 const keysB = extractMeaningfulKeywords(titleB);
                 if (keysA.length === 0 || keysB.length === 0) return false;
@@ -1115,7 +1087,6 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                   return isMatchResource(sessionTitle, sName);
                 });
 
-                // Match quiz questions configured in /admin/materi for this session/materi
                 const matchedQuizzes = levelQuizzes.filter((q) => {
                   const sub = q.subjectName || q.materialTitle || "";
                   if (!sub) return false;
@@ -1130,16 +1101,16 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
               if (!isForumOpen) {
                 return (
-                  <div className="p-8 sm:p-10 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 text-center space-y-3.5">
-                    <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center mx-auto shadow-2xs">
-                      <Lock className="w-6 h-6" />
+                  <div className="p-8 sm:p-10 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 text-center space-y-3">
+                    <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center mx-auto">
+                      <Lock className="w-5 h-5" />
                     </div>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                        Akses Forum & Sesi Materi Belum Dibuka
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Akses Forum Belum Dibuka
                       </h4>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                        {event.timeline?.forum?.note || "Akses materi forum, presensi, dan kuis evaluasi untuk kegiatan ini saat ini ditutup oleh panitia pelaksana."}
+                        {event.timeline?.forum?.note || "Akses materi forum, presensi, dan kuis evaluasi belum dibuka oleh panitia."}
                       </p>
                     </div>
                   </div>
@@ -1147,366 +1118,188 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               }
 
               return (
-                <div className="space-y-4">
+                <div className="space-y-3 min-w-0">
                   {!stage1Done && (
-                    <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
+                    <div className="p-3 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>Pendaftaran Anda belum diverifikasi/disetujui. Sesi di bawah ini berstatus pratinjau.</span>
+                      <span>Pendaftaran belum disetujui. Sesi di bawah ini berstatus pratinjau.</span>
                     </div>
                   )}
 
-                  {/* Daftar Sesi dan Berkas Materi Sesi */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
-                        Materi & Sesi Pokok Kegiatan ({event.sessions?.length || 0} Sesi):
-                      </span>
+                  {/* Header Daftar Sesi */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                      Daftar Sesi ({event.sessions?.length || 0})
+                    </span>
+                    {event.sessions && event.sessions.length > 0 && (
                       <span className="text-[11px] text-zinc-400">
-                        Klik berkas untuk melihat atau mengunduh materi
+                        {myReg?.attendance?.length || 0} dari {event.sessions.length} sesi dihadiri
                       </span>
-                    </div>
-
-                    {!event.sessions || event.sessions.length === 0 ? (
-                      <div className="p-8 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-400 space-y-1">
-                        <BookOpen className="w-8 h-8 mx-auto text-zinc-300 dark:text-zinc-700 mb-1" />
-                        <p className="font-semibold text-zinc-700 dark:text-zinc-300">Belum ada sesi materi yang dicantumkan</p>
-                        <p className="text-[11px]">Silabus dan bahan bacaan jenjang {event.level} dapat diakses di menu Materi.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {event.sessions.map((sesi, idx) => {
-                          const isAttended = myReg?.attendance?.includes(sesi);
-                          const { files, matchedSyllabus, matchedQuizzes } = getSessionResources(sesi);
-                          const sessionQuizResult = quizResults[sesi];
-
-                          return (
-                            <div
-                              key={idx}
-                              className={`p-3.5 rounded-2xl border transition-all space-y-2.5 ${
-                                isAttended
-                                  ? "border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10"
-                                  : "border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900"
-                              }`}
-                            >
-                              {/* Session Header */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div className="flex items-start gap-2.5 min-w-0">
-                                  <span
-                                    className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
-                                      isAttended
-                                        ? "bg-emerald-500 text-white"
-                                        : "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
-                                    }`}
-                                  >
-                                    {isAttended ? "✓" : idx + 1}
-                                  </span>
-
-                                  <div className="space-y-0.5">
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                      <span className="text-[10px] font-mono text-zinc-400 font-semibold">
-                                        Sesi #{idx + 1}
-                                      </span>
-                                      {matchedSyllabus?.category && (
-                                        <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
-                                          {matchedSyllabus.category}
-                                        </Badge>
-                                      )}
-                                      {matchedSyllabus?.durationHours && (
-                                        <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
-                                          <Clock className="w-3 h-3" /> {matchedSyllabus.durationHours}m
-                                        </span>
-                                      )}
-                                    </div>
-                                    <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
-                                      {sesi}
-                                    </h4>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                                  {isAttended ? (
-                                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-100/70 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3" /> Hadir
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-700/60">
-                                      Belum Presensi
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Card Silabus Sesi Materi (Diatas Berkas Materi Sesi) */}
-                              <div className="pl-0 sm:pl-8 pt-1 w-full max-w-full overflow-hidden">
-                                <div className="p-3 rounded-xl bg-zinc-50/70 dark:bg-zinc-950/70 border border-zinc-200/60 dark:border-zinc-800/60 space-y-2.5 w-full max-w-full overflow-hidden">
-                                  <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                                    <span className="flex items-center gap-1.5">
-                                      <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                      Silabus Sesi Materi:
-                                    </span>
-                                    {matchedSyllabus ? (
-                                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-                                        Silabus Tersedia
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] text-zinc-400 italic">Belum diatur</span>
-                                    )}
-                                  </div>
-
-                                  {matchedSyllabus ? (
-                                    <div className="p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs w-full max-w-full overflow-hidden">
-                                      <div className="min-w-0 flex-1 space-y-1">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                            {matchedSyllabus.subjectName || sesi}
-                                          </span>
-                                          {matchedSyllabus.category && (
-                                            <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
-                                              {matchedSyllabus.category}
-                                            </Badge>
-                                          )}
-                                          {matchedSyllabus.durationHours && (
-                                            <span className="text-[10px] text-zinc-400 flex items-center gap-0.5 font-medium">
-                                              <Clock className="w-3 h-3" /> {matchedSyllabus.durationHours}m
-                                            </span>
-                                          )}
-                                        </div>
-                                        {matchedSyllabus.tujuan && matchedSyllabus.tujuan.length > 0 && (
-                                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1 break-words">
-                                            Sasaran: {matchedSyllabus.tujuan[0]}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <Button
-                                        size="sm"
-                                        type="button"
-                                        onClick={() => setActiveSyllabusModal({ sessionTitle: sesi, syllabus: matchedSyllabus })}
-                                        className="h-7.5 px-3 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer shrink-0 shadow-none flex items-center justify-center gap-1.5 self-start sm:self-center transition-colors"
-                                      >
-                                        <BookOpen className="w-3.5 h-3.5" />
-                                        <span>Lihat Silabus</span>
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <div className="py-1">
-                                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
-                                        Belum ada silabus pembelajaran resmi yang dikonfigurasi untuk materi ini.
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Berkas File Materi untuk Sesi ini */}
-                              <div className="pl-0 sm:pl-8 pt-1 w-full max-w-full overflow-hidden">
-                                <div className="p-2.5 rounded-xl bg-zinc-50/70 dark:bg-zinc-950/70 border border-zinc-200/60 dark:border-zinc-800/60 space-y-2">
-                                  <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                                    <span className="flex items-center gap-1.5">
-                                      <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                      Modul & Berkas Materi:
-                                    </span>
-                                    {files.length > 0 && (
-                                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-                                        {files.length} Modul Tersedia
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {files.length > 0 ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      {files.map((file, fIdx) => {
-                                        const typeBadge = getFileTypeBadge(file.name);
-                                        return (
-                                          <div
-                                            key={fIdx}
-                                            className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2 text-xs"
-                                          >
-                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                              <Badge className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded ${typeBadge.color}`}>
-                                                {typeBadge.label}
-                                              </Badge>
-                                              <span className="text-[11px] font-medium text-zinc-800 dark:text-zinc-200 truncate" title={file.name}>
-                                                {file.name}
-                                              </span>
-                                              {file.size && (
-                                                <span className="text-[9px] text-zinc-400 font-mono shrink-0">
-                                                  ({file.size})
-                                                </span>
-                                              )}
-                                            </div>
-
-                                            <Button
-                                              size="sm"
-                                              type="button"
-                                              onClick={() =>
-                                                setActiveReadingModal({
-                                                  fileName: file.name,
-                                                  fileUrl: file.url,
-                                                  fileSize: file.size,
-                                                  sessionTitle: sesi,
-                                                  isRef: file.isRef
-                                                })
-                                              }
-                                              className="h-6 px-2.5 text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer shrink-0 shadow-none flex items-center gap-1 transition-colors"
-                                            >
-                                              <BookOpen className="w-3 h-3" /> Baca
-                                            </Button>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <div className="py-1">
-                                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
-                                        Belum ada berkas materi yang diunggah untuk sesi ini.
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Pre-Test & Post-Test Evaluasi Materi jika ada di /admin/materi */}
-                              {matchedQuizzes && matchedQuizzes.length > 0 && (() => {
-                                const preQuizzes = matchedQuizzes.filter(
-                                  (q) => q.testType === "PRE" || q.testType === "BOTH" || !q.testType
-                                );
-                                const postQuizzes = matchedQuizzes.filter(
-                                  (q) => q.testType === "POST" || q.testType === "BOTH" || !q.testType
-                                );
-                                const preResult = quizResults[`${sesi}-PRE`];
-                                const postResult = quizResults[`${sesi}-POST`] || quizResults[sesi];
-
-                                return (
-                                  <div className="pl-0 sm:pl-8 pt-1">
-                                    <div className="p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800 space-y-2.5">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-1.5">
-                                          <HelpCircle className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                          <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
-                                            Evaluasi Sesi Materi:
-                                          </span>
-                                        </div>
-                                        <span className="text-[10px] text-zinc-400">
-                                          {matchedSyllabus?.subjectName || sesi}
-                                        </span>
-                                      </div>
-
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                        {/* KOTAK PRE-TEST */}
-                                        {preQuizzes.length > 0 && (
-                                          <div className="p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex items-center justify-between gap-3 shadow-2xs">
-                                            <div className="min-w-0">
-                                              <div className="flex items-center gap-1.5">
-                                                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                                  Pre-Test
-                                                </span>
-                                                <span className="text-[11px] text-zinc-400">
-                                                  • {preQuizzes.length} Soal
-                                                </span>
-                                              </div>
-                                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 flex items-center gap-1">
-                                                {preResult ? (
-                                                  <>
-                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                                    <span>Selesai dikerjakan</span>
-                                                  </>
-                                                ) : (
-                                                  "Tes pemahaman awal"
-                                                )}
-                                              </p>
-                                            </div>
-
-                                            {preResult ? (
-                                              <div
-                                                className="h-7.5 px-3 text-xs font-semibold bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-lg flex items-center shrink-0 cursor-default select-none shadow-none"
-                                              >
-                                                <span className="text-[11px] font-normal text-emerald-600/80 dark:text-emerald-400/80 mr-1.5">Nilai</span>
-                                                <span className="font-mono font-bold text-sm text-emerald-700 dark:text-emerald-300">{preResult.score}</span>
-                                              </div>
-                                            ) : !isForumOpen ? (
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                disabled
-                                                className="h-7.5 px-3 text-xs font-medium bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 border-zinc-200 dark:border-zinc-700 rounded-lg opacity-70 cursor-not-allowed shrink-0"
-                                              >
-                                                <Lock className="w-3 h-3 mr-1" /> Ditutup
-                                              </Button>
-                                            ) : (
-                                              <Button
-                                                size="sm"
-                                                onClick={() => handleStartSessionQuiz(sesi, preQuizzes, "PRE")}
-                                                className="h-7.5 px-3 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-lg cursor-pointer shrink-0 transition-colors shadow-2xs"
-                                              >
-                                                Kerjakan
-                                              </Button>
-                                            )}
-                                          </div>
-                                        )}
-
-                                        {/* KOTAK POST-TEST */}
-                                        {postQuizzes.length > 0 && (
-                                          <div className="p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex items-center justify-between gap-3 shadow-2xs">
-                                            <div className="min-w-0">
-                                              <div className="flex items-center gap-1.5">
-                                                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                                  Post-Test
-                                                </span>
-                                                <span className="text-[11px] text-zinc-400">
-                                                  • {postQuizzes.length} Soal
-                                                </span>
-                                              </div>
-                                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 flex items-center gap-1">
-                                                {postResult ? (
-                                                  <>
-                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                                    <span>Selesai dikerjakan</span>
-                                                  </>
-                                                ) : (
-                                                  "Tes akhir kelulusan"
-                                                )}
-                                              </p>
-                                            </div>
-
-                                            {postResult ? (
-                                              <div
-                                                className="h-7.5 px-3 text-xs font-semibold bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-lg flex items-center shrink-0 cursor-default select-none shadow-none"
-                                              >
-                                                <span className="text-[11px] font-normal text-emerald-600/80 dark:text-emerald-400/80 mr-1.5">Nilai</span>
-                                                <span className="font-mono font-bold text-sm text-emerald-700 dark:text-emerald-300">{postResult.score}</span>
-                                              </div>
-                                            ) : !isForumOpen ? (
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                disabled
-                                                className="h-7.5 px-3 text-xs font-medium bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 border-zinc-200 dark:border-zinc-700 rounded-lg opacity-70 cursor-not-allowed shrink-0"
-                                              >
-                                                <Lock className="w-3 h-3 mr-1" /> Ditutup
-                                              </Button>
-                                            ) : (
-                                              <Button
-                                                size="sm"
-                                                onClick={() => handleStartSessionQuiz(sesi, postQuizzes, "POST")}
-                                                className="h-7.5 px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer shrink-0 transition-colors shadow-2xs"
-                                              >
-                                                Kerjakan
-                                              </Button>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          );
-                        })}
-                      </div>
                     )}
                   </div>
+
+                  {!event.sessions || event.sessions.length === 0 ? (
+                    <div className="p-8 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-400 space-y-1">
+                      <BookOpen className="w-6 h-6 mx-auto text-zinc-300 dark:text-zinc-600 mb-1" />
+                      <p className="font-medium text-zinc-700 dark:text-zinc-300">Belum ada sesi kegiatan</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {event.sessions.map((sesi, idx) => {
+                        const isAttended = myReg?.attendance?.includes(sesi);
+                        const { files, matchedSyllabus, matchedQuizzes } = getSessionResources(sesi);
+                        const preQuizzes = matchedQuizzes?.filter(
+                          (q) => q.testType === "PRE" || q.testType === "BOTH" || !q.testType
+                        ) || [];
+                        const postQuizzes = matchedQuizzes?.filter(
+                          (q) => q.testType === "POST" || q.testType === "BOTH" || !q.testType
+                        ) || [];
+                        const preResult = quizResults[`${sesi}-PRE`];
+                        const postResult = quizResults[`${sesi}-POST`] || quizResults[sesi];
+
+                        const hasAnyResource = matchedSyllabus || files.length > 0 || preQuizzes.length > 0 || postQuizzes.length > 0;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3.5 rounded-lg border transition-all space-y-2.5 ${
+                              isAttended
+                                ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/20 dark:bg-emerald-950/10"
+                                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                            }`}
+                          >
+                            {/* Session Header */}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span
+                                  className={`w-6 h-6 rounded-md text-xs font-semibold flex items-center justify-center shrink-0 ${
+                                    isAttended
+                                      ? "bg-emerald-500 text-white"
+                                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                  }`}
+                                >
+                                  {isAttended ? "✓" : idx + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                    {sesi}
+                                  </h4>
+                                </div>
+                              </div>
+
+                              <div className="shrink-0">
+                                {isAttended ? (
+                                  <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> Hadir
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-700/60">
+                                    Belum Presensi
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Session Actions & Resources */}
+                            <div className="pl-8 flex flex-wrap items-center gap-2 pt-0.5">
+                              {/* Silabus Button */}
+                              {matchedSyllabus && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  type="button"
+                                  onClick={() => setActiveSyllabusModal({ sessionTitle: sesi, syllabus: matchedSyllabus })}
+                                  className="h-7 px-2.5 text-xs rounded-md border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 gap-1.5 cursor-pointer shadow-none"
+                                >
+                                  <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                  <span>Silabus</span>
+                                  {matchedSyllabus.durationHours && (
+                                    <span className="text-[10px] text-zinc-400">({matchedSyllabus.durationHours}m)</span>
+                                  )}
+                                </Button>
+                              )}
+
+                              {/* Files Chips */}
+                              {files.map((file, fIdx) => {
+                                const typeBadge = getFileTypeBadge(file.name);
+                                return (
+                                  <button
+                                    key={fIdx}
+                                    type="button"
+                                    onClick={() =>
+                                      setActiveReadingModal({
+                                        fileName: file.name,
+                                        fileUrl: file.url,
+                                        fileSize: file.size,
+                                        sessionTitle: sesi,
+                                        isRef: file.isRef
+                                      })
+                                    }
+                                    className="h-7 px-2.5 rounded-md text-xs bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 inline-flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 cursor-pointer transition-colors max-w-[220px]"
+                                    title={file.name}
+                                  >
+                                    <Badge className={`text-[8px] font-bold px-1 py-0 rounded ${typeBadge.color}`}>
+                                      {typeBadge.label}
+                                    </Badge>
+                                    <span className="truncate text-xs">{file.name}</span>
+                                  </button>
+                                );
+                              })}
+
+                              {/* Pre-Test Action */}
+                              {preQuizzes.length > 0 && (
+                                preResult ? (
+                                  <div className="h-7 px-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 text-xs inline-flex items-center gap-1.5 font-medium">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>Pre-Test:</span>
+                                    <span className="font-mono font-bold">{preResult.score}</span>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    type="button"
+                                    onClick={() => handleStartSessionQuiz(sesi, preQuizzes, "PRE")}
+                                    className="h-7 px-2.5 text-xs rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 cursor-pointer shadow-none gap-1.5"
+                                  >
+                                    <HelpCircle className="w-3.5 h-3.5" />
+                                    <span>Pre-Test ({preQuizzes.length})</span>
+                                  </Button>
+                                )
+                              )}
+
+                              {/* Post-Test Action */}
+                              {postQuizzes.length > 0 && (
+                                postResult ? (
+                                  <div className="h-7 px-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 text-xs inline-flex items-center gap-1.5 font-medium">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>Post-Test:</span>
+                                    <span className="font-mono font-bold">{postResult.score}</span>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    type="button"
+                                    onClick={() => handleStartSessionQuiz(sesi, postQuizzes, "POST")}
+                                    className="h-7 px-2.5 text-xs rounded-md bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-none gap-1.5"
+                                  >
+                                    <HelpCircle className="w-3.5 h-3.5" />
+                                    <span>Post-Test ({postQuizzes.length})</span>
+                                  </Button>
+                                )
+                              )}
+
+                              {/* If no resources at all */}
+                              {!hasAnyResource && (
+                                <span className="text-[11px] text-zinc-400 italic">
+                                  Belum ada materi atau evaluasi
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1514,40 +1307,36 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             {/* TAHAP 3: RTL (RENCANA TINDAK LANJUT) */}
             {currentStageTab === 3 && (
               !isRtlOpen ? (
-                <div className="p-8 sm:p-10 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 text-center space-y-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center mx-auto shadow-2xs">
-                    <Lock className="w-6 h-6" />
+                <div className="p-8 sm:p-10 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center mx-auto">
+                    <Lock className="w-5 h-5" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                      Pengumpulan Tugas RTL Belum Dibuka
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Pengumpulan RTL Belum Dibuka
                     </h4>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                      {event.timeline?.rtl?.note || "Masa pengumpulan laporan dan tugas Rencana Tindak Lanjut (RTL) saat ini belum dibuka atau telah ditutup oleh panitia."}
+                      {event.timeline?.rtl?.note || "Masa pengumpulan tugas RTL saat ini belum dibuka oleh panitia."}
                     </p>
                   </div>
                   {event.timeline?.rtl?.endDate && (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-900/40 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-900/40 text-[11px] font-medium text-blue-700 dark:text-blue-300">
                       <Clock className="w-3.5 h-3.5" />
-                      <span>Batas Waktu: {event.timeline.rtl.endDate}</span>
+                      <span>Batas: {event.timeline.rtl.endDate}</span>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="space-y-3">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
-                      Daftar Indikator Penugasan:
-                    </span>
-                    <span className="text-[10.5px] text-zinc-400">
-                      Unggah langsung berkas tugas di bawah ini
+                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                      Penugasan RTL ({levelReqs.length})
                     </span>
                   </div>
 
                   {levelReqs.length === 0 ? (
-                    <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-400">
-                      Belum ada penugasan RTL yang didaftarkan untuk kegiatan ini.
+                    <div className="p-6 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-400">
+                      Belum ada penugasan RTL untuk kegiatan ini.
                     </div>
                   ) : (
                     levelReqs.map((req) => {
@@ -1562,29 +1351,31 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                       return (
                         <div
                           key={req.id}
-                          className={`p-4 rounded-2xl border transition-all space-y-3 text-xs ${
+                          className={`p-3.5 rounded-lg border transition-all space-y-2.5 text-xs ${
                             isApproved
-                              ? "bg-white dark:bg-zinc-900 border-emerald-200/70 dark:border-emerald-950/60"
+                              ? "bg-white dark:bg-zinc-900 border-emerald-200 dark:border-emerald-900/50"
                               : isCurrentlyUploading
-                              ? "bg-blue-50/20 dark:bg-blue-950/10 border-blue-400/80 dark:border-blue-500/80"
+                              ? "bg-blue-50/20 dark:bg-blue-950/10 border-blue-400 dark:border-blue-600"
                               : isRejected
-                              ? "bg-rose-50/20 dark:bg-rose-950/10 border-rose-200/80 dark:border-rose-900/50"
-                              : "bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800/80"
+                              ? "bg-rose-50/20 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900/50"
+                              : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
                           }`}
                         >
                           {/* Header: Judul Tugas & Status Badge */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="space-y-0.5">
-                              <h5 className="font-bold text-zinc-900 dark:text-zinc-100 text-xs">
+                              <h5 className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">
                                 {req.title}
                               </h5>
-                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                                {req.description}
-                              </p>
+                              {req.description && (
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                                  {req.description}
+                                </p>
+                              )}
                             </div>
 
                             <span
-                              className={`text-[9.5px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
+                              className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
                                 isApproved
                                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60"
                                   : isPending
@@ -1597,23 +1388,23 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                               {isApproved
                                 ? "✓ Disetujui"
                                 : isPending
-                                ? "⏳ Menunggu Review"
+                                ? "⏳ Review"
                                 : isRejected
-                                ? "✕ Perlu Revisi"
+                                ? "✕ Revisi"
                                 : "Belum Mengumpulkan"}
                             </span>
                           </div>
 
                           {/* Metadata: Deadline & Panduan Soal */}
-                          <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 dark:border-zinc-800/80 gap-2 flex-wrap">
+                          <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 dark:border-zinc-800 gap-2 flex-wrap">
                             {req.deadline ? (
                               <span className="text-amber-600 dark:text-amber-400 font-medium inline-flex items-center gap-1 text-[11px]">
                                 <Clock className="w-3 h-3 shrink-0" />
                                 Deadline: {formatDateTimeIndo(req.deadline)}
                               </span>
                             ) : (
-                              <span className="text-zinc-400 italic text-[10.5px]">
-                                Batas waktu fleksibel
+                              <span className="text-zinc-400 text-[10.5px]">
+                                Fleksibel
                               </span>
                             )}
 
@@ -1622,10 +1413,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                                 href={req.fileUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-blue-600 dark:text-blue-400 font-semibold hover:underline inline-flex items-center gap-1.5 text-[11px] bg-blue-50/80 dark:bg-blue-950/50 px-2 py-0.5 rounded-lg border border-blue-200/50 dark:border-blue-900/40"
+                                className="text-blue-600 dark:text-blue-400 font-medium hover:underline inline-flex items-center gap-1.5 text-[11px]"
                               >
                                 <FileText className="w-3 h-3 text-blue-500" />
-                                <span>Lihat / Unduh Soal Tugas</span>
+                                <span>Unduh Soal</span>
                                 <ExternalLink className="w-2.5 h-2.5" />
                               </a>
                             )}
@@ -1633,16 +1424,16 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
                           {/* Detail Berkas Yang Sudah Dikumpulkan */}
                           {sub && !isCurrentlyUploading && (
-                            <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/70 dark:border-zinc-800/70 space-y-2">
+                            <div className="p-2.5 rounded-md bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/70 dark:border-zinc-800/70 space-y-2">
                               <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                   <div className="min-w-0">
-                                    <span className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-100 truncate block">
-                                      Berkas Laporan Terkirim
+                                    <span className="text-[11px] font-medium text-zinc-900 dark:text-zinc-100 truncate block">
+                                      Berkas Terkirim
                                     </span>
                                     <span className="text-[10px] text-zinc-400 block">
-                                      Dikumpulkan pada {formatDateIndo(sub.date)}
+                                      {formatDateIndo(sub.date)}
                                     </span>
                                   </div>
                                 </div>
@@ -1653,11 +1444,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                                       href={sub.fileLink}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-lg"
+                                      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md"
                                     >
                                       <Download className="w-3 h-3" />
-                                      <span>Lihat Berkas Saya</span>
-                                      <ExternalLink className="w-2.5 h-2.5" />
+                                      <span>Lihat Berkas</span>
                                     </a>
                                   )}
 
@@ -1670,29 +1460,24 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                                         setUploadingTaskId(req.id);
                                         setTaskUploadNotes(sub.description || "");
                                       }}
-                                      className="h-7 text-[10.5px] px-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
+                                      className="h-6.5 text-[10.5px] px-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
                                     >
-                                      {isRejected
-                                        ? "Unggah Revisi"
-                                        : "Ganti Berkas"}
+                                      {isRejected ? "Unggah Revisi" : "Ganti Berkas"}
                                     </Button>
                                   )}
                                 </div>
                               </div>
 
                               {sub.description && (
-                                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 bg-white/70 dark:bg-zinc-900/70 p-2 rounded-lg border border-zinc-200/50 dark:border-zinc-800/50">
-                                  <span className="text-zinc-400 block text-[10px]">
-                                    Catatan Pengumpulan:
-                                  </span>
+                                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 bg-white/70 dark:bg-zinc-900/70 p-2 rounded-md border border-zinc-200/50 dark:border-zinc-800/50">
+                                  <span className="text-zinc-400 block text-[10px]">Catatan:</span>
                                   {sub.description}
                                 </p>
                               )}
 
                               {isRejected && sub.feedback && (
-                                <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] border border-rose-200/60 dark:border-rose-900/60">
-                                  <strong>Catatan Evaluasi Instruktur:</strong>{" "}
-                                  {sub.feedback}
+                                <div className="p-2 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] border border-rose-200/60 dark:border-rose-900/60">
+                                  <strong>Evaluasi Instruktur:</strong> {sub.feedback}
                                 </div>
                               )}
                             </div>
@@ -1700,15 +1485,15 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
                           {/* Tombol Awal Untuk Buka Form Upload */}
                           {!sub && !isCurrentlyUploading && (
-                            <div className="pt-1">
+                            <div className="pt-0.5">
                               {!isRtlOpen ? (
                                 <Button
                                   type="button"
                                   disabled
-                                  className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 text-xs font-semibold h-8.5 rounded-xl cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none opacity-70"
+                                  className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 text-xs font-medium h-7.5 rounded-md cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none opacity-70"
                                 >
                                   <Lock className="w-3.5 h-3.5" />
-                                  <span>Pengumpulan Tugas Ditutup oleh Panitia</span>
+                                  <span>Pengumpulan Ditutup</span>
                                 </Button>
                               ) : (
                                 <Button
@@ -1717,10 +1502,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                                     setUploadingTaskId(req.id);
                                     setTaskUploadNotes("");
                                   }}
-                                  className="w-full bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold h-8.5 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-none"
+                                  className="w-full bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-medium h-7.5 rounded-md cursor-pointer flex items-center justify-center gap-1.5 shadow-none"
                                 >
                                   <Upload className="w-3.5 h-3.5" />
-                                  <span>Unggah Berkas Laporan Tugas</span>
+                                  <span>Unggah Laporan RTL</span>
                                 </Button>
                               )}
                             </div>
@@ -1728,11 +1513,11 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
                           {/* FORM UPLOAD TUGAS LANGSUNG */}
                           {isCurrentlyUploading && (
-                            <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-950/80 border border-blue-200 dark:border-blue-900/60 space-y-3">
+                            <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950/80 border border-blue-200 dark:border-blue-900/60 space-y-2.5">
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
                                   <Upload className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Unggah Laporan Tugas Langsung</span>
+                                  <span>Unggah Laporan RTL</span>
                                 </span>
                                 <button
                                   type="button"
@@ -1744,25 +1529,24 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                               </div>
 
                               <div className="space-y-2">
-                                <div className="relative border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl p-4 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors bg-white dark:bg-zinc-900">
+                                <div className="relative border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-md p-3 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors bg-white dark:bg-zinc-900">
                                   <input
                                     type="file"
                                     id={`file-task-${req.id}`}
                                     onChange={handleTaskFileSelect}
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                   />
-                                  <div className="flex flex-col items-center justify-center gap-1.5">
-                                    <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
-                                      <Upload className="w-4 h-4" />
+                                  <div className="flex flex-col items-center justify-center gap-1">
+                                    <div className="w-7 h-7 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
+                                      <Upload className="w-3.5 h-3.5" />
                                     </div>
-                                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {taskUploadFileName ||
-                                        "Klik untuk memilih berkas"}
+                                    <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                                      {taskUploadFileName || "Pilih berkas tugas"}
                                     </span>
                                     <span className="text-[10px] text-zinc-400">
                                       {taskUploadFileSize
                                         ? `Ukuran: ${taskUploadFileSize}`
-                                        : "Format PDF, DOCX, ZIP, JPG, PNG (Maks 15MB)"}
+                                        : "PDF, DOCX, ZIP, JPG, PNG (Maks 15MB)"}
                                     </span>
                                   </div>
                                 </div>
@@ -1772,19 +1556,19 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                                   onChange={(e) =>
                                     setTaskUploadNotes(e.target.value)
                                   }
-                                  placeholder="Tuliskan keterangan ringkas atau link Google Drive cadangan jika ada..."
-                                  className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  placeholder="Keterangan atau link Drive (opsional)..."
+                                  className="w-full text-xs p-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                   rows={2}
                                 />
                               </div>
 
-                              <div className="flex items-center justify-end gap-2 pt-1">
+                              <div className="flex items-center justify-end gap-2 pt-0.5">
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
                                   onClick={handleCancelTaskUpload}
-                                  className="h-8 text-xs cursor-pointer"
+                                  className="h-7 text-xs cursor-pointer rounded-md"
                                 >
                                   Batal
                                 </Button>
@@ -1793,11 +1577,9 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                                   size="sm"
                                   disabled={isSubmittingTask || !taskUploadFile}
                                   onClick={() => handleDirectTaskUpload(req)}
-                                  className="h-8 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer"
+                                  className="h-7 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md cursor-pointer shadow-none"
                                 >
-                                  {isSubmittingTask
-                                    ? "Mengunggah..."
-                                    : "Kirim Laporan"}
+                                  {isSubmittingTask ? "Mengunggah..." : "Kirim Laporan"}
                                 </Button>
                               </div>
                             </div>
@@ -1807,97 +1589,96 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                     })
                   )}
                 </div>
-              </div>
               )
             )}
 
             {/* TAHAP 4: TERIMA SERTIFIKAT */}
             {currentStageTab === 4 && (
               !isCertOpen ? (
-                <div className="p-8 sm:p-10 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 text-center space-y-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center mx-auto shadow-2xs">
-                    <Lock className="w-6 h-6" />
+                <div className="p-8 sm:p-10 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 flex items-center justify-center mx-auto">
+                    <Lock className="w-5 h-5" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Penerbitan Sertifikat Belum Dibuka
                     </h4>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                      {event.timeline?.certification?.note || "Pengesahan sertifikat resmi dan kelulusan kaderisasi masih dalam proses verifikasi & yudisium oleh panitia."}
+                      {event.timeline?.certification?.note || "Pengesahan sertifikat masih dalam proses yudisium panitia."}
                     </p>
                   </div>
                   {event.timeline?.certification?.releaseDate && (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-900/40 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-900/40 text-[11px] font-medium text-blue-700 dark:text-blue-300">
                       <Clock className="w-3.5 h-3.5" />
-                      <span>Estimasi Rilis Yudisium: {event.timeline.certification.releaseDate}</span>
+                      <span>Estimasi: {event.timeline.certification.releaseDate}</span>
                     </div>
                   )}
                 </div>
               ) : stage4Done ? (
-                  <div className="p-6 rounded-2xl bg-amber-500/[0.04] border border-amber-500/20 text-center space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-xs">
-                      <Award className="w-6 h-6" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest block">
-                        PENGESAHAN KADERISASI RESMI
-                      </span>
-                      <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                        Selamat Sahabat {activeCadre?.name || myReg?.cadreName}!
-                      </h3>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto leading-relaxed">
-                        Anda telah berhasil menuntaskan seluruh tahapan {event.name} ({event.level}) beserta kewajiban RTL dengan hasil memuaskan.
-                      </p>
-                    </div>
-
-                    <div className="inline-block p-2 rounded-xl bg-white dark:bg-zinc-900 border border-amber-500/20 text-xs font-mono font-bold text-amber-700 dark:text-amber-300">
-                      No. Sertifikat: SERT-PMII-{event.level}-{myReg?.registrationNumber || "LULUS-2026"}
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-2">
-                      <Button
-                        type="button"
-                        onClick={onOpenCert}
-                        className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs h-9 px-5 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-none"
-                      >
-                        <Award className="w-3.5 h-3.5" />
-                        <span>Lihat & Cetak Sertifikat Digital</span>
-                      </Button>
-
-                      <Link href={`${rolePrefix}/profil`}>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full text-xs h-9 rounded-xl border-amber-300/80 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 cursor-pointer shadow-none"
-                        >
-                          <span>Buka KTA Digital</span>
-                        </Button>
-                      </Link>
-                    </div>
+                <div className="p-6 rounded-lg bg-amber-500/[0.04] border border-amber-500/20 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500 text-white flex items-center justify-center mx-auto">
+                    <Award className="w-5 h-5" />
                   </div>
-                ) : (
-                  <div className="p-8 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/80 dark:border-zinc-800/80 text-center space-y-3">
-                    <div className="w-11 h-11 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto">
-                      <Lock className="w-5 h-5" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                        Sertifikat Belum Diterbitkan
-                      </h4>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                        Sertifikat resmi dan KTA Digital tingkat {event.level} akan otomatis terbuka setelah seluruh tugas RTL pada Tahap 3 diverifikasi dan disetujui.
-                      </p>
-                    </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest block">
+                      PENGESAHAN KADERISASI RESMI
+                    </span>
+                    <h3 className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                      Selamat Sahabat {activeCadre?.name || myReg?.cadreName}!
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto leading-relaxed">
+                      Seluruh tahapan {event.name} ({event.level}) dan kewajiban RTL telah selesai diverifikasi.
+                    </p>
+                  </div>
+
+                  <div className="inline-block p-1.5 px-3 rounded-md bg-white dark:bg-zinc-900 border border-amber-500/20 text-xs font-mono font-medium text-amber-700 dark:text-amber-300">
+                    No. Sertifikat: SERT-PMII-{event.level}-{myReg?.registrationNumber || "LULUS-2026"}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center pt-1">
                     <Button
                       type="button"
-                      onClick={() => onStageTabChange(3)}
-                      className="bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 font-semibold text-xs h-8.5 px-4 rounded-xl cursor-pointer shadow-none"
+                      onClick={onOpenCert}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs h-8 px-4 rounded-md cursor-pointer flex items-center justify-center gap-1.5 shadow-none"
                     >
-                      Periksa Tugas RTL (Tahap 3)
+                      <Award className="w-3.5 h-3.5" />
+                      <span>Cetak Sertifikat Digital</span>
                     </Button>
+
+                    <Link href={`${rolePrefix}/profil`}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full text-xs h-8 rounded-md border-amber-300/80 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 cursor-pointer shadow-none"
+                      >
+                        <span>Buka KTA Digital</span>
+                      </Button>
+                    </Link>
                   </div>
-                )
+                </div>
+              ) : (
+                <div className="p-8 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Sertifikat Belum Diterbitkan
+                    </h4>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                      Sertifikat terbuka setelah seluruh tugas RTL diverifikasi dan disetujui.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => onStageTabChange(3)}
+                    className="bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 font-medium text-xs h-8 px-4 rounded-md cursor-pointer shadow-none"
+                  >
+                    Periksa Tugas RTL
+                  </Button>
+                </div>
+              )
             )}
           </div>
 
@@ -2003,25 +1784,25 @@ export const StagesModal: React.FC<StagesModalProps> = ({
           <div className="max-w-4xl mx-auto w-full px-3.5 sm:px-6 py-4 sm:py-6 space-y-4">
           {/* Status banner jika sudah dikumpulkan dengan Hasil Nilai */}
           {isQuizSubmitted && (
-            <div className="p-4 sm:p-5 rounded-2xl border border-emerald-200/90 dark:border-emerald-900/70 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-teal-50/40 dark:from-emerald-950/40 dark:via-emerald-950/20 dark:to-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+            <div className="p-4 sm:p-5 rounded-lg border border-emerald-200/90 dark:border-emerald-900/70 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
               <div className="flex items-start sm:items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <CheckCircle2 className="w-6 h-6" />
+                <div className="w-10 h-10 rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
-                      Jawaban {activeQuizType === "PRE" ? "Pre-Test" : "Post-Test"} Berhasil Dikirim
+                    <span className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+                      Jawaban {activeQuizType === "PRE" ? "Pre-Test" : "Post-Test"} Terkirim
                     </span>
-                    <Badge variant="outline" className="bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[11px] font-semibold py-0.5 px-2">
+                    <Badge variant="outline" className="bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[11px] font-medium py-0.5 px-2">
                       Tersimpan
                     </Badge>
                   </div>
                   <p className="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed">
-                    Terima kasih! Jawaban Anda telah tersimpan dan terekam oleh sistem instruktur. Soal evaluasi tidak dapat diulang.
+                    Jawaban Anda telah tersimpan dan terekam oleh sistem.
                     {activeQuizQuestions.length > 0 && (
                       <span className="block mt-0.5 font-medium text-emerald-800 dark:text-emerald-200">
-                        Hasil evaluasi: Benar {correctAnswersCount} dari {activeQuizQuestions.length} butir soal.
+                        Hasil: Benar {correctAnswersCount} dari {activeQuizQuestions.length} butir soal.
                       </span>
                     )}
                   </p>
@@ -2029,19 +1810,19 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               </div>
 
               {/* Box Nilai Utama */}
-              <div className="flex sm:flex-col items-center justify-between sm:justify-center px-5 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800/80 shadow-xs shrink-0 min-w-[130px] text-center">
-                <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                  Nilai Anda
+              <div className="flex sm:flex-col items-center justify-between sm:justify-center px-4 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800/80 shadow-xs shrink-0 min-w-[120px] text-center">
+                <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                  Nilai
                 </span>
                 <div className="flex items-baseline justify-center gap-1 my-0.5">
-                  <span className="text-3xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
+                  <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
                     {quizScore}
                   </span>
-                  <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
                     / 100
                   </span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                <span className={`text-[10px] font-medium px-2 py-0.2 rounded-full ${
                   quizScore >= 75
                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300"
                     : quizScore >= 60
@@ -2064,14 +1845,14 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             return (
               <div
                 key={q.id}
-                className={`p-4 sm:p-5 rounded-2xl border transition-all space-y-3.5 shadow-2xs ${
+                className={`p-3.5 sm:p-4 rounded-lg border transition-all space-y-3 ${
                   isQuizSubmitted
                     ? isUserAnswerCorrect
                       ? "border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/30 dark:bg-emerald-950/20"
                       : hasUserAnswered
                       ? "border-rose-300 dark:border-rose-800/80 bg-rose-50/30 dark:bg-rose-950/20"
                       : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/40"
-                    : "border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                    : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -2217,7 +1998,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         if (!open) setActiveSyllabusModal(null);
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0 rounded-2xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
         {activeSyllabusModal && (
           <div className="flex flex-col">
             {/* Header */}
@@ -2345,7 +2126,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         if (!open) setActiveReadingModal(null);
       }}
     >
-      <DialogContent showCloseButton={false} className="max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-2xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl">
+      <DialogContent showCloseButton={false} className="max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl">
         {activeReadingModal && (() => {
           const fileName = activeReadingModal.fileName || "Modul Materi";
           const fileUrl = activeReadingModal.fileUrl;
@@ -2435,8 +2216,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               {/* Reader Body */}
               <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-2 sm:p-4 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
                 {!fileUrl || fileUrl === "#" ? (
-                  <div className="p-8 text-center max-w-md space-y-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+                  <div className="p-8 text-center max-w-md space-y-3 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-xs">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
                       <Lock className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
@@ -2488,7 +2269,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
     {/* Modal Kuesioner & Hasil: Analisis Preferensi Kognitif & Arah Karier Mahasiswa */}
     <Dialog open={isCareerModalOpen} onOpenChange={setIsCareerModalOpen}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 rounded-2xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-xl">
         <div className="flex flex-col">
           {/* Header */}
           <div className="p-5 sm:p-6 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky top-0 z-10">
@@ -2531,7 +2312,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             /* VIEW LAPORAN HASIL - CLEAN & MINIMALIST */
             <div className="p-5 sm:p-6 space-y-4">
               {/* Formula Result Banner */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-850/60 border border-zinc-200/80 dark:border-zinc-800 space-y-2">
+              <div className="p-4 sm:p-5 rounded-lg bg-zinc-50 dark:bg-zinc-850/60 border border-zinc-200/80 dark:border-zinc-800 space-y-2">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-bold">
