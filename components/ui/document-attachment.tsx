@@ -147,7 +147,7 @@ export function DocumentAttachment({
                 if (e.key === "Enter" || e.key === " ") setIsPreviewOpen(true);
               }}
               title="Klik gambar untuk melihat pratinjau penuh"
-              className="group relative max-w-sm rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 cursor-pointer shadow-none transition-all hover:border-blue-500/60"
+              className="group relative max-w-sm rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 cursor-pointer shadow-none transition-all hover:border-zinc-400 dark:hover:border-zinc-600"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -179,7 +179,7 @@ export function DocumentAttachment({
                   variant="outline"
                   size="sm"
                   onClick={onRemove}
-                  className="h-7.5 px-3 text-xs rounded-md border-zinc-200 dark:border-zinc-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer flex items-center gap-1.5"
+                  className="h-7.5 px-3 text-xs rounded-md border-zinc-200 dark:border-zinc-800 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer flex items-center gap-1.5"
                 >
                   <Trash2 className="w-3 h-3" />
                   <span>Hapus</span>
@@ -189,14 +189,14 @@ export function DocumentAttachment({
           </div>
         ) : (
           /* Fallback untuk format non-gambar (misal berkas PDF) */
-          <div className="flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg gap-2.5">
+          <div className="flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md gap-2.5">
             <div
               role="button"
               tabIndex={0}
               onClick={() => setIsPreviewOpen(true)}
               className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
             >
-              <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400">
+              <div className="w-9 h-9 rounded flex items-center justify-center shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
                 <FileText className="w-4 h-4" />
               </div>
               <span className="truncate block text-zinc-900 dark:text-zinc-100 font-medium text-xs">
@@ -240,14 +240,14 @@ export function DocumentAttachment({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`relative flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-3 p-3.5 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+          className={`relative flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-3 p-3.5 border-2 border-dashed rounded-md cursor-pointer transition-all ${
             isDragging
               ? colorStyles.activeBorder
               : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-950/50 hover:bg-zinc-50 dark:hover:bg-zinc-950"
           }`}
         >
           {/* Upload Icon Circle */}
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colorStyles.iconBg}`}>
+          <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${colorStyles.iconBg}`}>
             <UploadCloud className="w-5 h-5" />
           </div>
 
@@ -263,13 +263,13 @@ export function DocumentAttachment({
           </div>
 
           {/* Action Badge */}
-          <span className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 shadow-2xs shrink-0">
+          <span className="text-[11px] font-semibold px-3 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 shadow-2xs shrink-0">
             Pilih Berkas
           </span>
         </div>
       ) : (
         /* Readonly Empty State */
-        <div className="flex items-center gap-2 p-3 text-xs text-zinc-400 dark:text-zinc-500 italic bg-zinc-50/60 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl">
+        <div className="flex items-center gap-2 p-3 text-xs text-zinc-400 dark:text-zinc-500 italic bg-zinc-50/60 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-md">
           <FileText className="w-4 h-4 opacity-50 shrink-0" />
           <span>Belum ada lampiran berkas yang diunggah.</span>
         </div>
@@ -277,7 +277,7 @@ export function DocumentAttachment({
 
       {/* In-App Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-xl p-4 sm:p-5 overflow-hidden">
+        <DialogContent className="max-w-xl p-4 sm:p-5 overflow-hidden rounded-md">
           <DialogHeader className="pb-2.5 border-b border-zinc-100 dark:border-zinc-800 pr-8">
             <DialogTitle className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">
               {label.replace(/^Unggah\s+/i, "Pratinjau ")}
@@ -288,7 +288,7 @@ export function DocumentAttachment({
           </DialogHeader>
 
           {/* Modal Preview Body */}
-          <div className="my-1 max-h-[75vh] overflow-auto flex items-center justify-center rounded-lg bg-zinc-50 dark:bg-zinc-950 p-1.5 sm:p-2">
+          <div className="my-1 max-h-[75vh] overflow-auto flex items-center justify-center rounded-md bg-zinc-50 dark:bg-zinc-950 p-1.5 sm:p-2">
             {isImage && fileUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

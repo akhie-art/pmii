@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Building, BookOpen, GraduationCap, Phone, Mail, Calendar } from "lucide-react";
+import { BookOpen, Phone, Mail, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -133,7 +133,7 @@ export function AcademicTab({
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       {/* 1. INFORMASI AKADEMIK (Kampus, Fakultas, Jurusan) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {/* Perguruan Tinggi */}
         <ProfileField
           label="Perguruan Tinggi"
@@ -151,7 +151,7 @@ export function AcademicTab({
             >
               <SelectValue placeholder="Pilih Perguruan Tinggi" className="truncate text-left" />
             </SelectTrigger>
-            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 max-h-60">
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md max-h-60">
               {UNIVERSITY_NAMES.map((u) => (
                 <SelectItem key={u} value={u} className="text-xs">
                   {u}
@@ -186,7 +186,7 @@ export function AcademicTab({
               >
                 <SelectValue placeholder="Pilih Fakultas" className="truncate text-left" />
               </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 max-h-60">
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md max-h-60">
                 {availableFaculties.map((f) => (
                   <SelectItem key={f} value={f} className="text-xs">
                     {f}
@@ -242,7 +242,7 @@ export function AcademicTab({
                   className="truncate text-left"
                 />
               </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 max-h-60">
+              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md max-h-60">
                 {availableMajors.map((m) => (
                   <SelectItem key={m} value={m} className="text-xs">
                     {m}
@@ -256,7 +256,7 @@ export function AcademicTab({
               </SelectContent>
             </Select>
           ) : (
-            <InputGroup>
+            <InputGroup className="rounded-md">
               <InputGroupAddon align="inline-start">
                 <BookOpen className="size-4 text-zinc-400" />
               </InputGroupAddon>
@@ -275,7 +275,7 @@ export function AcademicTab({
       </div>
 
       {/* Periode Kuliah: Tahun Mulai & Tahun Selesai */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <ProfileField
           label="Tahun Mulai Kuliah"
           isEditing={isEditing}
@@ -283,14 +283,14 @@ export function AcademicTab({
           emptyPlaceholder="Tahun mulai belum diisi"
           displayValue={
             tahunMasukPT ? (
-              <span className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <span className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 text-xs sm:text-[13px]">
                 <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Tahun Masuk: {tahunMasukPT}</span>
+                <span>{tahunMasukPT}</span>
               </span>
             ) : undefined
           }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <Calendar className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -313,14 +313,14 @@ export function AcademicTab({
           emptyPlaceholder="Belum diisi / Masih aktif kuliah"
           displayValue={
             tahunLulusPT ? (
-              <span className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <span className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 text-xs sm:text-[13px]">
                 <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Tahun Selesai: {tahunLulusPT}</span>
+                <span>{tahunLulusPT}</span>
               </span>
             ) : undefined
           }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <Calendar className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -335,7 +335,7 @@ export function AcademicTab({
       </div>
 
       {/* 2. KONTAK UTAMA (WhatsApp & Email) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
         <ProfileField
           label="Nomor WhatsApp / HP"
           required
@@ -348,17 +348,17 @@ export function AcademicTab({
                 href={`https://wa.me/${phone.replace(/^0/, "62").replace(/\D/g, "")}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 font-mono font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                className="inline-flex items-center gap-1.5 font-mono font-medium text-zinc-900 dark:text-zinc-100 hover:underline text-xs sm:text-[13px]"
               >
-                <Phone className="w-3.5 h-3.5" />
+                <Phone className="w-3.5 h-3.5 text-zinc-400" />
                 <span>{phone}</span>
               </a>
             ) : undefined
           }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
-              <Phone className="size-4 text-emerald-500" />
+              <Phone className="size-4 text-zinc-400" />
             </InputGroupAddon>
             <InputGroupInput
               required
@@ -380,17 +380,17 @@ export function AcademicTab({
             email ? (
               <a
                 href={`mailto:${email}`}
-                className="inline-flex items-center gap-1.5 font-medium text-blue-600 dark:text-blue-400 hover:underline truncate"
+                className="inline-flex items-center gap-1.5 font-medium text-zinc-900 dark:text-zinc-100 hover:underline truncate text-xs sm:text-[13px]"
               >
-                <Mail className="w-3.5 h-3.5 shrink-0" />
+                <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                 <span className="truncate">{email}</span>
               </a>
             ) : undefined
           }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
-              <Mail className="size-4 text-blue-500" />
+              <Mail className="size-4 text-zinc-400" />
             </InputGroupAddon>
             <InputGroupInput
               type="email"
@@ -404,7 +404,7 @@ export function AcademicTab({
       </div>
 
       {/* 3. MEDIA SOSIAL (Instagram, Twitter, Facebook) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
         <ProfileField
           label="Instagram"
           isEditing={isEditing}
@@ -416,17 +416,17 @@ export function AcademicTab({
                 href={`https://instagram.com/${instagram.replace(/^@+/, "")}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-zinc-800 dark:text-zinc-200 hover:text-pink-600 font-medium truncate"
+                className="inline-flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 hover:underline font-medium truncate text-xs sm:text-[13px]"
               >
-                <InstagramIcon className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                <InstagramIcon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                 <span className="truncate">@{instagram.replace(/^@+/, "")}</span>
               </a>
             ) : undefined
           }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
-              <InstagramIcon className="size-4 text-pink-500" />
+              <InstagramIcon className="size-4 text-zinc-400" />
               <InputGroupText>@</InputGroupText>
             </InputGroupAddon>
             <InputGroupInput
@@ -442,10 +442,23 @@ export function AcademicTab({
           isEditing={isEditing}
           value={twitter}
           emptyPlaceholder="Belum dicantumkan"
+          displayValue={
+            twitter ? (
+              <a
+                href={`https://x.com/${twitter.replace(/^@+/, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 hover:underline font-medium truncate text-xs sm:text-[13px]"
+              >
+                <TwitterIcon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                <span className="truncate">@{twitter.replace(/^@+/, "")}</span>
+              </a>
+            ) : undefined
+          }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
-              <TwitterIcon className="size-4 text-sky-500" />
+              <TwitterIcon className="size-4 text-zinc-400" />
               <InputGroupText>@</InputGroupText>
             </InputGroupAddon>
             <InputGroupInput
@@ -461,10 +474,18 @@ export function AcademicTab({
           isEditing={isEditing}
           value={facebook}
           emptyPlaceholder="Belum dicantumkan"
+          displayValue={
+            facebook ? (
+              <span className="inline-flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 font-medium truncate text-xs sm:text-[13px]">
+                <FacebookIcon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                <span className="truncate">{facebook}</span>
+              </span>
+            ) : undefined
+          }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
-              <FacebookIcon className="size-4 text-blue-600" />
+              <FacebookIcon className="size-4 text-zinc-400" />
             </InputGroupAddon>
             <InputGroupInput
               placeholder="Nama Akun FB"
@@ -484,7 +505,6 @@ export function AcademicTab({
           isEditing={isEditing}
           onUpload={onKtmUpload}
           onRemove={onRemoveKtm}
-          accentColor="amber"
         />
       </div>
     </div>
