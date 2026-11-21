@@ -1432,21 +1432,21 @@ export default function ProfilPage() {
           ) : (
             /* VIEW 2: FORM TABS (DIRI, AKADEMIK, RIWAYAT, KARAKTER, KEAMANAN) */
             <form onSubmit={handleSaveProfile} className="space-y-4">
-              <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-none">
+              <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden shadow-none">
                 {/* Profile Card Action Toolbar */}
-                <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 gap-3">
+                <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                      <span className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                         {activeTabMeta.title}
                       </span>
                       {activeTab !== "keamanan" && (
                         isEditing ? (
-                          <Badge variant="outline" className="h-5 px-2 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border-amber-500/20 bg-amber-500/10 shrink-0">
+                          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 rounded shrink-0">
                             Mode Edit
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="h-5 px-2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/20 bg-emerald-500/10 shrink-0">
+                          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-800/60 rounded shrink-0">
                             Mode Baca
                           </Badge>
                         )
@@ -1603,7 +1603,7 @@ export default function ProfilPage() {
                           if (activeTab === "riwayat") changeTab("akademik");
                           if (activeTab === "karakter") changeTab("riwayat");
                         }}
-                        className="text-xs h-9 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5 w-full sm:w-auto font-medium"
+                        className="text-xs h-9 px-3 rounded-md border-zinc-200 dark:border-zinc-800 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5 w-full sm:w-auto font-medium"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                         <span>Sebelumnya</span>
@@ -1619,7 +1619,7 @@ export default function ProfilPage() {
                           if (activeTab === "akademik") changeTab("riwayat");
                           if (activeTab === "riwayat") changeTab("karakter");
                         }}
-                        className="text-xs h-9 px-3 rounded-lg border-zinc-200 dark:border-zinc-800 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5 w-full sm:w-auto font-medium"
+                        className="text-xs h-9 px-3 rounded-md border-zinc-200 dark:border-zinc-800 disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5 w-full sm:w-auto font-medium"
                       >
                         <span>Selanjutnya</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -1633,14 +1633,14 @@ export default function ProfilPage() {
                           variant="outline"
                           size="sm"
                           onClick={handleCancelEdit}
-                          className="w-full sm:w-auto text-xs h-9 px-4 rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer font-medium"
+                          className="w-full sm:w-auto text-xs h-9 px-4 rounded-md border-zinc-200 dark:border-zinc-800 cursor-pointer font-medium"
                         >
                           Batal
                         </Button>
                         <Button
                           type="submit"
                           disabled={isSaving}
-                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-9 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
+                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs h-9 rounded-md border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
                         >
                           {isSaving ? (
                             <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1654,7 +1654,7 @@ export default function ProfilPage() {
                       <Button
                         type="button"
                         onClick={() => setIsEditing(true)}
-                        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-9 rounded-lg border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
+                        className="w-full sm:w-auto bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 font-medium text-xs h-9 rounded-md border-none cursor-pointer flex items-center justify-center gap-1.5 px-5 shrink-0 transition-colors shadow-xs"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                         <span>Edit Profil</span>

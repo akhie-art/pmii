@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { User, Calendar, MapPin, ShieldAlert, HeartPulse, CreditCard, Home, Camera, ZoomIn, Trash2 } from "lucide-react";
+import { User, Calendar, MapPin, ShieldAlert, CreditCard, Home, Camera, ZoomIn, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,13 +51,13 @@ export function BiodataTab({
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       {/* 1. PAS FOTO RESMI (3x4) */}
-      <div className="p-3.5 sm:p-4 rounded-lg bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+      <div className="p-3.5 sm:p-4 rounded-md bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+          <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Pas Foto Resmi (3×4)
           </label>
           <span className="text-[10px] text-zinc-400 dark:text-zinc-500 hidden sm:inline">
-            Digunakan untuk KTA Digital & CV Resmi PMII (Kolom Terpisah dari Avatar)
+            Digunakan untuk KTA Digital & CV Resmi PMII
           </span>
         </div>
 
@@ -71,7 +71,7 @@ export function BiodataTab({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") setIsPreviewOpen(true);
                 }}
-                className="w-24 h-32 rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 shadow-2xs cursor-pointer relative"
+                className="w-24 h-32 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 overflow-hidden cursor-pointer relative"
                 title="Klik untuk melihat foto penuh"
               >
                 <img
@@ -85,7 +85,7 @@ export function BiodataTab({
               </div>
             </div>
           ) : (
-            <div className="w-24 h-32 rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex flex-col items-center justify-center text-zinc-400 shrink-0">
+            <div className="w-24 h-32 rounded border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex flex-col items-center justify-center text-zinc-400 shrink-0">
               <User className="w-7 h-7 opacity-40 mb-1" />
               <span className="text-[10px] font-medium text-center">Foto 3×4</span>
             </div>
@@ -93,8 +93,8 @@ export function BiodataTab({
 
           <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">
             <div>
-              <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                {pasFoto ? "Pas Foto Kader Terpasang" : "Unggah Pas Foto Berlatar Resmi"}
+              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                {pasFoto ? "Pas Foto Terpasang" : "Unggah Pas Foto Berlatar Resmi"}
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
                 Disarankan pas foto berpakaian rapi / jas PMII dengan rasio 3:4 (Maks. 5 MB).
@@ -129,7 +129,7 @@ export function BiodataTab({
                     size="sm"
                     disabled={isUploadingPasFoto}
                     onClick={onRemovePasFoto}
-                    className="h-8 px-2.5 text-xs rounded-md border-zinc-200 dark:border-zinc-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer flex items-center gap-1"
+                    className="h-8 px-2.5 text-xs rounded-md border-zinc-200 dark:border-zinc-800 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Hapus</span>
@@ -143,17 +143,17 @@ export function BiodataTab({
         {/* Modal Zoom Preview */}
         {pasFoto && (
           <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-            <DialogContent className="max-w-md p-4 sm:p-5 overflow-hidden">
+            <DialogContent className="max-w-md p-4 sm:p-5 overflow-hidden rounded-md">
               <DialogHeader className="pb-2.5 border-b border-zinc-100 dark:border-zinc-800 pr-8">
-                <DialogTitle className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100">
+                <DialogTitle className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   Pratinjau Pas Foto Resmi
                 </DialogTitle>
               </DialogHeader>
-              <div className="my-2 max-h-[70vh] flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-md p-2">
+              <div className="my-2 max-h-[70vh] flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded p-2">
                 <img
                   src={pasFoto}
                   alt="Pas Foto Penuh"
-                  className="max-h-[65vh] w-auto max-w-full object-contain rounded shadow-xs"
+                  className="max-h-[65vh] w-auto max-w-full object-contain rounded"
                 />
               </div>
             </DialogContent>
@@ -162,7 +162,7 @@ export function BiodataTab({
       </div>
 
       {/* Row 1: Nama Lengkap & Jenis Kelamin */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <ProfileField
           label="Nama Lengkap"
           required
@@ -170,7 +170,7 @@ export function BiodataTab({
           value={name}
           emptyPlaceholder="Nama belum diisi"
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <User className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -188,15 +188,9 @@ export function BiodataTab({
           isEditing={isEditing}
           value={gender}
           displayValue={
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                gender === "Laki-laki"
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50"
-                  : "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50"
-              }`}>
-                {gender === "Laki-laki" ? "Laki-laki (Sahabat)" : "Perempuan (Sahabati)"}
-              </span>
-            </div>
+            <span className="font-medium text-zinc-900 dark:text-zinc-100 text-xs sm:text-[13px]">
+              {gender ? (gender === "Laki-laki" ? "Laki-laki (Sahabat)" : "Perempuan (Sahabati)") : "Belum diisi"}
+            </span>
           }
         >
           <Select
@@ -205,10 +199,10 @@ export function BiodataTab({
               if (val) setGender(val as any);
             }}
           >
-            <SelectTrigger className="h-9.5 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-xl">
+            <SelectTrigger className="h-9 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-md">
               <SelectValue placeholder="Pilih Jenis Kelamin" />
             </SelectTrigger>
-            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
               <SelectItem value="Laki-laki">Laki-laki (Sahabat)</SelectItem>
               <SelectItem value="Perempuan">Perempuan (Sahabati)</SelectItem>
             </SelectContent>
@@ -224,15 +218,15 @@ export function BiodataTab({
         emptyPlaceholder="Belum mencantumkan NIM"
         displayValue={
           nim ? (
-            <span className="font-mono font-semibold text-xs sm:text-sm tracking-wider text-blue-700 dark:text-blue-400">
+            <span className="font-mono font-medium text-xs sm:text-[13px] tracking-wider text-zinc-900 dark:text-zinc-100">
               {nim}
             </span>
           ) : undefined
         }
       >
-        <InputGroup>
+        <InputGroup className="rounded-md">
           <InputGroupAddon align="inline-start">
-            <CreditCard className="size-4 text-blue-500" />
+            <CreditCard className="size-4 text-zinc-400" />
           </InputGroupAddon>
           <InputGroupInput
             placeholder="Masukkan NIM mahasiswa (contoh: 21010123)"
@@ -244,14 +238,14 @@ export function BiodataTab({
       </ProfileField>
 
       {/* Row 3: Tempat & Tanggal Lahir */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <ProfileField
           label="Tempat Lahir"
           isEditing={isEditing}
           value={tempatLahir}
           emptyPlaceholder="Kota / Kabupaten belum diisi"
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <MapPin className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -270,13 +264,13 @@ export function BiodataTab({
           emptyPlaceholder="Tanggal belum diisi"
           displayValue={
             tanggalLahir ? (
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              <span className="font-medium text-zinc-900 dark:text-zinc-100 text-xs sm:text-[13px]">
                 {formatIndonesianDate(tanggalLahir)}
               </span>
             ) : undefined
           }
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <Calendar className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -290,30 +284,30 @@ export function BiodataTab({
         </ProfileField>
       </div>
 
-      {/* Pratinjau Format Resmi Tempat, Tanggal Lahir (Kombinasi Standar Indonesia) */}
+      {/* Pratinjau Format Resmi Tempat, Tanggal Lahir (Kombinasi Flat Standar) */}
       {!isEditing && (tempatLahir || tanggalLahir) && (
-        <div className="px-3.5 py-2 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
+        <div className="px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 truncate">
-            <span className="font-semibold text-blue-700 dark:text-blue-400 shrink-0">TTL Resmi:</span>
-            <span className="font-medium truncate">
-              {tempatLahir ? tempatLahir : "Kota belum diisi"}, {tanggalLahir ? formatIndonesianDate(tanggalLahir) : "Tanggal belum diisi"}
+            <span className="font-medium text-zinc-500 dark:text-zinc-400 shrink-0">TTL Resmi:</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+              {tempatLahir || "Kota belum diisi"}, {tanggalLahir ? formatIndonesianDate(tanggalLahir) : "Tanggal belum diisi"}
             </span>
           </div>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 shrink-0 border border-blue-200 dark:border-blue-800">
-            Standar CV & KTA
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 shrink-0 border border-zinc-200 dark:border-zinc-700">
+            Format Standar
           </span>
         </div>
       )}
 
       {/* Row 4: Alamat Asal & Domisili */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <ProfileField
           label="Alamat Asal Sesuai KTP"
           isEditing={isEditing}
           value={alamatRumah}
           emptyPlaceholder="Alamat asal belum diisi"
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <Home className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -332,7 +326,7 @@ export function BiodataTab({
           value={address}
           emptyPlaceholder="Alamat domisili belum diisi"
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
               <MapPin className="size-4 text-zinc-400" />
             </InputGroupAddon>
@@ -347,15 +341,14 @@ export function BiodataTab({
       </div>
 
       {/* Row 5: Golongan Darah & Riwayat Penyakit */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
         <ProfileField
           label="Golongan Darah"
           isEditing={isEditing}
           value={golonganDarah}
           displayValue={
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50">
-              <HeartPulse className="w-3 h-3 text-rose-500" />
-              Golongan {golonganDarah || "O"}
+            <span className="font-medium text-zinc-900 dark:text-zinc-100 text-xs sm:text-[13px]">
+              {golonganDarah ? `Golongan ${golonganDarah}` : "Belum diisi"}
             </span>
           }
         >
@@ -365,10 +358,10 @@ export function BiodataTab({
               if (val) setGolonganDarah(val);
             }}
           >
-            <SelectTrigger className="h-9.5 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-xl">
+            <SelectTrigger className="h-9 text-xs sm:text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-md">
               <SelectValue placeholder="Pilih Golongan Darah" />
             </SelectTrigger>
-            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
               <SelectItem value="A">Golongan A</SelectItem>
               <SelectItem value="B">Golongan B</SelectItem>
               <SelectItem value="AB">Golongan AB</SelectItem>
@@ -383,9 +376,9 @@ export function BiodataTab({
           value={riwayatPenyakit}
           emptyPlaceholder="Tidak ada riwayat penyakit khusus"
         >
-          <InputGroup>
+          <InputGroup className="rounded-md">
             <InputGroupAddon align="inline-start">
-              <ShieldAlert className="size-4 text-rose-400" />
+              <ShieldAlert className="size-4 text-zinc-400" />
             </InputGroupAddon>
             <InputGroupInput
               placeholder="Misal: Asma, Alergi dingin (jika ada)"
