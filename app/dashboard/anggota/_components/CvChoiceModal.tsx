@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, Briefcase, ExternalLink, FileText, CheckCircle2 } from "lucide-react";
 import type { Member } from "./types";
+import { CV_TEMPLATE_STORAGE_KEY } from "./CvTemplateModal";
 
 interface CvChoiceModalProps {
   isOpen: boolean;
@@ -28,6 +29,14 @@ export default function CvChoiceModal({
   onDownloadOrganisasi,
   onDownloadAts
 }: CvChoiceModalProps) {
+  const [hasCustomTemplate, setHasCustomTemplate] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && typeof window !== "undefined") {
+      setHasCustomTemplate(Boolean(localStorage.getItem(CV_TEMPLATE_STORAGE_KEY)));
+    }
+  }, [isOpen]);
+
   if (!member) return null;
 
   return (
@@ -63,8 +72,15 @@ export default function CvChoiceModal({
                 <div className="w-8 h-8 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
-                <Badge variant="outline" className="text-[10px] font-medium border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded">
-                  Resmi PMII
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-medium rounded ${
+                    hasCustomTemplate
+                      ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                      : "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  {hasCustomTemplate ? "Template Kustom" : "Resmi PMII"}
                 </Badge>
               </div>
 
@@ -73,14 +89,16 @@ export default function CvChoiceModal({
                   CV Organisasi
                 </h4>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                  Format resmi PMII dengan Kop Surat, data kaderisasi, pas foto formal, dan tanda tangan legalitas.
+                  {hasCustomTemplate
+                    ? "Menggunakan template Word (.docx) yang telah diunggah pengurus dengan data dan foto kader terisi otomatis."
+                    : "Format resmi PMII dengan Kop Surat, data kaderisasi, pas foto formal, dan tanda tangan legalitas."}
                 </p>
               </div>
 
               <div className="pt-1.5 space-y-1">
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400">
                   <CheckCircle2 className="w-3 h-3 text-zinc-500 shrink-0" />
-                  <span>Kop Surat & Pas Foto 3×4</span>
+                  <span>{hasCustomTemplate ? "Template Dokumen Word (.docx)" : "Kop Surat & Pas Foto 3×4"}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-600 dark:text-zinc-400">
                   <CheckCircle2 className="w-3 h-3 text-zinc-500 shrink-0" />
