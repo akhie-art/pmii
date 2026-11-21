@@ -27,6 +27,36 @@ function parseCvOrgItems(raw?: string | null): { nama: string; tahunMulai?: stri
 }
 
 /**
+ * Menghitung rentang tahun keaktifan PMII untuk disajikan pada CV ATS & Formal
+ * Contoh: "2021 - Sekarang" atau "2020 - 2024"
+ */
+function getPmiiPeriod(member: Member): string {
+  let startYear = member.angkatan ? member.angkatan.replace(/\D/g, "") : "";
+  if (!startYear && member.tahunMasukPT) {
+    startYear = member.tahunMasukPT.replace(/\D/g, "");
+  }
+  if (!startYear && member.history && member.history.length > 0) {
+    const mapaba = member.history.find((h) => (h.level || "").toUpperCase().includes("MAPABA")) || member.history[0];
+    if (mapaba?.date) {
+      const yr = new Date(mapaba.date).getFullYear();
+      if (!isNaN(yr) && yr > 1990) startYear = String(yr);
+    }
+  }
+  if (!startYear && (member as any).created_at) {
+    const yr = new Date((member as any).created_at).getFullYear();
+    if (!isNaN(yr) && yr > 1990) startYear = String(yr);
+  }
+
+  if (!startYear) return "";
+
+  if (member.status === "Alumni") {
+    const endYear = member.tahunLulusPT ? member.tahunLulusPT.replace(/\D/g, "") : "";
+    return endYear && endYear !== startYear ? `${startYear} - ${endYear}` : `${startYear} - Selesai`;
+  }
+  return `${startYear} - Sekarang`;
+}
+
+/**
  * Generates an official formal 3x4 cadre portrait (PMII Navy & Gold)
  * ensuring the CV always presents a dignified 3x4 photo even when no file is uploaded.
  */
@@ -375,7 +405,9 @@ export async function generateMemberCvPdf(member: Member): Promise<void> {
   parseCvOrgItems(member.organisasiSMP).forEach((item) => orgList.push(formatOrgItem(item)));
   parseCvOrgItems(member.organisasiSMA).forEach((item) => orgList.push(formatOrgItem(item)));
   parseCvOrgItems(member.organisasiPT).forEach((item) => orgList.push(formatOrgItem(item)));
-  orgList.push(member.jabatan && member.jabatan !== "Anggota" ? `PMII (${member.jabatan})` : "PMII");
+  const pmiiPeriod = getPmiiPeriod(member);
+  const pmiiLabel = member.jabatan && member.jabatan !== "Anggota" ? `PMII (${member.jabatan})` : "PMII";
+  orgList.push(pmiiPeriod ? `${pmiiLabel} (${pmiiPeriod})` : pmiiLabel);
 
   // Motto Hidup
   const mottoText =
@@ -725,20 +757,32 @@ export async function generateMemberCvAtsPdf(member: Member): Promise<void> {
 
   // PMII
   checkPageBreak(22);
+  const pmiiPeriod = getPmiiPeriod(member);
+  const periodW = pmiiPeriod ? doc.getTextWidth(pmiiPeriod) + 6 : 0;
   const commName = member.komisariat || "Cabang Grobogan";
-  const commW = commName ? doc.getTextWidth(commName) + 6 : 0;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(0, 0, 0);
-  const pmiiTitleLines = doc.splitTextToSize("Pergerakan Mahasiswa Islam Indonesia (PMII)", contentWidth - commW);
+  const pmiiTitleLines = doc.splitTextToSize("Pergerakan Mahasiswa Islam Indonesia (PMII)", contentWidth - periodW);
   doc.text(pmiiTitleLines, marginX, curY);
 
-  doc.setFont("helvetica", "normal");
+  if (pmiiPeriod) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(pmiiPeriod, marginX + contentWidth, curY, { align: "right" });
+  }
+  curY += pmiiTitleLines.length * 4.2;
+
+  // Subtitle: Jabatan / Komisariat (Italic)
+  const roleSubtitle = member.jabatan && member.jabatan !== "Anggota" ? `${member.jabatan} - ${commName}` : commName;
+  doc.setFont("helvetica", "italic");
   doc.setFontSize(8.5);
   doc.setTextColor(0, 0, 0);
-  doc.text(commName, marginX + contentWidth, curY, { align: "right" });
-  curY += pmiiTitleLines.length * 4.2 + 1;
+  const subLines = doc.splitTextToSize(roleSubtitle, contentWidth);
+  doc.text(subLines, marginX, curY);
+  curY += subLines.length * 4.2 + 1;
 
   // Bullets Pengalaman PMII
   doc.setFont("helvetica", "normal");
