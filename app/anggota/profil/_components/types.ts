@@ -11,6 +11,8 @@ export interface ProfileHeaderProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemovePhoto: () => void;
+  onDownloadOrganisasiCV?: () => void;
+  onDownloadAtsCV?: () => void;
 }
 
 export interface DigitalKtaCardProps {

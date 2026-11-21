@@ -1,7 +1,27 @@
 "use client";
 
 import React, { useState } from "react";
-import { Camera, Trash2, ShieldCheck, Mail, Building, Copy, Check, Sparkles } from "lucide-react";
+import {
+  Camera,
+  Trash2,
+  ShieldCheck,
+  Mail,
+  Building,
+  Copy,
+  Check,
+  Sparkles,
+  ChevronDown,
+  FileText,
+  Building2,
+  FileCheck
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ProfileHeaderProps } from "./types";
@@ -15,7 +35,9 @@ export function ProfileHeader({
   memberNTA,
   fileInputRef,
   onPhotoUpload,
-  onRemovePhoto
+  onRemovePhoto,
+  onDownloadOrganisasiCV,
+  onDownloadAtsCV
 }: ProfileHeaderProps) {
   const [copied, setCopied] = useState(false);
 
@@ -131,8 +153,8 @@ export function ProfileHeader({
                   {currentCadre.name}
                 </h1>
 
-                {/* Status Badge on Mobile */}
-                <div className="sm:hidden">
+                {/* Status Badge & CV Dropdown on Mobile */}
+                <div className="sm:hidden flex items-center gap-1.5 justify-center">
                   <Badge
                     variant="outline"
                     className="h-6 px-2 text-[11px] font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
@@ -144,6 +166,42 @@ export function ProfileHeader({
                       ? "Peserta MAPABA"
                       : "Calon Kader"}
                   </Badge>
+
+                  {(onDownloadOrganisasiCV || onDownloadAtsCV) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="h-6 px-2 text-[11px] font-medium border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                        title="Pilih Format CV"
+                      >
+                        <FileText className="w-3 h-3 text-zinc-500" />
+                        <span>CV</span>
+                        <ChevronDown className="w-2.5 h-2.5 text-zinc-400" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-44 p-1 rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-md">
+                        <DropdownMenuLabel className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1">
+                          Pilih Format CV
+                        </DropdownMenuLabel>
+                        {onDownloadOrganisasiCV && (
+                          <DropdownMenuItem
+                            onClick={onDownloadOrganisasiCV}
+                            className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          >
+                            <Building2 className="w-3.5 h-3.5 text-zinc-500" />
+                            <span>CV Organisasi</span>
+                          </DropdownMenuItem>
+                        )}
+                        {onDownloadAtsCV && (
+                          <DropdownMenuItem
+                            onClick={onDownloadAtsCV}
+                            className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          >
+                            <FileCheck className="w-3.5 h-3.5 text-zinc-500" />
+                            <span>CV ATS Friendly</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
 
@@ -182,19 +240,57 @@ export function ProfileHeader({
             </div>
           </div>
 
-          {/* Right Side: Status Badge & Completion Progress (Desktop Only) */}
+          {/* Right Side: Status Badge, CV Dropdown & Completion Progress (Desktop Only) */}
           <div className="hidden sm:flex flex-col items-end justify-center shrink-0 space-y-2">
-            <Badge
-              variant="outline"
-              className="h-7 px-2.5 text-xs font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-zinc-500 dark:text-zinc-400" />
-              {currentCadre.isGraduated
-                ? "Kader Resmi"
-                : hasMapabaRegistration
-                ? "Peserta MAPABA"
-                : "Calon Kader"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {(onDownloadOrganisasiCV || onDownloadAtsCV) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="h-7 px-2.5 text-xs font-medium border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                    title="Pilih Format CV (Organisasi / ATS)"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Curriculum Vitae</span>
+                    <ChevronDown className="w-3 h-3 text-zinc-400" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 p-1 rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-md">
+                    <DropdownMenuLabel className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1">
+                      Pilih Format CV
+                    </DropdownMenuLabel>
+                    {onDownloadOrganisasiCV && (
+                      <DropdownMenuItem
+                        onClick={onDownloadOrganisasiCV}
+                        className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        <Building2 className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>CV Organisasi</span>
+                      </DropdownMenuItem>
+                    )}
+                    {onDownloadAtsCV && (
+                      <DropdownMenuItem
+                        onClick={onDownloadAtsCV}
+                        className="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-md flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        <FileCheck className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>CV ATS Friendly</span>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Badge
+                variant="outline"
+                className="h-7 px-2.5 text-xs font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-zinc-500 dark:text-zinc-400" />
+                {currentCadre.isGraduated
+                  ? "Kader Resmi"
+                  : hasMapabaRegistration
+                  ? "Peserta MAPABA"
+                  : "Calon Kader"}
+              </Badge>
+            </div>
 
             {/* Profile Completion Bar */}
             <div className="flex items-center gap-2.5 px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300">

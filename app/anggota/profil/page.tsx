@@ -1220,6 +1220,88 @@ export default function ProfilPage() {
 
   const activeTabMeta = getActiveTabTitle();
 
+  const getMemberDataForCv = () => {
+    if (!currentCadre) return null;
+    return {
+      ...currentCadre,
+      name: name || currentCadre.name,
+      gender: gender || currentCadre.gender,
+      nim: nim || currentCadre.nim,
+      tempatLahir: tempatLahir || currentCadre.tempatLahir,
+      tanggalLahir: tanggalLahir || currentCadre.tanggalLahir,
+      alamatRumah: alamatRumah || currentCadre.alamatRumah,
+      address: address || currentCadre.address,
+      golonganDarah: golonganDarah || currentCadre.golonganDarah,
+      riwayatPenyakit: riwayatPenyakit || currentCadre.riwayatPenyakit,
+      pasFoto: pasFoto || avatar || currentCadre.pasFoto,
+      avatar: pasFoto || avatar || currentCadre.avatar,
+      perguruanTinggi: perguruanTinggi || currentCadre.perguruanTinggi,
+      fakultas: fakultas || currentCadre.fakultas,
+      jurusan: jurusan || currentCadre.jurusan,
+      tahunMasukPT: tahunMasukPT || currentCadre.tahunMasukPT,
+      tahunLulusPT: tahunLulusPT || currentCadre.tahunLulusPT,
+      phone: phone || currentCadre.phone,
+      email: email || currentCadre.email,
+      instagram: instagram || currentCadre.instagram,
+      twitter: twitter || currentCadre.twitter,
+      facebook: facebook || currentCadre.facebook,
+      pendidikanSD: pendidikanSD || currentCadre.pendidikanSD,
+      tahunMasukSD: tahunMasukSD || currentCadre.tahunMasukSD,
+      tahunLulusSD: tahunLulusSD || currentCadre.tahunLulusSD,
+      pendidikanSMP: pendidikanSMP || currentCadre.pendidikanSMP,
+      tahunMasukSMP: tahunMasukSMP || currentCadre.tahunMasukSMP,
+      tahunLulusSMP: tahunLulusSMP || currentCadre.tahunLulusSMP,
+      pendidikanSMA: pendidikanSMA || currentCadre.pendidikanSMA,
+      tahunMasukSMA: tahunMasukSMA || currentCadre.tahunMasukSMA,
+      tahunLulusSMA: tahunLulusSMA || currentCadre.tahunLulusSMA,
+      organisasiSMP: organisasiSMP || currentCadre.organisasiSMP,
+      organisasiSMA: organisasiSMA || currentCadre.organisasiSMA,
+      organisasiPT: organisasiPT || currentCadre.organisasiPT,
+      orientasiProfetik: orientasiProfetik || currentCadre.orientasiProfetik,
+      minatPassion: minatPassion || currentCadre.minatPassion,
+      motivasiMapaba: motivasiMapaba || currentCadre.motivasiMapaba,
+      mottoHidup: (currentCadre as any).mottoHidup || motivasiMapaba || "-",
+      nta: memberNTA || currentCadre.nta
+    };
+  };
+
+  const handleDownloadOrganisasiCv = async () => {
+    const memberData = getMemberDataForCv();
+    if (!memberData) return;
+    try {
+      toast.info(`Menyiapkan Curriculum Vitae ${memberData.name}...`);
+      const customTemplateBase64 = typeof window !== "undefined"
+        ? localStorage.getItem("PMII_CUSTOM_CV_TEMPLATE")
+        : null;
+
+      if (customTemplateBase64) {
+        const { previewCustomDocxCv } = await import("@/app/dashboard/anggota/_components/previewCustomDocxCv");
+        await previewCustomDocxCv(memberData as any, customTemplateBase64);
+        toast.success(`Membuka CV template kustom di tab baru...`);
+      } else {
+        const { generateMemberCvPdf } = await import("@/app/dashboard/anggota/_components/generateCvPdf");
+        await generateMemberCvPdf(memberData as any);
+        toast.success(`Membuka CV resmi di tab baru...`);
+      }
+    } catch (err) {
+      console.error("Gagal membuka CV Organisasi:", err);
+      toast.error("Gagal membuka berkas CV Organisasi.");
+    }
+  };
+
+  const handleDownloadAtsCv = async () => {
+    const memberData = getMemberDataForCv();
+    if (!memberData) return;
+    try {
+      toast.info(`Membuka CV ATS ${memberData.name} di tab baru...`);
+      const { generateMemberCvAtsPdf } = await import("@/app/dashboard/anggota/_components/generateCvPdf");
+      await generateMemberCvAtsPdf(memberData as any);
+    } catch (err) {
+      console.error("Gagal membuka CV ATS:", err);
+      toast.error("Gagal membuka berkas CV ATS.");
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-zinc-900 dark:text-zinc-100 font-sans pb-10">
       {/* 1. HERO PROFILE HEADER (MODERN ACCOUNT HUB) */}
@@ -1233,6 +1315,8 @@ export default function ProfilPage() {
         fileInputRef={fileInputRef}
         onPhotoUpload={handlePhotoUpload}
         onRemovePhoto={handleRemovePhoto}
+        onDownloadOrganisasiCV={handleDownloadOrganisasiCv}
+        onDownloadAtsCV={handleDownloadAtsCv}
       />
 
       {/* 2. MAIN WORKSPACE GRID (4 COLS SIDEBAR + 8 COLS WORKSPACE) */}
