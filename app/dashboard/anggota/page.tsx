@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   Plus,
   Search,
-  Eye,
   Edit,
   Trash2,
   FileSpreadsheet,
@@ -83,7 +82,6 @@ export const CV_TEMPLATE_STORAGE_KEY = "PMII_CUSTOM_CV_TEMPLATE";
 
 // Lazy-loaded modals to drastically optimize bundle size & First Contentful Paint
 const MemberFormModal = dynamic(() => import("./_components/MemberFormModal"), { ssr: false });
-const MemberDetailModal = dynamic(() => import("./_components/MemberDetailModal"), { ssr: false });
 const DeleteMemberModal = dynamic(() => import("./_components/DeleteMemberModal"), { ssr: false });
 const ImportMemberModal = dynamic(() => import("./_components/ImportMemberModal"), { ssr: false });
 const ShareMemberLinkModal = dynamic(() => import("./_components/ShareMemberLinkModal"), { ssr: false });
@@ -172,9 +170,6 @@ export default function AnggotaPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailMember, setDetailMember] = useState<Member | null>(null);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingMember, setDeletingMember] = useState<Member | null>(null);
@@ -1791,20 +1786,6 @@ export default function AnggotaPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setDetailMember(member);
-                        setShowDetailModal(true);
-                      }}
-                      className="h-8 px-2.5 text-[11px] font-medium border-zinc-200 dark:border-zinc-800 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 gap-1 rounded-lg"
-                      title="Detail & KTA"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span className="text-[10px]">KTA</span>
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
                         setEditingMember(member);
                         setShowEditModal(true);
                       }}
@@ -2006,19 +1987,6 @@ export default function AnggotaPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setDetailMember(member);
-                              setShowDetailModal(true);
-                            }}
-                            className="h-7 w-7 p-0 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
-                            title="Detail Profil & KTA"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
                               setEditingMember(member);
                               setShowEditModal(true);
                             }}
@@ -2179,18 +2147,6 @@ export default function AnggotaPage() {
             : (activeTenant !== "ALL" ? activeTenant : currentUser?.commissariat)) || "Pengurus Cabang PMII Grobogan"
         }
         isAdmin={isCabangOrAdmin(currentUser)}
-      />
-
-      <MemberDetailModal
-        isOpen={showDetailModal}
-        member={detailMember}
-        onClose={() => {
-          setShowDetailModal(false);
-          setDetailMember(null);
-        }}
-        onDownloadKTA={handleDownloadKTA}
-        onDownloadCV={handleDownloadCV}
-        onDownloadAtsCV={handleDownloadAtsCV}
       />
 
       <DeleteMemberModal
