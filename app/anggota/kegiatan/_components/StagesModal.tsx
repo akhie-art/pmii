@@ -40,6 +40,7 @@ import {
 import { db, generateUUID, QuizQuestion, ParticipantEvaluation, SessionScore } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { CAREER_MBTI_PROFILES, CAREER_QUESTIONS as careerQuestions, calculateCareerMBTI } from "@/lib/careerAssessment";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   formatDateIndo,
   formatEventDateIndo,
@@ -90,6 +91,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
   kaderisasiList,
   onOpenTwibbon
 }) => {
+  const isMobile = useIsMobile();
+
   // RTL direct upload state
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
   const [taskUploadFile, setTaskUploadFile] = useState<File | null>(null);
@@ -2172,9 +2175,15 @@ export const StagesModal: React.FC<StagesModalProps> = ({
           const isPdf = ext === "pdf" || (fileUrl && fileUrl.toLowerCase().includes(".pdf"));
           const isImage = ["jpg", "jpeg", "png", "webp", "svg", "gif"].includes(ext);
           const isOfficeDoc = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+          const isHttpUrl = Boolean(fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")));
 
-          const embedUrl = isOfficeDoc && fileUrl && fileUrl.startsWith("http")
-            ? `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`
+          // Di mobile/touch device, browser (khususnya iOS Safari & Android) tidak dapat me-render scroll multi-halaman pada file PDF mentah di dalam iframe (hanya zoom di halaman 1 dan membeku/tidak bisa di-scroll ke bawah).
+          // Menggunakan Google Docs Viewer (gview) merender PDF sebagai HTML scrollable yang dapat di-scroll lancar dengan sentuhan/swipe.
+          const isTouchOrMobile = isMobile || (typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0));
+          const shouldUseGoogleViewer = isHttpUrl && (isOfficeDoc || (isPdf && isTouchOrMobile));
+
+          const embedUrl = shouldUseGoogleViewer && fileUrl
+            ? `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`
             : fileUrl;
 
           return (
@@ -2243,7 +2252,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               </div>
 
               {/* Reader Body */}
-              <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-2 sm:p-3 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
+              <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-1 sm:p-3 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
                 {!fileUrl || fileUrl === "#" ? (
                   <div className="p-8 text-center max-w-md space-y-3 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-xs">
                     <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
@@ -2280,12 +2289,12 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                         />
                       </div>
                     ) : (
-                      <div className="w-full h-full flex flex-col rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner">
+                      <div className="w-full h-full flex-1 flex flex-col rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
                         <iframe
                           src={embedUrl}
                           title={fileName}
                           onLoad={() => setIsReaderLoading(false)}
-                          className="w-full h-full border-0 rounded-md"
+                          className="w-full h-full flex-1 border-0 rounded-md min-h-full"
                           allow="autoplay; encrypted-media"
                         />
                       </div>
