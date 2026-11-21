@@ -96,7 +96,7 @@ export function RepeatableOrgSection({
   };
 
   return (
-    <div className="p-3 sm:p-3.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5 flex flex-col justify-between">
+    <div className="p-3 sm:p-3.5 rounded-md bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5 flex flex-col justify-between">
       <div className="space-y-2.5">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -257,24 +257,12 @@ export function HistoryTab({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* SD / MI */}
-          <div className="p-3 rounded-lg bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+          <div className="p-3 rounded-md bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
             <ProfileField
               label="Sekolah Dasar (SD/MI)"
               isEditing={isEditing}
               value={pendidikanSD}
               emptyPlaceholder="SD/MI belum diisi"
-              displayValue={
-                pendidikanSD ? (
-                  <div className="min-w-0">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{pendidikanSD}</div>
-                    {(tahunMasukSD || tahunLulusSD) && (
-                      <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Tahun: {tahunMasukSD || "..."} – {tahunLulusSD || "..."}
-                      </div>
-                    )}
-                  </div>
-                ) : undefined
-              }
             >
               <Input
                 placeholder="Nama SD / MI"
@@ -322,24 +310,12 @@ export function HistoryTab({
           </div>
 
           {/* SMP / MTs */}
-          <div className="p-3 rounded-lg bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+          <div className="p-3 rounded-md bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
             <ProfileField
               label="SMP / MTs"
               isEditing={isEditing}
               value={pendidikanSMP}
               emptyPlaceholder="SMP/MTs belum diisi"
-              displayValue={
-                pendidikanSMP ? (
-                  <div className="min-w-0">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{pendidikanSMP}</div>
-                    {(tahunMasukSMP || tahunLulusSMP) && (
-                      <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Tahun: {tahunMasukSMP || "..."} – {tahunLulusSMP || "..."}
-                      </div>
-                    )}
-                  </div>
-                ) : undefined
-              }
             >
               <Input
                 placeholder="Nama SMP / MTs"
@@ -387,24 +363,12 @@ export function HistoryTab({
           </div>
 
           {/* SMA / SMK / MA */}
-          <div className="p-3 rounded-lg bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+          <div className="p-3 rounded-md bg-zinc-50/60 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
             <ProfileField
               label="SMA / SMK / MA"
               isEditing={isEditing}
               value={pendidikanSMA}
               emptyPlaceholder="SMA/SMK/MA belum diisi"
-              displayValue={
-                pendidikanSMA ? (
-                  <div className="min-w-0">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{pendidikanSMA}</div>
-                    {(tahunMasukSMA || tahunLulusSMA) && (
-                      <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Tahun: {tahunMasukSMA || "..."} – {tahunLulusSMA || "..."}
-                      </div>
-                    )}
-                  </div>
-                ) : undefined
-              }
             >
               <Input
                 placeholder="Nama SMA / SMK / MA"
