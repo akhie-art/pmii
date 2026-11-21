@@ -26,7 +26,10 @@ import {
   Target,
   Compass,
   Brain,
-  TrendingUp
+  TrendingUp,
+  Loader2,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -115,20 +118,54 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     sessionTitle?: string;
     isRef?: boolean;
   } | null>(null);
+  const [isReaderFullscreen, setIsReaderFullscreen] = useState(false);
+  const [isReaderLoading, setIsReaderLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  const handleDownloadMaterial = (url?: string, fileName?: string) => {
+  useEffect(() => {
+    if (activeReadingModal?.fileUrl) {
+      setIsReaderLoading(true);
+    }
+  }, [activeReadingModal?.fileUrl]);
+
+  const handleDownloadMaterial = async (url?: string, fileName?: string) => {
     if (!url || url === "#") {
       toast.info(`Berkas "${fileName || "materi"}" sedang disiapkan oleh panitia/instruktur.`);
       return;
     }
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", fileName || "berkas-materi");
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`Mengunduh berkas: ${fileName || "berkas materi"}`);
+
+    try {
+      setIsDownloading(true);
+      toast.loading(`Menyiapkan unduhan ${fileName || "berkas"}...`, { id: "download-materi" });
+
+      const response = await fetch(url, { mode: "cors" });
+      if (!response.ok) throw new Error("Gagal mengambil file");
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName || "berkas-materi.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+
+      toast.success(`Berkas "${fileName || "materi"}" berhasil diunduh!`, { id: "download-materi" });
+    } catch {
+      // Fallback jika fetch diblokir CORS: buka link langsung
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName || "berkas-materi";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Membuka berkas "${fileName || "materi"}"`, { id: "download-materi" });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   // Pre-Test & Post-Test Quiz Runner State
@@ -2123,10 +2160,20 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     <Dialog
       open={Boolean(activeReadingModal)}
       onOpenChange={(open) => {
-        if (!open) setActiveReadingModal(null);
+        if (!open) {
+          setActiveReadingModal(null);
+          setIsReaderFullscreen(false);
+        }
       }}
     >
-      <DialogContent showCloseButton={false} className="max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl">
+      <DialogContent
+        showCloseButton={false}
+        className={
+          isReaderFullscreen
+            ? "w-[calc(100vw-1rem)] h-[calc(100dvh-1rem)] sm:w-[calc(100vw-2rem)] sm:h-[calc(100dvh-2rem)] max-w-none max-h-none flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl transition-all duration-150"
+            : "max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl transition-all duration-150"
+        }
+      >
         {activeReadingModal && (() => {
           const fileName = activeReadingModal.fileName || "Modul Materi";
           const fileUrl = activeReadingModal.fileUrl;
@@ -2143,9 +2190,9 @@ export const StagesModal: React.FC<StagesModalProps> = ({
           return (
             <div className="flex flex-col h-full overflow-hidden">
               {/* Header */}
-              <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 flex items-center justify-between gap-3 shrink-0">
+              <div className="px-4 py-3 sm:px-5 sm:py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 flex items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-900/40">
+                  <div className="w-8.5 h-8.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-900/40">
                     <BookOpen className="w-4 h-4" />
                   </div>
                   <div className="min-w-0 flex-1 space-y-0.5">
@@ -2155,7 +2202,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                       </Badge>
                       {activeReadingModal.isRef && (
                         <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
-                          Referensi Tambahan
+                          Referensi
                         </Badge>
                       )}
                       {activeReadingModal.sessionTitle && (
@@ -2164,7 +2211,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                         </span>
                       )}
                     </div>
-                    <DialogTitle className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate block">
+                    <DialogTitle className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate block">
                       {fileName}
                     </DialogTitle>
                     <DialogDescription className="sr-only">
@@ -2180,11 +2227,16 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={isDownloading}
                         onClick={() => handleDownloadMaterial(fileUrl, fileName)}
-                        className="h-7.5 px-2.5 text-[11px] font-semibold gap-1 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 border-zinc-200 dark:border-zinc-800 cursor-pointer"
+                        className="h-7.5 px-2.5 text-xs font-medium gap-1.5 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 border-zinc-200 dark:border-zinc-800 rounded-md cursor-pointer shadow-none"
                         title="Unduh untuk baca luring (offline)"
                       >
-                        <Download className="w-3.5 h-3.5" />
+                        {isDownloading ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Download className="w-3.5 h-3.5" />
+                        )}
                         <span className="hidden sm:inline">Unduh</span>
                       </Button>
 
@@ -2192,8 +2244,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                         href={fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-7.5 px-2.5 text-[11px] font-semibold inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-400 hover:text-blue-600 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                        title="Buka di tab terpisah"
+                        className="h-7.5 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:text-blue-600 border border-zinc-200 dark:border-zinc-800 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                        title="Buka dokumen di tab baru"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Tab Baru</span>
@@ -2204,8 +2256,25 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setActiveReadingModal(null)}
-                    className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg cursor-pointer"
+                    onClick={() => setIsReaderFullscreen(!isReaderFullscreen)}
+                    className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-md cursor-pointer"
+                    title={isReaderFullscreen ? "Perkecil tampilan" : "Layar penuh (fullscreen)"}
+                  >
+                    {isReaderFullscreen ? (
+                      <Minimize2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    )}
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setActiveReadingModal(null);
+                      setIsReaderFullscreen(false);
+                    }}
+                    className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-md cursor-pointer"
                     title="Tutup penampil modul"
                   >
                     <X className="w-4 h-4" />
@@ -2214,51 +2283,82 @@ export const StagesModal: React.FC<StagesModalProps> = ({
               </div>
 
               {/* Reader Body */}
-              <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-2 sm:p-4 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
+              <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-2 sm:p-3 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
                 {!fileUrl || fileUrl === "#" ? (
                   <div className="p-8 text-center max-w-md space-y-3 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-xs">
                     <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
                       <Lock className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                         Berkas Sedang Disiapkan
                       </h4>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                        Instruktur atau panitia belum mengunggah salinan digital untuk berkas ini. Anda dapat mempelajari silabus atau menghubungi panitia pelaksana.
+                        Instruktur belum mengunggah salinan digital untuk berkas ini. Anda dapat mempelajari silabus atau menghubungi panitia.
                       </p>
                     </div>
                   </div>
-                ) : isImage ? (
-                  <div className="w-full h-full overflow-auto flex items-center justify-center p-2">
-                    <img
-                      src={fileUrl}
-                      alt={fileName}
-                      className="max-w-full max-h-full object-contain rounded-xl shadow-md border border-zinc-200 dark:border-zinc-800"
-                    />
-                  </div>
                 ) : (
-                  <div className="w-full h-full flex flex-col rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner">
-                    <iframe
-                      src={embedUrl}
-                      title={fileName}
-                      className="w-full h-full border-0 rounded-xl"
-                      allow="autoplay; encrypted-media"
-                    />
-                  </div>
+                  <>
+                    {/* Loading State Overlay */}
+                    {isReaderLoading && (
+                      <div className="absolute inset-0 bg-zinc-100/90 dark:bg-zinc-950/90 backdrop-blur-2xs flex flex-col items-center justify-center gap-2 z-10">
+                        <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
+                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                          Memuat dokumen modul...
+                        </span>
+                      </div>
+                    )}
+
+                    {isImage ? (
+                      <div className="w-full h-full overflow-auto flex items-center justify-center p-2">
+                        <img
+                          src={fileUrl}
+                          alt={fileName}
+                          onLoad={() => setIsReaderLoading(false)}
+                          className="max-w-full max-h-full object-contain rounded-md shadow-md border border-zinc-200 dark:border-zinc-800"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner">
+                        <iframe
+                          src={embedUrl}
+                          title={fileName}
+                          onLoad={() => setIsReaderLoading(false)}
+                          className="w-full h-full border-0 rounded-md"
+                          allow="autoplay; encrypted-media"
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
               {/* Reader Footer Info */}
-              <div className="px-4 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
-                <span className="flex items-center gap-1.5 truncate">
+              <div className="px-4 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  Mode Pembaca Modul Mandiri
-                </span>
-                {activeReadingModal.fileSize && (
-                  <span className="font-mono text-[10px] shrink-0">
-                    Ukuran: {activeReadingModal.fileSize}
-                  </span>
+                  <span className="truncate">Mode Pembaca Mandiri</span>
+                  {activeReadingModal.fileSize && (
+                    <span className="font-mono text-[10px] text-zinc-400 shrink-0">
+                      • {activeReadingModal.fileSize}
+                    </span>
+                  )}
+                </div>
+
+                {fileUrl && fileUrl !== "#" && (
+                  <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
+                    <span className="hidden sm:inline text-zinc-400">Pratinjau bermasalah?</span>
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>Buka di Tab Baru</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
                 )}
               </div>
             </div>
