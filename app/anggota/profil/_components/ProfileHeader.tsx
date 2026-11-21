@@ -27,16 +27,12 @@ export function ProfileHeader({
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-      {/* Decorative Top Banner Strip - Rich Modern PMII Gradient */}
-      <div className="h-24 sm:h-28 w-full bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-800 dark:from-blue-950 dark:via-blue-900/60 dark:to-zinc-950 relative overflow-hidden">
-        {/* Ambient Glows */}
-        <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-amber-400/20 blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-8 left-1/4 w-36 h-36 rounded-full bg-blue-400/20 blur-xl pointer-events-none" />
-
+    <div className="relative overflow-hidden rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+      {/* Decorative Top Banner Strip - Clean Flat Neutral */}
+      <div className="h-20 sm:h-24 w-full bg-zinc-900 dark:bg-zinc-950 border-b border-zinc-800 relative">
         {/* Subtle Right Watermark */}
-        <div className="absolute right-4 top-3 hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/15 dark:bg-white/10 backdrop-blur-md border border-white/15 text-white/90 text-[10px] font-semibold tracking-wider uppercase">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <div className="absolute right-4 top-3 hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800/90 border border-zinc-700/80 text-zinc-300 text-[11px] font-medium tracking-wide">
+          <Building className="w-3 h-3 text-zinc-400" />
           <span>PMII Ki Ageng Getas Pendawa</span>
         </div>
       </div>
@@ -47,7 +43,7 @@ export function ProfileHeader({
           {/* Avatar & Main Identity */}
           <div className="flex flex-col sm:flex-row items-center sm:items-end gap-3.5 sm:gap-4 text-center sm:text-left">
             {/* Avatar with Camera Trigger */}
-            <div className="relative group flex-shrink-0 -mt-12 sm:-mt-14 z-10">
+            <div className="relative group flex-shrink-0 -mt-10 sm:-mt-12 z-10">
               <div
                 role="button"
                 tabIndex={0}
@@ -58,7 +54,7 @@ export function ProfileHeader({
                   }
                 }}
                 title="Klik untuk mengubah foto profil"
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl border-4 border-white dark:border-zinc-900 shadow-md overflow-hidden cursor-pointer relative select-none transition-transform hover:scale-102"
+                className="w-22 h-22 sm:w-24 sm:h-24 rounded-full bg-zinc-800 dark:bg-zinc-700 flex items-center justify-center text-zinc-200 font-bold text-xl border-4 border-white dark:border-zinc-900 shadow-xs overflow-hidden cursor-pointer relative select-none"
               >
                 {avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -80,14 +76,14 @@ export function ProfileHeader({
 
                 {/* Hover Overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
-                  <Camera className="w-5 h-5" />
+                  <Camera className="w-4 h-4" />
                   <span className="text-[10px] font-medium mt-0.5">Ubah</span>
                 </div>
 
                 {/* Loading Spinner */}
                 {isUploadingPhoto && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
@@ -97,7 +93,7 @@ export function ProfileHeader({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 title="Ubah foto profil"
-                className="absolute bottom-0 right-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full border-2 border-white dark:border-zinc-900 shadow-sm cursor-pointer transition-colors"
+                className="absolute bottom-0 right-0 w-7 h-7 sm:w-7.5 sm:h-7.5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-full border-2 border-white dark:border-zinc-900 shadow-xs cursor-pointer transition-colors"
               >
                 <Camera className="w-3.5 h-3.5" />
               </button>
@@ -112,7 +108,7 @@ export function ProfileHeader({
                   }}
                   disabled={isUploadingPhoto}
                   title="Hapus foto profil"
-                  className="absolute bottom-0 left-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white hover:bg-rose-50 dark:bg-zinc-800 dark:hover:bg-rose-950/40 text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm cursor-pointer transition-colors"
+                  className="absolute bottom-0 left-0 w-7 h-7 sm:w-7.5 sm:h-7.5 flex items-center justify-center bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-750 text-zinc-600 hover:text-rose-600 dark:text-zinc-300 dark:hover:text-rose-400 rounded-full border-2 border-white dark:border-zinc-900 shadow-xs cursor-pointer transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -130,7 +126,7 @@ export function ProfileHeader({
 
             {/* Name, Status Badge & Basic Info */}
             <div className="space-y-1.5 sm:space-y-1 pt-1 sm:pt-0">
-              <div className="flex flex-col sm:flex-row items-center sm:items-baseline justify-center sm:justify-start gap-1.5 sm:gap-2">
+              <div className="flex flex-col sm:flex-row items-center sm:items-baseline justify-center sm:justify-start gap-2">
                 <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
                   {currentCadre.name}
                 </h1>
@@ -138,15 +134,10 @@ export function ProfileHeader({
                 {/* Status Badge on Mobile */}
                 <div className="sm:hidden">
                   <Badge
-                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-full shadow-none ${
-                      currentCadre.isGraduated
-                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                        : hasMapabaRegistration
-                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
-                        : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20"
-                    }`}
+                    variant="outline"
+                    className="h-6 px-2 text-[11px] font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
                   >
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                    <ShieldCheck className="w-3 h-3 mr-1 text-zinc-500 dark:text-zinc-400" />
                     {currentCadre.isGraduated
                       ? "Kader Resmi"
                       : hasMapabaRegistration
@@ -159,13 +150,13 @@ export function ProfileHeader({
               {/* Email, Commissariat, and NTA copy chip */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2.5 text-xs text-zinc-500 dark:text-zinc-400">
                 {currentCadre.email && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-full sm:rounded-none">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-md sm:rounded-none">
                     <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="truncate max-w-[210px] sm:max-w-none">{currentCadre.email}</span>
                   </span>
                 )}
                 <span className="hidden sm:inline text-zinc-300 dark:text-zinc-700">•</span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-full sm:rounded-none">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-0 sm:py-0 bg-zinc-100 dark:bg-zinc-800/80 sm:bg-transparent rounded-md sm:rounded-none">
                   <Building className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                   <span>{currentCadre.commissariat}</span>
                 </span>
@@ -176,13 +167,13 @@ export function ProfileHeader({
                       type="button"
                       onClick={handleCopyNta}
                       title="Salin Nomor Tanda Anggota (NTA)"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 font-mono text-[11px] font-semibold hover:bg-amber-100 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-mono text-[11px] font-medium transition-colors cursor-pointer"
                     >
                       <span>NTA: {memberNTA}</span>
                       {copied ? (
-                        <Check className="w-3 h-3 text-emerald-600" />
+                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                       ) : (
-                        <Copy className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                        <Copy className="w-3 h-3 text-zinc-400" />
                       )}
                     </button>
                   </>
@@ -194,15 +185,10 @@ export function ProfileHeader({
           {/* Right Side: Status Badge & Completion Progress (Desktop Only) */}
           <div className="hidden sm:flex flex-col items-end justify-center shrink-0 space-y-2">
             <Badge
-              className={`h-7 px-3 text-[11px] font-semibold rounded-full shadow-none ${
-                currentCadre.isGraduated
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                  : hasMapabaRegistration
-                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
-                  : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20"
-              }`}
+              variant="outline"
+              className="h-7 px-2.5 text-xs font-medium rounded-md shadow-none bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
             >
-              <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-zinc-500 dark:text-zinc-400" />
               {currentCadre.isGraduated
                 ? "Kader Resmi"
                 : hasMapabaRegistration
@@ -211,14 +197,14 @@ export function ProfileHeader({
             </Badge>
 
             {/* Profile Completion Bar */}
-            <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/60 text-[11px] text-zinc-600 dark:text-zinc-300">
-              <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">
+            <div className="flex items-center gap-2.5 px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300">
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-xs">
                 {completionScore}%
               </span>
               <span className="text-[10px] text-zinc-400">Lengkap</span>
-              <div className="w-16 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+              <div className="w-20 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
                 <div
-                  className="h-full bg-blue-600 dark:bg-blue-400 rounded-full transition-all duration-500"
+                  className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all duration-500"
                   style={{ width: `${completionScore}%` }}
                 />
               </div>

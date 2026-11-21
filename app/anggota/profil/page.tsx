@@ -1240,12 +1240,12 @@ export default function ProfilPage() {
         {/* LEFT COLUMN: VERTICAL ACCOUNT HUB NAVIGATION & MINI KTA (Hidden on Mobile, 4 Cols on Desktop) */}
         <div className="hidden lg:block lg:col-span-4 space-y-4">
           {/* Vertical Sub-navigation Card */}
-          <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-xs">
+          <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden shadow-xs">
             <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                 Pusat Akun Kader
               </span>
-              <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+              <span className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 font-mono">
                 {profileCompletionScore}% Lengkap
               </span>
             </div>
@@ -1259,16 +1259,16 @@ export default function ProfilPage() {
                     key={item.id}
                     type="button"
                     onClick={() => changeTab(item.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all flex items-center gap-3 cursor-pointer group ${
+                    className={`w-full text-left px-3 py-2.5 rounded-md text-xs transition-all flex items-center gap-3 cursor-pointer group ${
                       isActive
-                        ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold border border-blue-200/80 dark:border-blue-900/60 shadow-2xs"
+                        ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold border border-zinc-300 dark:border-zinc-700 shadow-2xs"
                         : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/50 border border-transparent"
                     }`}
                   >
                     <div
-                      className={`p-2 rounded-lg shrink-0 transition-colors ${
+                      className={`p-2 rounded-md shrink-0 transition-colors ${
                         isActive
-                          ? "bg-blue-600 text-white shadow-2xs"
+                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-2xs"
                           : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700"
                       }`}
                     >
@@ -1278,7 +1278,7 @@ export default function ProfilPage() {
                       <div className="flex items-center justify-between gap-1">
                         <span className="font-medium truncate">{item.label}</span>
                         {item.id === "kta" && currentCadre?.isGraduated && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold uppercase shrink-0">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold uppercase shrink-0 border border-zinc-200 dark:border-zinc-700">
                             Resmi
                           </span>
                         )}
@@ -1289,7 +1289,7 @@ export default function ProfilPage() {
                     </div>
                     <ChevronRight
                       className={`w-3.5 h-3.5 shrink-0 transition-transform ${
-                        isActive ? "text-blue-600 dark:text-blue-400 translate-x-0.5" : "text-zinc-300 dark:text-zinc-600"
+                        isActive ? "text-zinc-900 dark:text-zinc-100 translate-x-0.5" : "text-zinc-300 dark:text-zinc-600"
                       }`}
                     />
                   </button>
@@ -1300,17 +1300,14 @@ export default function ProfilPage() {
 
           {/* Mini KTA Passport / Status Widget (Visible when NOT on KTA tab) */}
           {activeTab !== "kta" && (
-            <Card className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-950 text-white rounded-xl p-4 shadow-sm relative overflow-hidden border border-blue-800/40">
-              <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-400/20 rounded-full blur-xl pointer-events-none" />
+            <Card className="bg-zinc-900 text-white rounded-md p-4 shadow-none relative overflow-hidden border border-zinc-800">
               <div className="flex items-center justify-between mb-3 relative z-10">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                  <CreditCard className="w-3.5 h-3.5 text-amber-300" />
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+                  <CreditCard className="w-3.5 h-3.5 text-zinc-400" />
                   <span>KTA Digital Mini</span>
                 </div>
                 <Badge
-                  className={`text-[9px] h-5 px-2 border-0 ${
-                    currentCadre?.isGraduated ? "bg-amber-400 text-slate-950 font-bold" : "bg-white/20 text-white"
-                  }`}
+                  className="text-[9px] h-5 px-2 rounded border border-zinc-700 bg-zinc-800 text-zinc-300"
                 >
                   {currentCadre?.isGraduated ? "Kader Resmi" : "Peserta"}
                 </Badge>
@@ -1321,19 +1318,19 @@ export default function ProfilPage() {
                   <img
                     src={avatar}
                     alt="Foto Profil"
-                    className="w-11 h-11 rounded-lg object-cover border-2 border-amber-400/80 shrink-0"
+                    className="w-11 h-11 rounded-md object-cover border border-zinc-700 shrink-0"
                   />
                 ) : (
-                  <div className="w-11 h-11 rounded-lg bg-white/10 flex items-center justify-center border border-white/20 shrink-0 font-bold text-amber-300">
+                  <div className="w-11 h-11 rounded-md bg-zinc-800 flex items-center justify-center border border-zinc-700 shrink-0 font-bold text-zinc-300">
                     {currentCadre?.name?.charAt(0) || "P"}
                   </div>
                 )}
                 <div className="min-w-0 flex-1 text-xs">
                   <p className="font-bold truncate text-white">{currentCadre?.name || "Kader PMII"}</p>
-                  <p className="font-mono text-[11px] text-amber-300 truncate mt-0.5">
+                  <p className="font-mono text-[11px] text-zinc-300 truncate mt-0.5">
                     {memberNTA && memberNTA !== "-" ? memberNTA : "NTA belum terbit"}
                   </p>
-                  <p className="text-[10px] text-zinc-300 truncate mt-0.5">
+                  <p className="text-[10px] text-zinc-400 truncate mt-0.5">
                     {currentCadre?.commissariat || "PMII Grobogan"}
                   </p>
                 </div>
@@ -1342,19 +1339,19 @@ export default function ProfilPage() {
               <button
                 type="button"
                 onClick={() => changeTab("kta")}
-                className="mt-3.5 w-full py-1.5 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 border border-white/15 cursor-pointer"
+                className="mt-3.5 w-full py-1.5 px-3 rounded-md bg-zinc-800 hover:bg-zinc-750 text-zinc-200 text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 border border-zinc-700 cursor-pointer"
               >
                 <span>Buka KTA Digital Penuh</span>
-                <ArrowRight className="w-3 h-3 text-amber-300" />
+                <ArrowRight className="w-3 h-3 text-zinc-400" />
               </button>
             </Card>
           )}
 
           {/* Verification Notice when on KTA Tab */}
           {activeTab === "kta" && (
-            <Card className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/60 rounded-xl p-4 text-xs space-y-2">
-              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold text-xs">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <Card className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 text-xs space-y-2">
+              <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200 font-semibold text-xs">
+                <ShieldCheck className="w-4 h-4 text-zinc-600 dark:text-zinc-400 shrink-0" />
                 <span>Verifikasi Keaslian KTA</span>
               </div>
               <p className="text-zinc-600 dark:text-zinc-400 text-[11px] leading-relaxed">
@@ -1377,9 +1374,9 @@ export default function ProfilPage() {
                     key={item.id}
                     type="button"
                     onClick={() => changeTab(item.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${
                       isActive
-                        ? "bg-blue-600 text-white font-semibold shadow-xs"
+                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold shadow-xs"
                         : "bg-white dark:bg-zinc-850 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800"
                     }`}
                   >
@@ -1393,7 +1390,7 @@ export default function ProfilPage() {
 
           {/* VIEW 1: KTA DIGITAL FULL VIEW */}
           {activeTab === "kta" ? (
-            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-none p-5 sm:p-6 space-y-6">
+            <Card className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden shadow-none p-5 sm:p-6 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800 gap-3">
                 <div>
                   <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
