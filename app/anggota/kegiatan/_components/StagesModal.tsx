@@ -2200,6 +2200,11 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                       <Badge className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${typeBadge.color}`}>
                         {typeBadge.label}
                       </Badge>
+                      {activeReadingModal.fileSize && (
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          {activeReadingModal.fileSize}
+                        </span>
+                      )}
                       {activeReadingModal.isRef && (
                         <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
                           Referensi
@@ -2331,34 +2336,6 @@ export const StagesModal: React.FC<StagesModalProps> = ({
                       </div>
                     )}
                   </>
-                )}
-              </div>
-
-              {/* Reader Footer Info */}
-              <div className="px-4 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0 gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="truncate">Mode Pembaca Mandiri</span>
-                  {activeReadingModal.fileSize && (
-                    <span className="font-mono text-[10px] text-zinc-400 shrink-0">
-                      • {activeReadingModal.fileSize}
-                    </span>
-                  )}
-                </div>
-
-                {fileUrl && fileUrl !== "#" && (
-                  <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
-                    <span className="hidden sm:inline text-zinc-400">Pratinjau bermasalah?</span>
-                    <a
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-                    >
-                      <span>Buka di Tab Baru</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
                 )}
               </div>
             </div>
