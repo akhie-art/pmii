@@ -15,13 +15,17 @@ import {
   Upload,
   Download,
   RotateCcw,
-  CheckCircle2,
+  Check,
+  Copy,
   FileCheck,
-  Info,
-  Sparkles
+  FileDown,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { arrayBufferToBase64 } from "@/app/dashboard/surat/component/docx-template-helper";
+import {
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+} from "@/app/dashboard/surat/component/docx-template-helper";
 
 export const CV_TEMPLATE_STORAGE_KEY = "PMII_CUSTOM_CV_TEMPLATE";
 export const CV_TEMPLATE_NAME_KEY = "PMII_CUSTOM_CV_TEMPLATE_NAME";
@@ -36,6 +40,7 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
   const [hasCustomTemplate, setHasCustomTemplate] = useState(false);
   const [customTemplateName, setCustomTemplateName] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -46,7 +51,7 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
   }, [isOpen]);
 
   const handleFileUpload = (file: File) => {
-    if (!file.name.endsWith(".docx")) {
+    if (!file.name.toLowerCase().endsWith(".docx")) {
       toast.error("Format berkas harus berekstensi .docx (Microsoft Word).");
       return;
     }
@@ -74,68 +79,133 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
     localStorage.removeItem(CV_TEMPLATE_NAME_KEY);
     setHasCustomTemplate(false);
     setCustomTemplateName("");
-    toast.success("Template CV dikembalikan ke standar PMII.");
+    toast.success("Template CV dikembalikan ke standar bawaan.");
+  };
+
+  const handleDownloadCustomTemplate = () => {
+    try {
+      const stored = localStorage.getItem(CV_TEMPLATE_STORAGE_KEY);
+      if (!stored) {
+        toast.error("Template kustom tidak ditemukan.");
+        return;
+      }
+      const buffer = base64ToArrayBuffer(stored);
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = customTemplateName || "Template_CV_Kustom.docx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Template kustom berhasil diunduh.");
+    } catch (err) {
+      console.error("Gagal mengunduh template kustom:", err);
+      toast.error("Gagal mengunduh template kustom.");
+    }
+  };
+
+  const handleCopyTag = (tag: string) => {
+    navigator.clipboard.writeText(tag);
+    setCopiedTag(tag);
+    toast.success(`Tag ${tag} disalin ke clipboard`);
+    setTimeout(() => {
+      setCopiedTag((curr) => (curr === tag ? null : curr));
+    }, 2000);
   };
 
   const supportedTags = [
     { tag: "{{nama}}", desc: "Nama Lengkap Kader" },
-    { tag: "{{ttl}}", desc: "Tempat & Tanggal Lahir" },
-    { tag: "{{alamat}}", desc: "Alamat Domisili / Rumah" },
-    { tag: "{{phone}}", desc: "Nomor WhatsApp / HP" },
-    { tag: "{{pendidikan}}", desc: "Riwayat Pendidikan Formal" },
-    { tag: "{{organisasi}}", desc: "Riwayat Pengalaman Organisasi" },
-    { tag: "{{motto}}", desc: "Motto / Orientasi & Motivasi" },
-    { tag: "{{nipa}}", desc: "Nomor Induk NIPA Nasional" },
-    { tag: "{{komisariat}}", desc: "Nama Komisariat & Kampus" },
+    { tag: "{{nim}}", desc: "NIM / NIK Kader" },
+    { tag: "{{ttl}}", desc: "Tempat, Tanggal Lahir" },
+    { tag: "{{alamat}}", desc: "Alamat Domisili" },
+    { tag: "{{phone}}", desc: "No. WhatsApp / HP" },
+    { tag: "{{pendidikan}}", desc: "Riwayat Pendidikan" },
+    { tag: "{{organisasi}}", desc: "Pengalaman Organisasi" },
+    { tag: "{{motto}}", desc: "Motto & Motivasi" },
+    { tag: "{{nipa}}", desc: "Nomor Induk NIPA" },
+    { tag: "{{komisariat}}", desc: "Komisariat & Kampus" },
   ];
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-xl p-5 sm:p-6 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
-        <DialogHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <FileText className="w-5 h-5" />
+      <DialogContent className="sm:max-w-[540px] p-5 sm:p-6 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl gap-4">
+        <DialogHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800 text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-md bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 flex items-center justify-center text-zinc-700 dark:text-zinc-300 shrink-0">
+              <FileText className="w-4 h-4" />
             </div>
             <div>
-              <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-                Pengaturan Template CV Kader
+              <DialogTitle className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                Template CV Kader
               </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-500 mt-0.5">
-                Gunakan template bawaan resmi PMII atau unggah file Word (.docx) kustom pengurus.
+              <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Gunakan template resmi PMII atau sesuaikan dengan berkas Word (.docx).
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 text-xs">
+        <div className="space-y-3.5 py-1 text-xs">
           {/* Status Template Aktif */}
-          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <FileCheck className="w-5 h-5" />
+          <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 shrink-0">
+                <FileCheck className="w-4 h-4" />
               </div>
-              <div>
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100 block">
-                  {hasCustomTemplate ? customTemplateName : "Template Resmi PMII (Standar Kop)"}
-                </span>
-                <span className="text-[11px] text-zinc-500">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate text-xs">
+                    {hasCustomTemplate ? customTemplateName : "Template Bawaan PMII"}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] px-1.5 py-0 rounded font-normal ${
+                      hasCustomTemplate
+                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200/60 dark:border-amber-900/40"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                    }`}
+                  >
+                    {hasCustomTemplate ? "Kustom" : "Standar"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
                   {hasCustomTemplate
-                    ? "Menggunakan berkas template Word kustom pengurus"
-                    : "Sesuai format Kop PMII Ki Ageng Getas Pendawa / Cabang"}
-                </span>
+                    ? "Template Word kustom tersimpan di browser"
+                    : "Format resmi standar Kop PMII"}
+                </p>
               </div>
             </div>
-            <Badge
-              variant="outline"
-              className={
-                hasCustomTemplate
-                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border-amber-200 dark:border-amber-800 font-medium"
-                  : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border-emerald-200 dark:border-emerald-800 font-medium"
-              }
-            >
-              {hasCustomTemplate ? "Kustom" : "Default"}
-            </Badge>
+
+            {hasCustomTemplate && (
+              <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadCustomTemplate}
+                  title="Unduh berkas template kustom saat ini"
+                  className="h-7 px-2 text-[11px] font-normal gap-1 rounded-md text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <Download className="w-3 h-3 text-zinc-500" />
+                  <span>Unduh</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetToDefault}
+                  title="Kembalikan ke template standar PMII"
+                  className="h-7 px-2 text-[11px] font-normal gap-1 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Area Unggah File Word */}
@@ -166,73 +236,75 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
               const file = e.dataTransfer.files?.[0];
               if (file) handleFileUpload(file);
             }}
-            className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${
+            className={`border border-dashed rounded-lg p-4 sm:p-5 text-center cursor-pointer transition-all ${
               isDragging
-                ? "border-blue-500 bg-blue-50/40 dark:bg-blue-950/30"
-                : "border-zinc-200 dark:border-zinc-800 hover:border-blue-500/60 bg-white dark:bg-zinc-900"
+                ? "border-zinc-900 bg-zinc-100/70 dark:border-zinc-300 dark:bg-zinc-800/50"
+                : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-900/30"
             }`}
           >
-            <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center mb-2">
-              <Upload className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 mx-auto flex items-center justify-center mb-1.5 shadow-xs">
+              <Upload className="w-4 h-4" />
             </div>
-            <p className="font-semibold text-zinc-800 dark:text-zinc-200">
-              Klik atau tarik file .docx ke sini
+            <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+              Pilih berkas Word atau seret ke sini
             </p>
-            <p className="text-[11px] text-zinc-400 mt-1">
-              File Microsoft Word (.docx) dengan tag placeholder seperti {"{{nama}}"}
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+              Hanya format berkas <span className="font-mono text-zinc-600 dark:text-zinc-400">.docx</span>
             </p>
           </div>
 
-          {/* Tag & Placeholder Panduan */}
-          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-2">
-            <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-semibold text-[11px]">
-              <Info className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Tag Placeholder Yang Didukung:</span>
+          {/* Tag & Placeholder Panduan (Click to Copy) */}
+          <div className="p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/30 space-y-2">
+            <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-[11px]">
+              <span className="font-medium text-zinc-800 dark:text-zinc-200">Tag Placeholder Tersedia:</span>
+              <span className="text-[10px] text-zinc-400">Klik tag untuk menyalin</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
-              {supportedTags.map((item) => (
-                <div
-                  key={item.tag}
-                  className="px-2 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md font-mono"
-                  title={item.desc}
-                >
-                  <span className="text-blue-600 dark:text-blue-400 font-semibold">{item.tag}</span>
-                  <span className="block text-[10px] text-zinc-400 font-sans truncate">{item.desc}</span>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {supportedTags.map((item) => {
+                const isCopied = copiedTag === item.tag;
+                return (
+                  <button
+                    key={item.tag}
+                    type="button"
+                    onClick={() => handleCopyTag(item.tag)}
+                    className="group relative flex flex-col items-start p-1.5 sm:p-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all text-left focus:outline-none"
+                    title={`Klik untuk menyalin ${item.tag}`}
+                  >
+                    <div className="w-full flex items-center justify-between gap-1">
+                      <span className="font-mono text-[11px] font-medium text-zinc-900 dark:text-zinc-100">
+                        {item.tag}
+                      </span>
+                      {isCopied ? (
+                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate w-full mt-0.5">
+                      {isCopied ? "Tersalin!" : item.desc}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <a
-              href="/templates/template-cv-pmii.docx"
-              download="Template_CV_PMII_Dasar.docx"
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Unduh Contoh (.docx)</span>
-            </a>
-
-            {hasCustomTemplate && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleResetToDefault}
-                className="h-8 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1 rounded-lg"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset ke Standar</span>
-              </Button>
-            )}
-          </div>
+        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2">
+          <a
+            href="/templates/template-cv-pmii.docx"
+            download="Template_CV_PMII_Dasar.docx"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+          >
+            <FileDown className="w-3.5 h-3.5 text-zinc-500" />
+            <span>Unduh Contoh (.docx)</span>
+          </a>
 
           <Button
             size="sm"
             onClick={onClose}
-            className="h-8 px-4 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+            className="h-8 px-4 text-xs font-medium rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 transition-colors"
           >
             Selesai
           </Button>
@@ -241,4 +313,3 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
     </Dialog>
   );
 }
-
