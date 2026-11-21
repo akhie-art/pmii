@@ -82,12 +82,11 @@ export function RepeatableOrgSection({
   }, [rawString, isEditing]);
 
   const handleUpdateItem = (index: number, field: keyof OrgItem, val: string) => {
-    setItems((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: val };
-      onChange(stringifyOrgItems(updated));
-      return updated;
-    });
+    const updated = items.map((item, idx) =>
+      idx === index ? { ...item, [field]: val } : item
+    );
+    setItems(updated);
+    onChange(stringifyOrgItems(updated));
   };
 
   const handleAddItem = () => {
@@ -97,19 +96,15 @@ export function RepeatableOrgSection({
       tahunMulai: "",
       tahunSelesai: ""
     };
-    setItems((prev) => {
-      const updated = [...prev, newItem];
-      onChange(stringifyOrgItems(updated));
-      return updated;
-    });
+    const updated = [...items, newItem];
+    setItems(updated);
+    onChange(stringifyOrgItems(updated));
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems((prev) => {
-      const updated = prev.filter((_, idx) => idx !== index);
-      onChange(stringifyOrgItems(updated));
-      return updated;
-    });
+    const updated = items.filter((_, idx) => idx !== index);
+    setItems(updated);
+    onChange(stringifyOrgItems(updated));
   };
 
   const nonEmptyItems = items.filter((i) => i.nama && i.nama.trim());
