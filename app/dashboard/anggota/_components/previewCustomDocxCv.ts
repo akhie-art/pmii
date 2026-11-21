@@ -24,26 +24,28 @@ export async function previewCustomDocxCv(
   }
   const formattedTTL = ttlParts.length > 0 ? ttlParts.join(", ") : "-";
 
-  // Format Riwayat Pendidikan Formal
+  // Format Riwayat Pendidikan Formal (Tanpa awalan SD:, SMP:, SMA:, PT:)
   const eduParts: string[] = [];
   if (member.pendidikanSD) {
     const yrs = [member.tahunMasukSD, member.tahunLulusSD].filter(Boolean).join(" – ");
-    eduParts.push(`SD: ${member.pendidikanSD}${yrs ? ` (${yrs})` : ""}`);
+    eduParts.push(`${member.pendidikanSD}${yrs ? ` (${yrs})` : ""}`);
   }
   if (member.pendidikanSMP) {
     const yrs = [member.tahunMasukSMP, member.tahunLulusSMP].filter(Boolean).join(" – ");
-    eduParts.push(`SMP: ${member.pendidikanSMP}${yrs ? ` (${yrs})` : ""}`);
+    eduParts.push(`${member.pendidikanSMP}${yrs ? ` (${yrs})` : ""}`);
   }
   if (member.pendidikanSMA) {
     const yrs = [member.tahunMasukSMA, member.tahunLulusSMA].filter(Boolean).join(" – ");
-    eduParts.push(`SMA: ${member.pendidikanSMA}${yrs ? ` (${yrs})` : ""}`);
+    eduParts.push(`${member.pendidikanSMA}${yrs ? ` (${yrs})` : ""}`);
   }
   if (member.perguruanTinggi) {
-    eduParts.push(`PT: ${member.perguruanTinggi}${member.jurusan ? ` (${member.jurusan})` : ""}`);
+    const ptYrs = [member.tahunMasukPT, member.tahunLulusPT].filter(Boolean).join(" – ");
+    const campus = member.jurusan ? `${member.perguruanTinggi} (${member.jurusan})` : member.perguruanTinggi;
+    eduParts.push(`${campus}${ptYrs ? ` (${ptYrs})` : ""}`);
   }
   const formattedPendidikan = eduParts.length > 0 ? eduParts.join("\n") : "-";
 
-  // Format Riwayat Pengalaman Organisasi
+  // Format Riwayat Pengalaman Organisasi (Tanpa awalan SMP:, SMA:, PT:)
   const formatOrgEntries = (raw?: string | null) => {
     if (!raw) return [];
     return parseOrgItems(raw).map((item) => {
@@ -56,9 +58,9 @@ export async function previewCustomDocxCv(
   const ptOrgs = formatOrgEntries(member.organisasiPT);
 
   const orgParts: string[] = [];
-  if (smpOrgs.length > 0) orgParts.push(`SMP: ${smpOrgs.join(", ")}`);
-  if (smaOrgs.length > 0) orgParts.push(`SMA: ${smaOrgs.join(", ")}`);
-  if (ptOrgs.length > 0) orgParts.push(`PT / Umum: ${ptOrgs.join(", ")}`);
+  smpOrgs.forEach((org) => orgParts.push(org));
+  smaOrgs.forEach((org) => orgParts.push(org));
+  ptOrgs.forEach((org) => orgParts.push(org));
   const formattedOrganisasi = orgParts.length > 0 ? orgParts.join("\n") : "-";
 
   const data: Record<string, string> = {
@@ -110,14 +112,16 @@ export async function previewCustomDocxCv(
     renderAltChunks: true
   });
 
-  // 1. Periksa apakah docx-preview sudah merender gambar pas foto
+  // 1. Periksa gambar di dalam dokumen & pastikan logo kop surat bebas border
   const renderedImgs = Array.from(renderContainer.querySelectorAll("img"));
   let foundPhotoInDom = false;
   renderedImgs.forEach((img) => {
     const src = img.getAttribute("src") || "";
-    // Identifikasi gambar pas foto kader
-    if (src.includes("member_photo") || (photoDataUrl && (src === photoDataUrl || src.length > 500))) {
+    // Identifikasi gambar pas foto kader secara spesifik (BUKAN logo kop surat)
+    const isMemberPhoto = src.includes("member_photo") || (Boolean(photoDataUrl) && src.startsWith("data:image") && src === photoDataUrl);
+    if (isMemberPhoto) {
       foundPhotoInDom = true;
+      img.className = "cv-photo-img";
       img.style.width = "3cm";
       img.style.height = "4cm";
       img.style.objectFit = "cover";
@@ -125,6 +129,12 @@ export async function previewCustomDocxCv(
       img.style.display = "block";
       img.style.boxShadow = "none";
       img.style.margin = "12px 0";
+    } else {
+      // Pastikan logo kop surat dan gambar header tidak diberi border apapun
+      img.style.border = "none";
+      img.style.outline = "none";
+      img.style.boxShadow = "none";
+      img.style.borderRadius = "0";
     }
   });
 
@@ -144,7 +154,8 @@ export async function previewCustomDocxCv(
         <img
           src="${photoDataUrl}"
           alt="Pas Foto 3x4"
-          style="width: 3cm; height: 4cm; object-fit: cover; border: 1.5px solid #000000; box-shadow: none; display: block; background-color: #ffffff;"
+          class="cv-photo-img"
+          style="width: 3cm !important; height: 4cm !important; object-fit: cover !important; border: 1.5px solid #000000 !important; box-shadow: none !important; display: block !important; background-color: #ffffff !important;"
         />
       </div>
     `;
@@ -284,6 +295,21 @@ export async function previewCustomDocxCv(
             background: transparent !important;
             padding: 0 !important;
             margin: 0 auto !important;
+          }
+          .docx-wrapper img:not(.cv-photo-img),
+          header img,
+          .docx-header img {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+          }
+          .cv-photo-img {
+            width: 3cm !important;
+            height: 4cm !important;
+            object-fit: cover !important;
+            border: 1.5px solid #000000 !important;
+            box-shadow: none !important;
+            display: block !important;
           }
           .docx-wrapper > section.docx {
             background: #ffffff !important;

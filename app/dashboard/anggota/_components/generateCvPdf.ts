@@ -686,11 +686,7 @@ export async function generateMemberCvAtsPdf(member: Member): Promise<void> {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
-    const smaText = member.pendidikanSMA.toLowerCase().includes("smk") || 
-                    member.pendidikanSMA.toLowerCase().includes("sma") || 
-                    member.pendidikanSMA.toLowerCase().includes("ma ")
-      ? member.pendidikanSMA
-      : `SMA / Sederajat: ${member.pendidikanSMA}`;
+    const smaText = member.pendidikanSMA;
     const smaLines = doc.splitTextToSize(smaText, contentWidth - periodW);
     doc.text(smaLines, marginX, curY);
 
@@ -711,10 +707,7 @@ export async function generateMemberCvAtsPdf(member: Member): Promise<void> {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
-    const smpText = member.pendidikanSMP.toLowerCase().includes("smp") || 
-                    member.pendidikanSMP.toLowerCase().includes("mts")
-      ? member.pendidikanSMP
-      : `SMP / Sederajat: ${member.pendidikanSMP}`;
+    const smpText = member.pendidikanSMP;
     const smpLines = doc.splitTextToSize(smpText, contentWidth - periodW);
     doc.text(smpLines, marginX, curY);
 
@@ -735,10 +728,7 @@ export async function generateMemberCvAtsPdf(member: Member): Promise<void> {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
-    const sdText = member.pendidikanSD.toLowerCase().includes("sd") || 
-                   member.pendidikanSD.toLowerCase().includes("mi ")
-      ? member.pendidikanSD
-      : `SD / Sederajat: ${member.pendidikanSD}`;
+    const sdText = member.pendidikanSD;
     const sdLines = doc.splitTextToSize(sdText, contentWidth - periodW);
     doc.text(sdLines, marginX, curY);
 
