@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { sanitizeHtml } from "@/lib/sanitize";
 import {
   Bookmark,
   Plus,
@@ -626,7 +627,7 @@ export function TemplateManagerDialog({
                             <div className="h-24 overflow-hidden rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-2.5 text-[9px] text-zinc-500 font-sans pointer-events-none opacity-80 leading-relaxed">
                               <div
                                 dangerouslySetInnerHTML={{
-                                  __html: parsed.html?.slice(0, 400) || "Isi template kosong..."
+                                  __html: sanitizeHtml(parsed.html?.slice(0, 400) || "Isi template kosong...")
                                 }}
                               />
                             </div>
@@ -1093,7 +1094,7 @@ export function TemplateManagerDialog({
               className="bg-white text-zinc-900 p-8 rounded-lg shadow-sm font-sans"
               style={{ fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.35" }}
               dangerouslySetInnerHTML={{
-                __html: previewTemplate ? parseTemplateContent(previewTemplate.content).html : ""
+                __html: sanitizeHtml(previewTemplate ? parseTemplateContent(previewTemplate.content).html : "")
               }}
             />
           </div>

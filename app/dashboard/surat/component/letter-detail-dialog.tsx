@@ -23,6 +23,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import type { MailItem } from "./types";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 interface LetterDetailDialogProps {
   selectedMail: MailItem | null;
@@ -246,7 +247,7 @@ export function LetterDetailDialog({
                 <div className="bg-white text-zinc-900 p-6 sm:p-8 rounded-lg shadow-sm border border-zinc-200/90 max-w-full overflow-x-auto text-[13px] leading-relaxed">
                   <div
                     className="preview-official-letter select-text"
-                    dangerouslySetInnerHTML={{ __html: selectedMail.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedMail.content) }}
                   />
                 </div>
               </div>

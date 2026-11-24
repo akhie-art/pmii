@@ -185,140 +185,58 @@ export default function OnboardingPage() {
     setSubmitting(true);
 
     try {
-      const activeCadreId =
-        (typeof window !== "undefined" && localStorage.getItem("PMII_ACTIVE_CADRE_ID")) ||
-        currentUser?.id ||
-        `kader-${Date.now()}`;
-
       const universityName = selected.university || selected.campusName || "-";
 
-      // 1. Simpan/Perbarui di tabel Supabase 'anggota' jika terhubung
+      // 1. Selesaikan onboarding secara atomik & aman lewat RPC server-side
       if (isSupabaseConfigured && supabase) {
-        try {
-          const memberPayload: any = {
-            tenant_id: selected.id,
-            perguruanTinggi: universityName
-          };
-
-          const { data: existingMember } = await supabase
-            .from("anggota")
-            .select("id")
-            .or(`id.eq.${activeCadreId},email.eq.${currentUser?.email}`)
-            .maybeSingle();
-
-          if (existingMember) {
-            const { error: updateErr } = await supabase
-              .from("anggota")
-              .update(memberPayload)
-              .eq("id", existingMember.id);
-
-            if (updateErr) {
-              console.warn("Notice updating anggota in Supabase:", updateErr.message);
-            }
-          } else {
-            const newMember = {
-              user_id: currentUser?.user_id || (isValidUUID(currentUser?.id) ? currentUser?.id : null),
-              name: currentUser?.name || currentUser?.email?.split("@")[0] || "Anggota PMII",
-              email: currentUser?.email,
-              role: currentUser?.role || "anggota",
-              tenant_id: selected.id,
-              perguruanTinggi: universityName,
-              status: "AKTIF"
-            };
-            const { error: insertErr } = await supabase
-              .from("anggota")
-              .insert(newMember);
-
-            if (insertErr) {
-              console.warn("Notice inserting anggota in Supabase:", insertErr.message);
-            }
-          }
-
-          // Sinkronkan ke auth user metadata jika memungkinkan
-          if (currentUser?.id || currentUser?.user_id) {
-            try {
-              await supabase.rpc("update_auth_user", {
-                p_user_id: currentUser.user_id || currentUser.id,
-                p_email: currentUser.email,
-                p_commissariat: selected.name,
-                p_komisariat_id: selected.id
-              });
-            } catch {}
-          }
-        } catch (dbErr) {
-          console.warn("DB update exception:", dbErr);
+        const { error: rpcErr } = await supabase.rpc("complete_my_onboarding", {
+          p_tenant_id: selected.id,
+        });
+        if (rpcErr) {
+          throw new Error(rpcErr.message || "Gagal menyimpan pilihan komisariat.");
         }
       }
 
-      // 2. Perbarui list kader di db local/cache
-      try {
-        const cadres = await db.getCadres([]);
-        const existingIdx = cadres.findIndex(
-          (c) =>
-            c.id === activeCadreId ||
-            (c.email && currentUser?.email && c.email.toLowerCase() === currentUser.email.toLowerCase())
-        );
-
-        if (existingIdx >= 0) {
-          const updated = [...cadres];
-          updated[existingIdx] = {
-            ...updated[existingIdx],
-            komisariat_id: selected.id,
-            commissariat: selected.name,
-            perguruanTinggi: universityName,
-            needsOnboarding: false
-          };
-          await db.saveCadres(updated);
-        } else {
-          const newCadre: CadreFollowUp = {
-            id: activeCadreId,
-            user_id: currentUser?.user_id || (isValidUUID(currentUser?.id) ? currentUser?.id : undefined),
-            name: currentUser?.name || currentUser?.email?.split("@")[0] || "Anggota PMII",
-            email: currentUser?.email || "",
-            komisariat_id: selected.id,
-            commissariat: selected.name,
-            perguruanTinggi: universityName,
-            role: currentUser?.role || "anggota",
-            status: "AKTIF",
-            level: "MAPABA",
-            startDate: new Date().toISOString().split("T")[0],
-            needsOnboarding: false,
-            isGraduated: false,
-            submissions: []
-          };
-          await db.saveCadres([...cadres, newCadre]);
-        }
-      } catch (cacheErr) {
-        console.warn("Cache save notice:", cacheErr);
-      }
-
-      // 3. Perbarui session di localStorage
+      // 2. Refresh profil otoritatif dari server
+      const freshProfile = await db.getMyProfile();
       const updatedUser = {
         ...currentUser,
+        ...(freshProfile || {}),
         komisariat_id: selected.id,
+        tenant_id: selected.id,
         commissariat: selected.name,
         perguruanTinggi: universityName,
-        needsOnboarding: false
+        needsOnboarding: false,
       };
 
+      const activeCadreId = freshProfile?.anggota_id || updatedUser.id;
       if (typeof window !== "undefined") {
         localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedUser));
         localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", selected.name);
-        localStorage.setItem("PMII_ACTIVE_CADRE_ID", activeCadreId);
+        if (activeCadreId) {
+          localStorage.setItem("PMII_ACTIVE_CADRE_ID", activeCadreId);
+          localStorage.setItem("PMII_ACTIVE_ANGGOTA_ID", activeCadreId);
+        }
       }
 
       setSuccess(true);
 
-      const roleLower = (updatedUser.role || "anggota").toLowerCase();
+      const roleLower = String(updatedUser.role || "anggota").toLowerCase();
       const isStaff = isUserAdmin(roleLower) || isUserPengurus(roleLower) || isUserInstruktur(roleLower);
-      const targetPath = isStaff ? getTargetStaffPrefix(roleLower) : `/${roleLower}`;
+      const targetPath = isStaff
+        ? getTargetStaffPrefix(roleLower)
+        : roleLower === "peserta"
+        ? "/peserta"
+        : "/anggota";
 
       setTimeout(() => {
         router.push(targetPath);
-      }, 1000);
-    } catch (err: any) {
+      }, 800);
+    } catch (err: unknown) {
       console.error("Gagal menyelesaikan onboarding:", err);
-      setErrorMsg(err.message || "Terjadi gangguan saat menyimpan data. Silakan coba kembali.");
+      setErrorMsg(
+        err instanceof Error ? err.message : "Terjadi gangguan saat menyimpan data. Silakan coba kembali."
+      );
       setSubmitting(false);
     }
   };

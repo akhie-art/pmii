@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { sanitizeHtml } from "@/lib/sanitize";
 import {
   Calendar,
   Clock,
@@ -101,11 +102,8 @@ export function BacaArtikelContent() {
             .slice(0, 3);
           setRelatedArticles(others);
 
-          // Increment view counter once per load in background
-          const updatedArticles = articlesPool.map((item) =>
-            item.id === found.id ? { ...item, views: (item.views || 0) + 1 } : item
-          );
-          db.saveArticles(updatedArticles).catch(() => {});
+          // Increment view counter safely via SECURITY DEFINER RPC (tanpa write penuh ke articles)
+          db.incrementArticleViews(found.id).catch(() => {});
         } else {
           setArticle(null);
         }
@@ -133,9 +131,7 @@ export function BacaArtikelContent() {
         localStorage.setItem("PMII_LIKED_ARTICLES", JSON.stringify(filtered));
       }
       try {
-        const allArticles = await db.getArticles();
-        const updated = allArticles.map((a) => (a.id === article.id ? { ...a, likes: nextLikes } : a));
-        await db.saveArticles(updated);
+        await db.likeArticle(article.id, -1);
       } catch {
         // ignore
       }
@@ -152,7 +148,7 @@ export function BacaArtikelContent() {
         }
       }
       try {
-        await db.likeArticle(article.id);
+        await db.likeArticle(article.id, 1);
       } catch {
         // ignore
       }
@@ -420,13 +416,13 @@ export function BacaArtikelContent() {
                       <div
                         key={idx}
                         className="space-y-4 [&_p]:mb-4 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-4 [&_blockquote]:border-blue-600 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-zinc-600 dark:[&_blockquote]:text-zinc-400"
-                        dangerouslySetInnerHTML={{ __html: paragraph }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(paragraph) }}
                       />
                     ))
                   ) : (
                     <div
                       className="space-y-4 [&_p]:mb-4 [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-4 [&_blockquote]:border-blue-600 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-zinc-600 dark:[&_blockquote]:text-zinc-400"
-                      dangerouslySetInnerHTML={{ __html: article.content }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content) }}
                     />
                   )}
                 </div>

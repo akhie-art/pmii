@@ -863,33 +863,22 @@ export default function ProfilPage() {
       // 3. ONLY run credentials & Supabase Auth sync IF email or name actually changed
       const emailChanged = previousEmail && previousEmail.toLowerCase() !== email.trim().toLowerCase();
       const nameChanged = (currentCadre.name || "").trim() !== name.trim();
-      const currentPwd = db.getUserPassword(currentCadre) || (currentCadre as any).password;
-
-      if (emailChanged && previousEmail) {
-        db.migrateUserEmail(previousEmail, email.trim());
-      }
-      if (currentPwd) {
-        db.setUserPassword([currentCadre.id, currentCadre.user_id, email.trim(), cleanNim, name.trim()], currentPwd);
-      }
-
-      // Background non-blocking sync to Supabase Auth if credentials changed
+      // Sinkronkan perubahan email/nama ke Supabase Auth secara resmi melalui auth.updateUser
       if ((emailChanged || nameChanged) && isSupabaseConfigured && supabase) {
         const targetEmail = email.trim().toLowerCase();
-        if (targetEmail.includes("@")) {
-          (async () => {
-            try {
-              await supabase.rpc("sync_user_to_auth", {
-                p_email: targetEmail,
-                p_password: currentPwd || "pmii1960",
-                p_name: name.trim(),
-                p_role: currentCadre.role || "anggota",
-                p_commissariat: currentCadre.commissariat || "Ki Ageng Getas Pendawa"
-              });
-            } catch (authErr) {
-              console.warn("Background Supabase Auth sync notice:", authErr);
+        (async () => {
+          try {
+            const payload: { email?: string; data?: Record<string, string> } = {
+              data: { name: name.trim(), full_name: name.trim() },
+            };
+            if (emailChanged && targetEmail.includes("@")) {
+              payload.email = targetEmail;
             }
-          })();
-        }
+            await supabase.auth.updateUser(payload);
+          } catch (authErr) {
+            console.warn("Background Supabase Auth profile sync notice:", authErr);
+          }
+        })();
       }
 
       toast.success("Data profil berhasil diperbarui.");
@@ -1001,95 +990,25 @@ export default function ProfilPage() {
     try {
       setIsSavingPassword(true);
 
-      // 0. Update credentials store directly
-      db.setUserPassword(
-        [
-          currentCadre?.id,
-          currentCadre?.user_id,
-          currentCadre?.email,
-          email.trim(),
-          currentCadre?.nim || currentCadre?.nik,
-          currentCadre?.name,
-          name.trim()
-        ],
-        newPassword
-      );
-
-      // 1. Update Cadre record
-      if (currentCadre) {
-        const updatedCadre: CadreFollowUp = {
-          ...currentCadre,
-          password: newPassword
-        };
-        setCurrentCadre(updatedCadre);
-        const updatedCadres = cadres.map((c) => (c.id === currentCadre.id ? updatedCadre : c));
-        setCadres(updatedCadres);
-        await db.saveCadres(updatedCadres);
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("Koneksi autentikasi server belum dikonfigurasi.");
       }
 
-      // 2. Update User Account record
-      const users = await db.getUsers();
-      const userIdx = users.findIndex(
-        (u) =>
-          (currentCadre && u.id === currentCadre.id) ||
-          (currentCadre?.user_id && u.user_id === currentCadre.user_id) ||
-          (currentCadre?.email && u.email?.toLowerCase() === currentCadre.email.toLowerCase()) ||
-          (email && u.email?.toLowerCase() === email.trim().toLowerCase()) ||
-          (currentCadre?.name && u.name?.toLowerCase().trim() === currentCadre.name.toLowerCase().trim())
-      );
-      if (userIdx !== -1) {
-        users[userIdx] = {
-          ...users[userIdx],
-          password: newPassword
-        };
-        await db.saveUsers(users);
-      }
+      // Perbarui kata sandi langsung melalui Supabase Auth API (tanpa menyimpan sandi plaintext di localStorage)
+      const { error: authErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
-      // 3. Update active session in localStorage
-      if (typeof window !== "undefined") {
-        const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
-        if (savedUserStr) {
-          try {
-            const loggedInUser = JSON.parse(savedUserStr);
-            loggedInUser.password = newPassword;
-            localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInUser));
-          } catch (e) {}
-        }
-      }
-
-      // 4. Update in Supabase Auth via sync_user_to_auth RPC
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const targetEmail = (email || currentCadre?.email || "").trim().toLowerCase();
-          if (targetEmail.includes("@")) {
-            const { data: rpcUserId } = await supabase.rpc("sync_user_to_auth", {
-              p_email: targetEmail,
-              p_password: newPassword,
-              p_name: (name || currentCadre?.name || "").trim(),
-              p_role: currentCadre?.role || "anggota",
-              p_commissariat: currentCadre?.commissariat || "Ki Ageng Getas Pendawa"
-            });
-            if (rpcUserId && currentCadre && !currentCadre.user_id) {
-              currentCadre.user_id = rpcUserId;
-              const updatedList = cadres.map(c => c.id === currentCadre.id ? { ...c, user_id: rpcUserId } : c);
-              await db.saveCadres(updatedList);
-            }
-            await supabase.auth.signInWithPassword({
-              email: targetEmail,
-              password: newPassword
-            });
-          }
-        } catch (supabaseErr) {
-          console.warn("Supabase Auth password error:", supabaseErr);
-        }
+      if (authErr) {
+        throw new Error(authErr.message || "Gagal memperbarui kata sandi di server autentikasi.");
       }
 
       setNewPassword("");
       setConfirmPassword("");
       toast.success("Kata sandi berhasil diperbarui! Silakan gunakan sandi baru ini saat login.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save password error:", err);
-      toast.error(err.message || "Gagal memperbarui kata sandi.");
+      toast.error(err instanceof Error ? err.message : "Gagal memperbarui kata sandi.");
     } finally {
       setIsSavingPassword(false);
     }

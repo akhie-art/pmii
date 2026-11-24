@@ -263,8 +263,14 @@ export default function DashboardLayout({
 
     if (typeof window !== "undefined") {
       window.addEventListener(TENANT_CHANGED_EVENT, handleTenantChange);
-      return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenantChange);
+      return () => {
+        isMounted = false;
+        window.removeEventListener(TENANT_CHANGED_EVENT, handleTenantChange);
+      };
     }
+    return () => {
+      isMounted = false;
+    };
   }, [currentUser]);
 
   // Load saved theme
@@ -409,41 +415,67 @@ export default function DashboardLayout({
         setCurrentUser(user);
         setLoading(false);
 
-        // Background synchronization with Supabase Users Auth for live role/allowedMenus updates
-        if (isSupabaseConfigured && supabase && user.email) {
+        // Verifikasi sesi & peran otoritatif langsung dari server Supabase (mencegah manipulasi localStorage/DevTools)
+        if (isSupabaseConfigured && supabase) {
           (async () => {
             try {
-              const { data: usersData, error } = await supabase.rpc("get_auth_users");
-              if (!error && Array.isArray(usersData)) {
-                const fresh = usersData.find((u: any) =>
-                  (u.email && u.email.toLowerCase().trim() === user.email.toLowerCase().trim()) ||
-                  (u.id && (u.id === user.id || u.id === user.user_id))
-                );
-                if (fresh) {
-                  const freshRole = fresh.role || user.role || "pengurus";
-                  const freshAllowed = Array.isArray(fresh.allowedMenus) ? fresh.allowedMenus : (user.allowedMenus || []);
-                  const freshStatus = fresh.status || user.status || "AKTIF";
-                  const freshComm = fresh.commissariat || user.commissariat;
+              const {
+                data: { user: authUser },
+                error: authErr,
+              } = await supabase.auth.getUser();
 
-                  const roleChanged = freshRole !== user.role;
-                  const menusChanged = JSON.stringify(freshAllowed) !== JSON.stringify(user.allowedMenus);
-                  const statusChanged = freshStatus !== user.status;
+              if (authErr || !authUser) {
+                await safeSignOut();
+                router.replace("/login");
+                return;
+              }
 
-                  if (roleChanged || menusChanged || statusChanged) {
-                    const updatedSession = {
-                      ...user,
-                      role: freshRole,
-                      allowedMenus: freshAllowed,
-                      status: freshStatus,
-                      commissariat: freshComm
-                    };
-                    localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
-                    setCurrentUser(updatedSession);
-                  }
+              const fresh = await db.getMyProfile();
+              if (fresh) {
+                if (fresh.status === "NONAKTIF") {
+                  await safeSignOut();
+                  router.replace("/login");
+                  return;
+                }
+
+                const freshRole = String(fresh.role || "anggota").toLowerCase().trim();
+                const freshIsStaff =
+                  isUserAdmin(freshRole) ||
+                  isUserPengurus(freshRole) ||
+                  isUserInstruktur(freshRole);
+
+                if (!freshIsStaff) {
+                  localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(fresh));
+                  router.replace(freshRole === "peserta" ? "/peserta" : "/anggota");
+                  return;
+                }
+
+                const freshAllowed = Array.isArray(fresh.allowedMenus) ? fresh.allowedMenus : [];
+                const freshStatus = fresh.status || "AKTIF";
+                const freshComm = fresh.commissariat || user.commissariat;
+                const freshTid = fresh.tenant_id || fresh.komisariat_id || user.tenant_id;
+
+                const roleChanged = freshRole !== String(user.role || "").toLowerCase();
+                const menusChanged = JSON.stringify(freshAllowed) !== JSON.stringify(user.allowedMenus);
+                const statusChanged = freshStatus !== user.status;
+                const tenantChanged = freshTid !== user.tenant_id;
+
+                if (roleChanged || menusChanged || statusChanged || tenantChanged) {
+                  const updatedSession = {
+                    ...user,
+                    role: freshRole,
+                    allowedMenus: freshAllowed,
+                    status: freshStatus,
+                    commissariat: freshComm,
+                    tenant_id: freshTid,
+                    komisariat_id: freshTid,
+                  };
+                  localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
+                  setCurrentUser(updatedSession);
                 }
               }
             } catch (syncErr) {
-              console.warn("Notice syncing user session in layout:", syncErr);
+              console.warn("Notice verifying authoritative user session in layout:", syncErr);
             }
           })();
         }

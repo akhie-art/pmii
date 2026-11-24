@@ -1,11 +1,14 @@
 import { Article } from "./types";
 import { KEYS } from "./defaults";
 import { getTableData, saveTableData, deleteTableRow } from "./core";
+import { supabase, isSupabaseConfigured } from "../supabase";
+import { isValidUUID } from "../utils";
 
-export function formatArticleDate(input?: any): string {
-  let dateVal: any = input;
+export function formatArticleDate(input?: unknown): string {
+  let dateVal: unknown = input;
   if (typeof input === "object" && input !== null && !(input instanceof Date)) {
-    dateVal = input.createdAt || input.created_at || input.date || input.establishedDate;
+    const obj = input as Record<string, unknown>;
+    dateVal = obj.createdAt || obj.created_at || obj.date || obj.establishedDate;
   }
 
   if (!dateVal) {
@@ -33,7 +36,7 @@ export function formatArticleDate(input?: any): string {
     const dateFormatted = d.toLocaleDateString("id-ID", {
       day: "numeric",
       month: "long",
-      year: "numeric"
+      year: "numeric",
     });
 
     const hours = String(d.getHours()).padStart(2, "0");
@@ -47,8 +50,9 @@ export function formatArticleDate(input?: any): string {
 
 export async function getArticles(): Promise<Article[]> {
   const list = await getTableData<Article>("articles", KEYS.ARTICLES, []);
-  return list.map((item: any) => {
-    const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+  return list.map((item) => {
+    const rec = item as Article & { created_at?: string; date?: string };
+    const dateVal = rec.createdAt || rec.created_at || rec.date || new Date().toISOString();
     return {
       ...item,
       createdAt: dateVal,
@@ -58,8 +62,9 @@ export async function getArticles(): Promise<Article[]> {
 }
 
 export async function saveArticles(articles: Article[]): Promise<boolean> {
-  const sanitized = articles.map((item: any) => {
-    const dateVal = item.createdAt || item.created_at || item.date || new Date().toISOString();
+  const sanitized = articles.map((item) => {
+    const rec = item as Article & { created_at?: string; date?: string };
+    const dateVal = rec.createdAt || rec.created_at || rec.date || new Date().toISOString();
     return {
       ...item,
       createdAt: dateVal,
@@ -73,17 +78,27 @@ export async function deleteArticle(articleId: string): Promise<boolean> {
   return deleteTableRow("articles", articleId, KEYS.ARTICLES);
 }
 
-export async function likeArticle(articleId: string): Promise<number> {
-  const articles = await getTableData<Article>("articles", KEYS.ARTICLES, []);
-  let newLikes = 0;
-  const updated = articles.map((a) => {
-    if (a.id === articleId || a.slug === articleId) {
-      newLikes = (a.likes || 0) + 1;
-      return { ...a, likes: newLikes };
-    }
-    return a;
-  });
-  await saveTableData<Article>("articles", KEYS.ARTICLES, updated);
-  return newLikes;
+export async function incrementArticleViews(articleId: string): Promise<number> {
+  if (isSupabaseConfigured && supabase && isValidUUID(articleId)) {
+    try {
+      const { data, error } = await supabase.rpc("increment_article_views", {
+        p_article_id: articleId,
+      });
+      if (!error && typeof data === "number") return data;
+    } catch {}
+  }
+  return 0;
 }
 
+export async function likeArticle(articleId: string, delta: 1 | -1 = 1): Promise<number> {
+  if (isSupabaseConfigured && supabase && isValidUUID(articleId)) {
+    try {
+      const { data, error } = await supabase.rpc("toggle_article_like", {
+        p_article_id: articleId,
+        p_delta: delta,
+      });
+      if (!error && typeof data === "number") return data;
+    } catch {}
+  }
+  return 0;
+}

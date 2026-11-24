@@ -144,7 +144,15 @@ export default function KaderMateriPage() {
     };
 
     setKaderisasiData(updatedKurikulum);
-    db.saveKurikulum(updatedKurikulum);
+    // Increment download counter safely via RPC (tanpa hak tulis tabel kurikulum bagi anggota biasa)
+    import("@/lib/supabase").then(({ supabase, isSupabaseConfigured }) => {
+      if (isSupabaseConfigured && supabase) {
+        supabase.rpc("increment_material_download", {
+          p_level_name: selectedLevelId,
+          p_material_id: materialId,
+        }).then(() => {}, () => {});
+      }
+    });
 
     // Trigger download
     const link = document.createElement("a");

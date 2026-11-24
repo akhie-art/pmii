@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatArticleDate } from "@/lib/db";
 import type { Article } from "@/lib/db";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 interface ArticlePreviewModalProps {
   isOpen: boolean;
@@ -94,10 +95,10 @@ export const ArticlePreviewModal: React.FC<ArticlePreviewModalProps> = ({
           <div className="space-y-4 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-normal prose dark:prose-invert max-w-none">
             {Array.isArray(article.content) ? (
               article.content.map((p, idx) => (
-                <div key={idx} dangerouslySetInnerHTML={{ __html: p }} />
+                <div key={idx} dangerouslySetInnerHTML={{ __html: sanitizeHtml(p) }} />
               ))
             ) : (
-              <div dangerouslySetInnerHTML={{ __html: article.content }} />
+              <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content) }} />
             )}
           </div>
 

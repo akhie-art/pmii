@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import * as XLSX from "xlsx";
+import { exportToExcel, readSpreadsheetToObjects } from "@/lib/excel";
 import {
   Plus,
   Trash2,
@@ -222,7 +222,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     subject: ["materi", "materipokok", "mapel", "subject", "subjek"]
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     const subject = globalSubject || defaultSubject;
     const rows = [
       {
@@ -246,30 +246,28 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         Materi: subject
       }
     ];
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [
-      { wch: 50 },
-      { wch: 30 },
-      { wch: 30 },
-      { wch: 30 },
-      { wch: 30 },
-      { wch: 10 },
-      { wch: 14 },
-      { wch: 28 }
-    ];
-    const guide = XLSX.utils.aoa_to_sheet([
-      ["Panduan Pengisian"],
-      ["Pertanyaan", "Wajib diisi."],
-      ["Pilihan A & B", "Wajib diisi. Pilihan C & D opsional."],
-      ["Jawaban", "Isi huruf pilihan benar: A, B, C, atau D (angka 1-4 juga bisa)."],
-      ["Jenis Tes", "Opsional: Pre, Post, atau Pre & Post. Kosong = mengikuti pengaturan modal."],
-      ["Materi", "Opsional. Kosong = mengikuti materi yang dipilih di modal."]
-    ]);
-    guide["!cols"] = [{ wch: 18 }, { wch: 90 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Soal");
-    XLSX.utils.book_append_sheet(wb, guide, "Panduan");
-    XLSX.writeFile(wb, `Template_Soal_${(selectedLevel.name || "Evaluasi").replace(/\s+/g, "_")}.xlsx`);
+    await exportToExcel(
+      `Template_Soal_${(selectedLevel.name || "Evaluasi").replace(/\s+/g, "_")}.xlsx`,
+      [
+        {
+          name: "Soal",
+          rows,
+          colWidths: [50, 30, 30, 30, 30, 10, 14, 28],
+        },
+        {
+          name: "Panduan",
+          aoa: [
+            ["Panduan Pengisian"],
+            ["Pertanyaan", "Wajib diisi."],
+            ["Pilihan A & B", "Wajib diisi. Pilihan C & D opsional."],
+            ["Jawaban", "Isi huruf pilihan benar: A, B, C, atau D (angka 1-4 juga bisa)."],
+            ["Jenis Tes", "Opsional: Pre, Post, atau Pre & Post. Kosong = mengikuti pengaturan modal."],
+            ["Materi", "Opsional. Kosong = mengikuti materi yang dipilih di modal."],
+          ],
+          colWidths: [18, 90],
+        },
+      ]
+    );
   };
 
   const parseTestType = (raw: string): "BOTH" | "PRE" | "POST" | null => {
@@ -298,12 +296,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setIsImporting(true);
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array" });
-      const sheetName = wb.SheetNames.find((n) => n.toLowerCase() !== "panduan") || wb.SheetNames[0];
-      const sheet = wb.Sheets[sheetName];
-      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        defval: "",
-        raw: false
+      const { rows: rawRows } = await readSpreadsheetToObjects(buffer, {
+        fileName: file.name,
+        skipSheetNames: ["panduan"],
       });
 
       if (rawRows.length === 0) {

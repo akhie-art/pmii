@@ -2,84 +2,46 @@ import { supabase, isSupabaseConfigured } from "../supabase";
 import { isValidUUID } from "../utils";
 import { UserAccount } from "./types";
 
+/**
+ * Menghasilkan kata sandi acak sementara yang kuat ketika admin membuat akun tanpa mengisi sandi eksplisit.
+ */
+function generateSecureTempPassword(length = 12): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const arr = new Uint32Array(length);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, (n) => chars[n % chars.length]).join("");
+  }
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+/**
+ * Legacy password localStorage store dihapus demi keamanan (anti pencurian kredensial plaintext via XSS).
+ * Fungsi berikut dipertahankan sebagai no-op aman demi kompatibilitas tanda tangan API.
+ */
 export function getUserCredentials(): Record<string, string> {
-  const defaults: Record<string, string> = {
-    "admin@pmii.org": "admin123",
-  };
-  if (typeof window === "undefined") return defaults;
-  try {
-    const raw = localStorage.getItem("PMII_USER_CREDENTIALS");
-    const parsed = raw ? JSON.parse(raw) : {};
-    return { ...defaults, ...parsed };
-  } catch {
-    return defaults;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("PMII_USER_CREDENTIALS");
+    } catch {}
+  }
+  return {};
+}
+
+export function setUserPassword(_identifiers: (string | undefined | null)[], _password: string): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("PMII_USER_CREDENTIALS");
+    } catch {}
   }
 }
 
-export function setUserPassword(identifiers: (string | undefined | null)[], password: string): void {
-  if (typeof window === "undefined" || !password) return;
-  try {
-    const creds = getUserCredentials();
-    for (const id of identifiers) {
-      if (!id || typeof id !== "string") continue;
-      const trimmed = id.trim();
-      if (!trimmed) continue;
-      creds[trimmed.toLowerCase()] = password;
-      creds[trimmed] = password;
-    }
-    localStorage.setItem("PMII_USER_CREDENTIALS", JSON.stringify(creds));
-  } catch (e) {
-    console.error("Error setting user password:", e);
-  }
-}
-
-export function getUserPassword(userOrCadre?: any): string | undefined {
-  if (!userOrCadre) return undefined;
-  if (typeof userOrCadre === "string") {
-    const creds = getUserCredentials();
-    const clean = userOrCadre.trim().toLowerCase();
-    return creds[clean] || creds[userOrCadre.trim()];
-  }
-  if (userOrCadre.password) return userOrCadre.password;
-  if (typeof window === "undefined") return undefined;
-  try {
-    const creds = getUserCredentials();
-    const candidates = [
-      userOrCadre.id,
-      userOrCadre.user_id,
-      userOrCadre.email?.trim().toLowerCase(),
-      userOrCadre.email?.trim(),
-      userOrCadre.nim?.trim(),
-      userOrCadre.nik?.trim(),
-      userOrCadre.name?.trim().toLowerCase(),
-      userOrCadre.name?.trim()
-    ];
-    for (const cand of candidates) {
-      if (cand && creds[cand]) {
-        return creds[cand];
-      }
-    }
-  } catch {
-    return undefined;
-  }
+export function getUserPassword(_userOrCadre?: unknown): string | undefined {
   return undefined;
 }
 
-export function migrateUserEmail(oldEmail: string | undefined, newEmail: string | undefined): void {
-  if (!oldEmail || !newEmail || oldEmail.toLowerCase() === newEmail.toLowerCase()) return;
-  if (typeof window === "undefined") return;
-  try {
-    const creds = getUserCredentials();
-    const oldClean = oldEmail.trim().toLowerCase();
-    const newClean = newEmail.trim().toLowerCase();
-    if (creds[oldClean]) {
-      creds[newClean] = creds[oldClean];
-      creds[newEmail.trim()] = creds[oldClean];
-      localStorage.setItem("PMII_USER_CREDENTIALS", JSON.stringify(creds));
-    }
-  } catch (e) {
-    console.error("Error migrating user email:", e);
-  }
+export function migrateUserEmail(_oldEmail: string | undefined, _newEmail: string | undefined): void {
+  // Tidak menyimpan password di localStorage
 }
 
 export function recordDeletedUser(identifier: { id?: string; email?: string; user_id?: string } | string) {
@@ -130,51 +92,51 @@ export function isUserDeleted(id?: string, email?: string): boolean {
   return false;
 }
 
-export async function deleteUserFromAuth(identifier: { id?: string; email?: string; user_id?: string } | string): Promise<boolean> {
-  const targetEmail = typeof identifier === "string" 
-    ? (identifier.includes("@") ? identifier.trim().toLowerCase() : undefined)
-    : identifier.email?.trim().toLowerCase();
-  
-  const targetId = typeof identifier === "string"
-    ? (!identifier.includes("@") && isValidUUID(identifier) ? identifier : undefined)
-    : (identifier.user_id && isValidUUID(identifier.user_id) ? identifier.user_id : (isValidUUID(identifier.id) ? identifier.id : undefined));
+export async function deleteUserFromAuth(
+  identifier: { id?: string; email?: string; user_id?: string } | string
+): Promise<boolean> {
+  const targetEmail =
+    typeof identifier === "string"
+      ? identifier.includes("@")
+        ? identifier.trim().toLowerCase()
+        : undefined
+      : identifier.email?.trim().toLowerCase();
 
-  // Catat identitas pengguna ke store blacklist pengguna yang dihapus
+  const targetId =
+    typeof identifier === "string"
+      ? !identifier.includes("@") && isValidUUID(identifier)
+        ? identifier
+        : undefined
+      : identifier.user_id && isValidUUID(identifier.user_id)
+      ? identifier.user_id
+      : isValidUUID(identifier.id)
+      ? identifier.id
+      : undefined;
+
   recordDeletedUser(identifier);
 
-  // Remove from local credentials store
-  if (typeof window !== "undefined") {
-    try {
-      const raw = localStorage.getItem("PMII_USER_CREDENTIALS");
-      if (raw) {
-        const creds = JSON.parse(raw);
-        if (targetEmail && creds[targetEmail]) delete creds[targetEmail];
-        if (targetId && creds[targetId]) delete creds[targetId];
-        if (typeof identifier !== "string" && identifier.id && creds[identifier.id]) delete creds[identifier.id];
-        localStorage.setItem("PMII_USER_CREDENTIALS", JSON.stringify(creds));
-      }
-    } catch {}
-  }
-
-  // Delete from Supabase auth.users via RPC
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.rpc("delete_user_from_auth", {
         p_user_id: targetId || null,
-        p_email: targetEmail || null
+        p_email: targetEmail || null,
       });
       if (error) {
         console.warn("Notice delete_user_from_auth:", error.message);
+        return false;
       }
       return Boolean(data);
     } catch (e) {
       console.warn("Error calling delete_user_from_auth:", e);
+      return false;
     }
   }
   return true;
 }
 
-export async function deleteUsersFromAuth(users: ({ id?: string; email?: string; user_id?: string } | string)[]): Promise<number> {
+export async function deleteUsersFromAuth(
+  users: ({ id?: string; email?: string; user_id?: string } | string)[]
+): Promise<number> {
   const userIds: string[] = [];
   const emails: string[] = [];
 
@@ -190,27 +152,15 @@ export async function deleteUsersFromAuth(users: ({ id?: string; email?: string;
     }
   }
 
-  // Remove from local credentials store
-  if (typeof window !== "undefined") {
-    try {
-      const raw = localStorage.getItem("PMII_USER_CREDENTIALS");
-      if (raw) {
-        const creds = JSON.parse(raw);
-        for (const em of emails) delete creds[em];
-        for (const uid of userIds) delete creds[uid];
-        localStorage.setItem("PMII_USER_CREDENTIALS", JSON.stringify(creds));
-      }
-    } catch {}
-  }
-
   if (isSupabaseConfigured && supabase && (userIds.length > 0 || emails.length > 0)) {
     try {
       const { data, error } = await supabase.rpc("delete_users_from_auth", {
         p_user_ids: userIds,
-        p_emails: emails
+        p_emails: emails,
       });
       if (error) {
         console.warn("Notice delete_users_from_auth:", error.message);
+        return 0;
       }
       return typeof data === "number" ? data : 0;
     } catch (e) {
@@ -231,103 +181,60 @@ export async function createAuthUser(user: {
   allowedMenus?: string[];
 }): Promise<UserAccount | null> {
   const cleanEmail = user.email.trim().toLowerCase();
-  const pwd = user.password || "pmii1960";
+  const pwd = user.password && user.password.trim().length >= 6 ? user.password.trim() : generateSecureTempPassword();
   unrecordDeletedUser(cleanEmail);
 
   if (isSupabaseConfigured && supabase) {
-    try {
-      let res = await supabase.rpc("create_auth_user", {
-        p_email: cleanEmail,
-        p_password: pwd,
-        p_name: user.name?.trim() || "",
-        p_role: user.role || "pengurus",
-        p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
-        p_status: user.status || "AKTIF",
-        p_allowed_menus: user.allowedMenus || [],
-        p_komisariat_id: user.komisariat_id || null
-      });
+    const { data, error } = await supabase.rpc("create_auth_user", {
+      p_email: cleanEmail,
+      p_password: pwd,
+      p_name: user.name?.trim() || "",
+      p_role: user.role || "pengurus",
+      p_commissariat: user.commissariat || "",
+      p_status: user.status || "AKTIF",
+      p_allowed_menus: user.allowedMenus || [],
+      p_komisariat_id: user.komisariat_id || null,
+    });
 
-      // Jika RPC versi sebelumnya belum menerima p_komisariat_id, fallback ke signature lama
-      if (res.error && res.error.message.includes("p_komisariat_id")) {
-        res = await supabase.rpc("create_auth_user", {
-          p_email: cleanEmail,
-          p_password: pwd,
-          p_name: user.name?.trim() || "",
-          p_role: user.role || "pengurus",
-          p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
-          p_status: user.status || "AKTIF",
-          p_allowed_menus: user.allowedMenus || []
-        });
-      }
+    if (error) {
+      console.warn("Notice create_auth_user:", error.message);
+      throw new Error(error.message);
+    }
 
-      const { data, error } = res;
-
-      if (error) {
-        console.warn("Notice create_auth_user:", error.message);
-        throw new Error(error.message);
-      } else if (data) {
-        if (pwd) {
-          setUserPassword([data.id, data.user_id, cleanEmail, user.name], pwd);
-        }
-        return {
-          id: data.id || data.user_id,
-          user_id: data.user_id || data.id,
-          name: data.name || user.name || "",
-          email: cleanEmail,
-          password: pwd,
-          role: data.role || user.role || "pengurus",
-          commissariat: data.commissariat || user.commissariat || "Ki Ageng Getas Pendawa",
-          komisariat_id: data.komisariat_id || user.komisariat_id,
-          status: data.status || user.status || "AKTIF",
-          createdAt: data.created_at || new Date().toISOString(),
-          allowedMenus: data.allowed_menus || user.allowedMenus || []
-        };
-      }
-    } catch (e: any) {
-      console.warn("Exception in create_auth_user RPC:", e);
-      throw e;
+    if (data) {
+      return {
+        id: data.id || data.user_id,
+        user_id: data.user_id || data.id,
+        name: data.name || user.name || "",
+        email: cleanEmail,
+        role: data.role || user.role || "pengurus",
+        commissariat: data.commissariat || user.commissariat || "",
+        komisariat_id: data.komisariat_id || data.tenant_id || user.komisariat_id,
+        tenant_id: data.tenant_id || data.komisariat_id || user.komisariat_id,
+        status: data.status || user.status || "AKTIF",
+        createdAt: data.created_at || new Date().toISOString(),
+        allowedMenus: data.allowed_menus || user.allowedMenus || [],
+      };
     }
   }
 
-  // Local fallback
-  if (pwd) {
-    setUserPassword([cleanEmail, user.name], pwd);
-  }
   return null;
 }
 
 export async function updateAuthUser(user: Partial<UserAccount> & { id: string }): Promise<boolean> {
-  if (user.password) {
-    setUserPassword([user.id, user.user_id, user.email, user.name], user.password);
-  }
   if (isSupabaseConfigured && supabase) {
     try {
-      let { error } = await supabase.rpc("update_auth_user", {
+      const { error } = await supabase.rpc("update_auth_user", {
         p_user_id: user.user_id || user.id,
-        p_email: user.email ? user.email.toLowerCase().trim() : "",
-        p_name: user.name || "",
-        p_role: user.role || "pengurus",
-        p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
-        p_status: user.status || "AKTIF",
-        p_allowed_menus: user.allowedMenus || [],
+        p_email: user.email ? user.email.toLowerCase().trim() : null,
+        p_name: user.name || null,
+        p_role: user.role || null,
+        p_commissariat: user.commissariat || null,
+        p_status: user.status || null,
+        p_allowed_menus: user.allowedMenus ?? null,
         p_password: user.password && user.password.trim() ? user.password.trim() : null,
-        p_komisariat_id: user.komisariat_id || null
+        p_komisariat_id: user.komisariat_id || user.tenant_id || null,
       });
-
-      // Jika RPC versi lama belum ada p_komisariat_id, fallback tanpa p_komisariat_id
-      if (error && error.message.includes("p_komisariat_id")) {
-        const fallback = await supabase.rpc("update_auth_user", {
-          p_user_id: user.user_id || user.id,
-          p_email: user.email ? user.email.toLowerCase().trim() : "",
-          p_name: user.name || "",
-          p_role: user.role || "pengurus",
-          p_commissariat: user.commissariat || "Ki Ageng Getas Pendawa",
-          p_status: user.status || "AKTIF",
-          p_allowed_menus: user.allowedMenus || [],
-          p_password: user.password && user.password.trim() ? user.password.trim() : null
-        });
-        error = fallback.error;
-      }
 
       if (error) {
         console.warn("Notice updating auth user:", error.message);
@@ -340,4 +247,18 @@ export async function updateAuthUser(user: Partial<UserAccount> & { id: string }
     }
   }
   return true;
+}
+
+/**
+ * Mengambil profil otoritatif pengguna yang sedang login dari database via RPC get_my_profile().
+ */
+export async function getMyProfile(): Promise<(UserAccount & { anggota_id?: string | null }) | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase.rpc("get_my_profile");
+    if (error || !data) return null;
+    return data as UserAccount & { anggota_id?: string | null };
+  } catch {
+    return null;
+  }
 }

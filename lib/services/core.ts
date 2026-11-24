@@ -14,16 +14,35 @@ export function normalizeKomisariat(comm: string | undefined): string {
           if (u.commissariat) return u.commissariat;
         } catch {}
       }
+      // Cari tenant non-cabang pertama secara dinamis dari cache tenant DB
+      try {
+        const storedTenants = localStorage.getItem("PMII_KOMISARIAT_LIST") || localStorage.getItem("PMII_TENANT_LIST");
+        if (storedTenants) {
+          const list = JSON.parse(storedTenants);
+          if (Array.isArray(list) && list.length > 0) {
+            const firstKom = list.find(
+              (t: { level?: string; type?: string; name?: string }) =>
+                t?.level?.toUpperCase() !== "CABANG" &&
+                t?.type?.toUpperCase() !== "CABANG" &&
+                !String(t?.name || "").toLowerCase().includes("cabang")
+            );
+            if (firstKom?.name) return firstKom.name;
+          }
+        }
+      } catch {}
     }
-    return "Komisariat Ki Ageng Getas Pendawa";
+    return "";
   }
   const c = comm.trim().toLowerCase();
-  if (c.includes("cabang") || c.includes("pc pmii")) return "Pengurus Cabang Grobogan";
-  if (c.includes("tarub")) return "Komisariat Ki Ageng Tarub";
-  if (c.includes("ajisaka")) return "Komisariat Ajisaka";
-  if (c.includes("joko") || c.includes("suro")) return "Komisariat Joko Suro";
-  if (c.includes("getas") || c.includes("pendawa")) return "Komisariat Ki Ageng Getas Pendawa";
-  if (c.includes("walisongo") && !c.includes("semarang")) return "Komisariat Ki Ageng Getas Pendawa";
+  if (c.includes("cabang") || c.includes("pc pmii")) {
+    return getTenantNameById(CABANG_TENANT_ID) || "Pengurus Cabang";
+  }
+  // Resolusi dinamis dari daftar tenant (bukan hardcode jika sudah tersedia)
+  const resolvedId = getTenantIdByName(comm);
+  if (resolvedId) {
+    const resolvedName = getTenantNameById(resolvedId);
+    if (resolvedName) return resolvedName;
+  }
   return comm.trim();
 }
 
@@ -84,8 +103,6 @@ export function broadcastTableSync(tableName: string, localStorageKey?: string) 
   } catch (e) {}
 }
 
-let _resolvedAnggotaTable: string | null = "anggota";
-
 export async function getEffectiveTableName(tableName: string): Promise<string> {
   if (tableName === "anggota" || tableName === "kader") return "anggota";
   if (tableName === "komisariat" || tableName === "commissariats" || tableName === "tenant" || tableName === "tenants") return "tenant";
@@ -141,37 +158,14 @@ export async function getTableData<T>(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      let { data, error } = await supabase.from(effectiveTable).select("*");
+      const { data, error } = await supabase.from(effectiveTable).select("*");
 
       if (error) {
-        console.warn(`[Supabase Read Warning] ${effectiveTable}: ${error.message}. Mencoba REST anon key...`);
         const errMsg = (error.message || "").toLowerCase();
         if (errMsg.includes("jwt") || errMsg.includes("expired") || errMsg.includes("token")) {
           clearSupabaseStorage();
         }
-
-        // Coba direct REST fetch anon sebagai fallback
-        try {
-          const rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-          const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
-          if (rawUrl && anonKey) {
-            const restRes = await fetch(`${rawUrl}/rest/v1/${effectiveTable}?select=*`, {
-              headers: {
-                apikey: anonKey,
-                Authorization: `Bearer ${anonKey}`,
-              },
-            });
-            if (restRes.ok) {
-              const restData = await restRes.json();
-              if (Array.isArray(restData)) {
-                data = restData;
-                error = null;
-              }
-            }
-          }
-        } catch (restErr) {
-          console.warn(`[Supabase REST fallback error] ${effectiveTable}:`, restErr);
-        }
+        console.warn(`[Supabase Read Notice] ${effectiveTable}: ${error.message}`);
       }
 
       if (data) {

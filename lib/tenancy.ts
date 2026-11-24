@@ -33,12 +33,70 @@ export const DEFAULT_KOMISARIAT_LIST = [
 ];
 
 /**
- * Mencari UUID Tenant / Komisariat berdasarkan nama atau kata kunci nama
+ * Mendapatkan nama Cabang/Organisasi default secara dinamis dari pengaturan sistem (`pengaturan`)
+ * agar aplikasi siap multi-cabang tanpa ketergantungan nama hardcode.
+ */
+export function getDefaultBranchName(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("PMII_SYSTEM_SETTINGS");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const name = parsed?.organization?.cabangName;
+        if (typeof name === "string" && name.trim()) return name.trim();
+      }
+      const storedTenants = localStorage.getItem("PMII_TENANT_LIST") || localStorage.getItem("PMII_KOMISARIAT_LIST");
+      if (storedTenants) {
+        const list = JSON.parse(storedTenants);
+        if (Array.isArray(list)) {
+          const cabang = list.find(
+            (t: { level?: string; type?: string; name?: string }) =>
+              t?.level?.toUpperCase() === "CABANG" ||
+              t?.type?.toUpperCase() === "CABANG" ||
+              String(t?.name || "").toLowerCase().includes("cabang")
+          );
+          if (cabang?.name) return cabang.name;
+        }
+      }
+    } catch {}
+  }
+  return "Pengurus Cabang PMII Grobogan";
+}
+
+/**
+ * Mencari UUID Tenant / Komisariat berdasarkan nama atau kata kunci nama.
+ * Memprioritaskan daftar tenant dinamis dari database sebelum fallback statis.
  */
 export function getTenantIdByName(name: string | undefined | null): string | null {
   if (!name) return null;
   const n = normalizeTenantName(name);
   if (!n) return null;
+
+  // 1. Prioritaskan daftar tenant dinamis dari database (PMII_TENANT_LIST / PMII_KOMISARIAT_LIST)
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("PMII_TENANT_LIST") || localStorage.getItem("PMII_KOMISARIAT_LIST");
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list)) {
+          const exact = list.find(
+            (k: { id?: string; name?: string; university?: string }) =>
+              normalizeTenantName(k.name) === n || normalizeTenantName(k.university) === n
+          );
+          if (exact?.id) return exact.id;
+
+          const partial = list.find(
+            (k: { id?: string; name?: string }) =>
+              (k.name && normalizeTenantName(k.name).includes(n)) ||
+              (k.name && n.includes(normalizeTenantName(k.name)))
+          );
+          if (partial?.id) return partial.id;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Fallback untuk nama/alias yang sudah dikenal saat offline atau SSR
   if (n.includes("cabang") || n.includes("pcpmii") || n.includes("grobogan")) {
     return CABANG_TENANT_ID;
   }
@@ -54,47 +112,30 @@ export function getTenantIdByName(name: string | undefined | null): string | nul
   if (n.includes("joko") || n.includes("suro")) {
     return "2eae53a7-28ff-40b5-95f1-69f85d179d8e";
   }
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem("PMII_KOMISARIAT_LIST") || localStorage.getItem("PMII_TENANT_LIST");
-      if (stored) {
-        const list = JSON.parse(stored);
-        if (Array.isArray(list)) {
-          const found = list.find(
-            (k: any) =>
-              normalizeTenantName(k.name) === n ||
-              normalizeTenantName(k.university) === n ||
-              normalizeTenantName(k.name).includes(n) ||
-              n.includes(normalizeTenantName(k.name))
-          );
-          if (found?.id) return found.id;
-        }
-      }
-    } catch {}
-  }
   return null;
 }
 
 export const getKomisariatIdByName = getTenantIdByName;
 
 /**
- * Mendapatkan nama resmi tenant / komisariat berdasarkan ID
+ * Mendapatkan nama resmi tenant / komisariat berdasarkan ID.
+ * Memprioritaskan daftar tenant dinamis dari database sebelum fallback statis.
  */
 export function getTenantNameById(id: string | undefined | null): string | null {
   if (!id) return null;
-  if (DEFAULT_TENANT_MAP[id]) return DEFAULT_TENANT_MAP[id];
   if (typeof window !== "undefined") {
     try {
-      const stored = localStorage.getItem("PMII_KOMISARIAT_LIST") || localStorage.getItem("PMII_TENANT_LIST");
+      const stored = localStorage.getItem("PMII_TENANT_LIST") || localStorage.getItem("PMII_KOMISARIAT_LIST");
       if (stored) {
         const list = JSON.parse(stored);
         if (Array.isArray(list)) {
-          const found = list.find((k: any) => k.id === id);
+          const found = list.find((k: { id?: string; name?: string }) => k.id === id);
           if (found?.name) return found.name;
         }
       }
     } catch {}
   }
+  if (DEFAULT_TENANT_MAP[id]) return DEFAULT_TENANT_MAP[id];
   return null;
 }
 

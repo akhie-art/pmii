@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import * as XLSX from "xlsx";
+import { exportToExcel, readSpreadsheetTo2DArray } from "@/lib/excel";
 import type { Member } from "./types";
 
 export interface ImportAccountSettings {
@@ -159,31 +159,21 @@ export default function ImportMemberModal({
   // Settings Pembuatan Akun Login Otomatis
   const [createAccounts, setCreateAccounts] = useState<boolean>(true);
   const [passwordType, setPasswordType] = useState<"custom" | "nim" | "nik" | "birthdate">("custom");
-  const [customPassword, setCustomPassword] = useState<string>("pmii1960");
+  const [customPassword, setCustomPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
   // Unduh Template Excel
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     try {
-      const worksheet = XLSX.utils.json_to_sheet(SAMPLE_ROWS, {
-        header: TEMPLATE_HEADERS
-      });
-
-      const colWidths = TEMPLATE_HEADERS.map((h) => {
-        let maxLen = h.length;
-        SAMPLE_ROWS.forEach((r) => {
-          const val = String((r as any)[h] || "");
-          if (val.length > maxLen) maxLen = val.length;
-        });
-        return { wch: maxLen + 4 };
-      });
-      worksheet["!cols"] = colWidths;
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Format Import Kader");
-      XLSX.writeFile(workbook, "Template_Import_Kader_PMII.xlsx");
+      await exportToExcel("Template_Import_Kader_PMII.xlsx", [
+        {
+          name: "Format Import Kader",
+          headers: TEMPLATE_HEADERS,
+          rows: SAMPLE_ROWS as unknown as Record<string, unknown>[],
+        },
+      ]);
     } catch (err) {
       console.error("Gagal membuat template excel", err);
     }
@@ -196,15 +186,8 @@ export default function ImportMemberModal({
 
     try {
       const buffer = await uploadedFile.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-
-      // Baca raw 2D array untuk mencari baris header yang sesungguhnya
-      const sheetData: any[][] = XLSX.utils.sheet_to_json(worksheet, {
-        header: 1,
-        defval: ""
+      const { rows: sheetData } = await readSpreadsheetTo2DArray(buffer, {
+        fileName: uploadedFile.name,
       });
 
       if (!sheetData || sheetData.length === 0) {
@@ -611,7 +594,7 @@ export default function ImportMemberModal({
       await onImport(validRows.map((r) => r.data), {
         createAccounts,
         passwordType,
-        customPassword: customPassword.trim() || "pmii1960"
+        customPassword: customPassword.trim()
       });
       onClose();
       handleResetFile();
@@ -904,7 +887,7 @@ export default function ImportMemberModal({
                             type={showPassword ? "text" : "password"}
                             value={customPassword}
                             onChange={(e) => setCustomPassword(e.target.value)}
-                            placeholder="Contoh: pmii1960"
+                            placeholder="Minimal 6 karakter (kosong = acak aman)"
                             className="text-xs h-8 bg-white dark:bg-zinc-900 pr-8"
                           />
                           <button

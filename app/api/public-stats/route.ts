@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const cadres = await db.getCadres();
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc("get_public_stats");
+      if (!error && data) {
+        return NextResponse.json({
+          cadresCount: typeof data.cadresCount === "number" ? data.cadresCount : 0,
+          tenantCounts: data.tenantCounts || {},
+          stagesCount: data.stagesCount ?? 3,
+          digitalArchivePercent: data.digitalArchivePercent ?? 100,
+        });
+      }
+    }
+
     return NextResponse.json({
-      cadresCount: Array.isArray(cadres) ? cadres.length : 0,
+      cadresCount: 0,
+      tenantCounts: {},
       stagesCount: 3,
       digitalArchivePercent: 100,
     });
@@ -15,6 +27,7 @@ export async function GET() {
     console.error("[API Public Stats Error]:", error);
     return NextResponse.json({
       cadresCount: 0,
+      tenantCounts: {},
       stagesCount: 3,
       digitalArchivePercent: 100,
     });

@@ -32,7 +32,7 @@ import {
   Layers
 } from "lucide-react";
 import PizZip from "pizzip";
-import * as XLSX from "xlsx";
+import { exportToExcel, readSpreadsheetTo2DArray } from "@/lib/excel";
 import { toast } from "sonner";
 import { db, SuratTemplate } from "@/lib/db";
 import {
@@ -645,7 +645,7 @@ export default function LetterGeneratorDialog({
     return result;
   };
 
-  const handleDownloadExcelTemplate = () => {
+  const handleDownloadExcelTemplate = async () => {
     try {
       const headers = [
         "Nama Penerima",
@@ -662,11 +662,13 @@ export default function LetterGeneratorDialog({
         ["Sahabati Dewi Lestari", "Ketua Rayon", "PR PMII Rayon Ekonomi & Bisnis", "Grobogan", "Konfirmasi kehadiran"]
       ];
 
-      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
-      worksheet["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 24 }];
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Penerima Surat PMII");
-      XLSX.writeFile(workbook, "Format_Penerima_Surat_Massal_PMII.xlsx");
+      await exportToExcel("Format_Penerima_Surat_Massal_PMII.xlsx", [
+        {
+          name: "Penerima Surat PMII",
+          aoa: [headers, ...sampleData],
+          colWidths: [32, 18, 30, 20, 24],
+        },
+      ]);
       toast.success("Format template Excel berhasil diunduh!");
     } catch (e: any) {
       console.error("Gagal mengunduh format Excel:", e);
@@ -680,18 +682,13 @@ export default function LetterGeneratorDialog({
 
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const firstSheetName = workbook.SheetNames[0];
+      const { sheetName: firstSheetName, rows: sheetData } = await readSpreadsheetTo2DArray(buffer, {
+        fileName: file.name,
+      });
       if (!firstSheetName) {
         toast.error("File Excel kosong atau tidak memiliki lembar kerja.");
         return;
       }
-
-      const worksheet = workbook.Sheets[firstSheetName];
-      const sheetData: any[][] = XLSX.utils.sheet_to_json(worksheet, {
-        header: 1,
-        defval: ""
-      });
 
       if (!sheetData || sheetData.length === 0) {
         toast.error("Lembar kerja Excel kosong.");

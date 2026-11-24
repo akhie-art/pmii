@@ -10,7 +10,7 @@ import {
   ChevronRight,
   Download
 } from "lucide-react";
-import * as XLSX from "xlsx";
+import { exportToExcel } from "@/lib/excel";
 import { Button } from "@/components/ui/button";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 import { generateUUID } from "@/lib/utils";
@@ -976,7 +976,7 @@ export default function KomisariatPengurusPage() {
     }
   };
 
-  const handleExportToExcel = () => {
+  const handleExportToExcel = async () => {
     if (filteredMembers.length === 0) {
       showError("Tidak Ada Data", "Tidak ada data pengurus untuk diekspor.");
       return;
@@ -1009,24 +1009,16 @@ export default function KomisariatPengurusPage() {
         "No. Telepon": getMemberPhone(m)
       }));
 
-      const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
-
-      const objectWidths = headers.map((header) => {
-        let maxLen = header.length;
-        rows.forEach((row) => {
-          const val = String((row as any)[header] || "");
-          if (val.length > maxLen) maxLen = val.length;
-        });
-        return { wch: Math.max(maxLen + 3, 10) };
-      });
-      worksheet["!cols"] = objectWidths;
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Pengurus");
       const dateStr = new Date().toISOString().split("T")[0];
-      XLSX.writeFile(
-        workbook,
-        `Data_Pengurus_PMII_${isCabangLevel ? "Cabang" : "Komisariat"}_${dateStr}.xlsx`
+      await exportToExcel(
+        `Data_Pengurus_PMII_${isCabangLevel ? "Cabang" : "Komisariat"}_${dateStr}.xlsx`,
+        [
+          {
+            name: "Data Pengurus",
+            headers,
+            rows,
+          },
+        ]
       );
       showToast(`Berhasil mengekspor ${filteredMembers.length} data pengurus ke Excel.`);
     } catch (err) {

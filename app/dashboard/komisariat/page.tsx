@@ -13,7 +13,7 @@ import {
   List,
   ChevronRight,
 } from "lucide-react";
-import * as XLSX from "xlsx";
+import { exportToExcel } from "@/lib/excel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -327,7 +327,7 @@ export default function KomisariatPage() {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (filteredKomisariats.length === 0) {
       showFeedback(
         "Tidak Ada Data",
@@ -353,16 +353,18 @@ export default function KomisariatPage() {
       };
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, isTenantView ? "Data Tenant" : "Data Komisariat");
-
     const dateStr = new Date().toISOString().split("T")[0];
-    XLSX.writeFile(workbook, `Data_${isTenantView ? "Tenant" : "Komisariat"}_PMII_${dateStr}.xlsx`);
+    const fileName = `Data_${isTenantView ? "Tenant" : "Komisariat"}_PMII_${dateStr}.xlsx`;
+    await exportToExcel(fileName, [
+      {
+        name: isTenantView ? "Data Tenant" : "Data Komisariat",
+        rows: exportRows,
+      },
+    ]);
 
     showSuccess(
       "Ekspor Berhasil",
-      `File spreadsheet Data_${isTenantView ? "Tenant" : "Komisariat"}_PMII_${dateStr}.xlsx berhasil diunduh.`
+      `File spreadsheet ${fileName} berhasil diunduh.`
     );
   };
 

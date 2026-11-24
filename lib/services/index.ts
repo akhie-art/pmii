@@ -1,10 +1,10 @@
-import { getCadres, saveCadres, updateCadre, getAnggota, saveAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./anggota";
+import { getCadres, saveCadres, updateCadre, getAnggota, getAnggotaPaginated, saveAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./anggota";
 import { getEvents, saveEvents, deleteEvent, getDefaultEventTimeline } from "./events";
-import { getRegistrations, saveRegistrations, deleteRegistration } from "./registrations";
+import { getRegistrations, getRegistrationsPaginated, saveRegistrations, deleteRegistration } from "./registrations";
 import { getRequirements, saveRequirements } from "./requirements";
 import { getBoards, saveBoards, deleteBoard, deletePengurus } from "./boards";
 import { getCommissariats, saveCommissariats, upsertCommissariat, deleteCommissariat } from "./commissariats";
-import { getUsers, saveUsers } from "./users";
+import { getUsers, getUsersPaginated, saveUsers } from "./users";
 import { getKaderisasi, saveKaderisasi } from "./kaderisasi";
 import { getKurikulum, saveKurikulum } from "./kurikulum";
 import { getSurat, saveSurat, deleteSurat, getSuratTemplates, saveSuratTemplates, deleteSuratTemplate } from "./letters";
@@ -18,7 +18,7 @@ import {
   syncEvaluationsWithRegistrations,
   ensureEvaluationForRegistration
 } from "./evaluations";
-import { getArticles, saveArticles, deleteArticle, likeArticle, formatArticleDate } from "./articles";
+import { getArticles, saveArticles, deleteArticle, likeArticle, incrementArticleViews, formatArticleDate } from "./articles";
 import {
   getUserCredentials,
   setUserPassword,
@@ -27,7 +27,8 @@ import {
   deleteUserFromAuth,
   deleteUsersFromAuth,
   createAuthUser,
-  updateAuthUser
+  updateAuthUser,
+  getMyProfile
 } from "./credentials";
 import { getRoles, getRoleByCode, getRoleById, upsertRole, deleteRole, DEFAULT_ROLES } from "./roles";
 import { normalizeKomisariat, normalizeDateString, deleteTableRow, upsertTableRow, updateTableRow } from "./core";
@@ -54,6 +55,7 @@ export const db = {
   saveCadres,
   updateCadre,
   getAnggota,
+  getAnggotaPaginated,
   saveAnggota,
   updateAnggota,
   deleteCadre,
@@ -69,6 +71,7 @@ export const db = {
 
   // Registrations / Pendaftaran
   getRegistrations,
+  getRegistrationsPaginated,
   saveRegistrations,
   deleteRegistration,
 
@@ -90,7 +93,9 @@ export const db = {
 
   // Users & Auth
   getUsers,
+  getUsersPaginated,
   saveUsers,
+  getMyProfile,
 
   // Kaderisasi
   getKaderisasi,
@@ -130,6 +135,7 @@ export const db = {
   saveArticles,
   deleteArticle,
   likeArticle,
+  incrementArticleViews,
 
   // Roles & Multi-Tenancy Roles
   getRoles,
@@ -180,6 +186,11 @@ export {
   deleteUsersFromAuth,
   createAuthUser,
   updateAuthUser,
+  getMyProfile,
+  getAnggotaPaginated,
+  getRegistrationsPaginated,
+  getUsersPaginated,
+  incrementArticleViews,
   getRoles,
   getRoleByCode,
   getRoleById,

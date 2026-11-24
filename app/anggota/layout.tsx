@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { db } from "@/lib/db";
-import { safeSignOut } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, safeSignOut } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Calendar,
@@ -348,6 +348,32 @@ export default function KaderLayout({
       setDarkMode(savedTheme === "dark");
 
       const loadAnggota = async () => {
+        if (isSupabaseConfigured && supabase) {
+          const {
+            data: { user: authUser },
+            error: authErr,
+          } = await supabase.auth.getUser();
+          if (authErr || !authUser) {
+            await safeSignOut();
+            const fullPath = window.location.pathname + window.location.search;
+            router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
+            return;
+          }
+          const profile = await db.getMyProfile();
+          if (profile) {
+            if (profile.status === "NONAKTIF") {
+              await safeSignOut();
+              router.replace("/login");
+              return;
+            }
+            if (profile.needsOnboarding) {
+              localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(profile));
+              router.replace("/onboarding");
+              return;
+            }
+          }
+        }
+
         const [anggotaList, commList] = await Promise.all([
           db.getAnggota([]),
           db.getCommissariats().catch(() => [])

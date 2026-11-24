@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SIAKAD Kaderisasi PMII (Multi-Tenant Platform)
 
-## Getting Started
+Sistem Informasi Kaderisasi & Administrasi multi-komisariat untuk **Pergerakan Mahasiswa Islam Indonesia (PMII)** berbasis **Next.js 16 (App Router + Turbopack)**, **React 19**, **Tailwind CSS v4**, dan **Supabase (Auth, PostgreSQL + RLS, Storage)**.
 
-First, run the development server:
+## Fitur Utama
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Publik:** Landing page organisasi, portal berita/opini (`/artikel`), profil tiap komisariat (`/komisariat/[slug]`), twibbon kegiatan (`/twibbon`), pendaftaran kegiatan kaderisasi (`/register`), serta verifikasi keanggotaan publik (`/api/verify-anggota`).
+- **Portal Anggota (`/anggota`, `/kader`, `/peserta`):** Tahapan kaderisasi (MAPABA, PKD, PKL), materi & kuis pre/post-test, penilaian minat/bakat, unggah RTL/laporan, profil lengkap, KTA digital, dan generator CV (DOCX & ATS).
+- **Dashboard Staf (`/admin`, `/pengurus`, `/instruktur`):** Manajemen anggota & impor/ekspor Excel, struktur kepengurusan, agenda & verifikasi pendaftaran kegiatan, penilaian & rekap nilai, persuratan dinamis berbasis template `.docx`, pengajuan SK berjenjang, arsip drive, artikel, galeri, serta manajemen pengguna & tenant.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Arsitektur Keamanan
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Autentikasi & Otorisasi Server-Side:**
+   - Sesi dikelola menggunakan `@supabase/ssr` berbasis cookie HTTP dan diverifikasi di server oleh [`proxy.ts`](./proxy.ts) (`supabase.auth.getUser()`).
+   - Peran (`role`) dan `tenant_id` otoritatif disimpan di `auth.users.raw_app_meta_data` (tidak dapat dimodifikasi pengguna dari sisi klien) dan diverifikasi ulang oleh RPC `public.get_my_profile()`.
+   - Tidak ada bypass kata sandi di sisi klien dan tidak ada penyimpanan kata sandi plaintext di `localStorage`.
+2. **Row Level Security (RLS) & Tenant Isolation:**
+   - Seluruh 17 tabel `public.*` mengaktifkan RLS dengan prinsip *least-privilege*.
+   - Tabel PII/internal (`anggota`, `pendaftaran`, `evaluations`, `surat`, `surat_templates`, `arsip`, `pengajuan_sk`) diblokir total dari role `anon`.
+   - Trigger `trg_protect_anggota_privileged_columns` mencegah eskalasi peran atau manipulasi status kelulusan oleh pengguna non-staf.
+   - Seluruh RPC manajemen akun (`get_auth_users`, `create_auth_user`, `update_auth_user`, `delete_user_from_auth`) dicabut dari `anon` dan menegakkan hirarki peran serta isolasi tenant di database.
+3. **Proteksi XSS & Dependensi:**
+   - Seluruh konten HTML dinamis (artikel, surat, template, pratinjau spreadsheet) disanitasi menggunakan `isomorphic-dompurify` ([`lib/sanitize.ts`](./lib/sanitize.ts)).
+   - Ekspor/impor Excel menggunakan `exceljs` ([`lib/excel.ts`](./lib/excel.ts)) menggantikan paket `xlsx` yang rentan.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup Lokal
 
-## Learn More
+1. Salin file environment:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Isi `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, dan `NEXT_PUBLIC_APP_URL`.
 
-To learn more about Next.js, take a look at the following resources:
+2. Install dependensi:
+   ```bash
+   npm install
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Terapkan migrasi database ke Supabase:
+   ```bash
+   npm run db:push
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+4. Jalankan server pengembangan:
+   ```bash
+   npm run dev
+   ```
 
-## Deploy on Vercel
+## Skrip Tersedia
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Perintah | Deskripsi |
+|---|---|
+| `npm run dev` | Menjalankan Next.js dev server |
+| `npm run build` | Build produksi (Turbopack + TypeScript check) |
+| `npm run lint` | Menjalankan ESLint pada seluruh kode |
+| `npm test` | Menjalankan unit test suite (Vitest) |
+| `npm run db:push` | Mendorong migrasi SQL ke Supabase remote |

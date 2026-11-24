@@ -230,7 +230,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             if (ev) {
               const dbQuiz = ev.quizResults || {};
               const currentRaw = localStorage.getItem(key);
-              let localData: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
+              const localData: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
               let hasReset = false;
 
               // Jika di localData tercatat post-test tapi di DB tidak ada (telah di-reset oleh instruktur), hapus!

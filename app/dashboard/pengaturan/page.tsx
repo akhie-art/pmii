@@ -14,7 +14,7 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 
-import { db, setUserPassword } from "@/lib/db";
+import { db } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { isUserKomisariat } from "@/lib/auth-helpers";
 import {
@@ -298,31 +298,19 @@ export default function PengaturanPage() {
     try {
       setIsSavingPassword(true);
 
-      // 1. Update password di Supabase Auth (auth.users)
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { error: updateAuthErr } = await supabase.auth.updateUser({
-            password: newPassword
-          });
-          if (updateAuthErr) {
-            console.warn("Supabase Auth updateUser warning:", updateAuthErr.message);
-          }
-        } catch (e: any) {
-          console.warn("Supabase Auth update password exception:", e);
-        }
+      if (!isSupabaseConfigured || !supabase) {
+        setPasswordError("Koneksi autentikasi server belum dikonfigurasi.");
+        return;
       }
 
-      // 2. Simpan juga ke credentials store aplikasi agar sinkron saat login kembali
-      setUserPassword([targetEmail, currentUser?.id, currentUser?.name], newPassword);
+      // Perbarui kata sandi secara aman langsung melalui Supabase Auth (auth.users)
+      const { error: updateAuthErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
-      // 3. Update password di tabel anggota jika ada kolom password
-      if (isSupabaseConfigured && supabase && currentUser?.id) {
-        try {
-          await supabase
-            .from("anggota")
-            .update({ password: newPassword })
-            .eq("id", currentUser.id);
-        } catch {}
+      if (updateAuthErr) {
+        setPasswordError(updateAuthErr.message || "Gagal memperbarui kata sandi.");
+        return;
       }
 
       setPasswordSuccess("Kata sandi akun Anda berhasil diperbarui secara aman!");
@@ -330,7 +318,7 @@ export default function PengaturanPage() {
       setNewPassword("");
       setConfirmPassword("");
       showToast("Kata sandi berhasil diperbarui!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Change password error:", err);
       setPasswordError("Gagal memperbarui kata sandi. Periksa koneksi.");
     } finally {

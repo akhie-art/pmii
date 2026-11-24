@@ -263,24 +263,33 @@ export default function RegisterPage() {
       return null;
     }
     try {
-      const regList = await db.getRegistrations();
       const cleanEmail = targetEmail.trim().toLowerCase();
-      const found = regList.find(
-        (r) => r.eventId === eventId && (
-          r.cadreEmail?.trim().toLowerCase() === cleanEmail ||
-          (r as any).email?.trim().toLowerCase() === cleanEmail
-        )
-      );
-      if (found) {
-        setAlreadyRegisteredData(found);
-        if (found.registrationNumber) {
-          setRegisteredNumber(found.registrationNumber);
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.rpc("check_registration_account", {
+          p_email: cleanEmail,
+          p_event_id: eventId,
+        });
+        if (!error && data?.alreadyRegistered && data.registration) {
+          const found = {
+            id: data.registration.id,
+            eventId,
+            cadreName: name || existingAccountName || "",
+            cadreEmail: cleanEmail,
+            dateApplied: data.registration.dateApplied || new Date().toISOString().split("T")[0],
+            status: data.registration.status || "APPROVED",
+            registrationNumber: data.registration.registrationNumber,
+          } as ParticipantRegistration;
+          setAlreadyRegisteredData(found);
+          if (found.registrationNumber) {
+            setRegisteredNumber(found.registrationNumber);
+          }
+          return found;
         }
-        return found;
-      } else {
         setAlreadyRegisteredData(null);
         return null;
       }
+      setAlreadyRegisteredData(null);
+      return null;
     } catch (err) {
       console.warn("Check event registration status error:", err);
       return null;
@@ -298,42 +307,56 @@ export default function RegisterPage() {
       return;
     }
 
-    if (targetEventId) {
-      await checkEventRegistrationStatus(cleanEmail, targetEventId);
-    }
-
     setIsVerifyingEmail(true);
     try {
-      const [cadres, users] = await Promise.all([
-        db.getCadres(),
-        db.getUsers()
-      ]);
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.rpc("check_registration_account", {
+          p_email: cleanEmail,
+          p_event_id: targetEventId || null,
+        });
 
-      const matchedCadre = cadres.find(c => c.email?.trim().toLowerCase() === cleanEmail);
-      const matchedUser = users.find(u => u.email?.trim().toLowerCase() === cleanEmail);
+        if (!error && data) {
+          if (data.alreadyRegistered && data.registration && targetEventId) {
+            const found = {
+              id: data.registration.id,
+              eventId: targetEventId,
+              cadreName: name || "",
+              cadreEmail: cleanEmail,
+              dateApplied: data.registration.dateApplied || new Date().toISOString().split("T")[0],
+              status: data.registration.status || "APPROVED",
+              registrationNumber: data.registration.registrationNumber,
+            } as ParticipantRegistration;
+            setAlreadyRegisteredData(found);
+            if (found.registrationNumber) setRegisteredNumber(found.registrationNumber);
+          } else {
+            setAlreadyRegisteredData(null);
+          }
 
-      if (matchedCadre || matchedUser) {
-        const foundName = matchedCadre?.name || matchedUser?.name || "";
-        const cleanFoundName = foundName.replace(/^Sahabat\s+/i, "").trim();
-        const foundPhone = matchedCadre?.phone || "";
-        const foundComm = matchedCadre?.commissariat || matchedUser?.commissariat || "";
-
-        setIsExistingAccount(true);
-        setExistingAccountName(cleanFoundName);
-        setExistingCadreObj(matchedCadre || matchedUser);
-
-        if (isFromGoogle) {
-          // Dari Google OAuth: identitas sudah terverifikasi
-          if (cleanFoundName && !name.trim()) setName(cleanFoundName);
-          if (foundPhone && !phone.trim()) setPhone(foundPhone);
-          if (foundComm && !commissariat.trim()) setCommissariat(foundComm);
-          setIsExistingPasswordVerified(true);
+          if (data.accountExists) {
+            setIsExistingAccount(true);
+            if (isFromGoogle) {
+              const profile = await db.getMyProfile();
+              const ownCadres = await db.getCadres([]);
+              const ownCadre = ownCadres.find((c) => c.email?.trim().toLowerCase() === cleanEmail) || profile;
+              const foundName = (ownCadre?.name || "").replace(/^Sahabat\s+/i, "").trim();
+              setExistingAccountName(foundName);
+              setExistingCadreObj(ownCadre);
+              if (foundName && !name.trim()) setName(foundName);
+              if ((ownCadre as any)?.phone && !phone.trim()) setPhone((ownCadre as any).phone);
+              if (ownCadre?.commissariat && !commissariat.trim()) setCommissariat(ownCadre.commissariat);
+              setIsExistingPasswordVerified(true);
+            } else {
+              setExistingAccountName("");
+              setExistingCadreObj(null);
+              setIsExistingPasswordVerified(false);
+            }
+          } else {
+            setIsExistingAccount(false);
+            setExistingAccountName("");
+            setExistingCadreObj(null);
+            setIsExistingPasswordVerified(false);
+          }
         }
-      } else {
-        setIsExistingAccount(false);
-        setExistingAccountName("");
-        setExistingCadreObj(null);
-        setIsExistingPasswordVerified(false);
       }
     } catch (err) {
       console.warn("Check existing account notice:", err);
@@ -741,19 +764,18 @@ export default function RegisterPage() {
 
     if (!email.trim()) return setError("Alamat email harus diisi.");
 
-    // Cek apakah akun ada jika belum dicek
+    // Cek apakah akun ada melalui RPC aman (tanpa ekspos PII)
+    const cleanEmail = email.trim().toLowerCase();
     let accountExists = isExistingAccount;
     let cadreObj = existingCadreObj;
-    if (!accountExists) {
-      const [cadres, users] = await Promise.all([db.getCadres(), db.getUsers()]);
-      const matchedCadre = cadres.find(c => c.email?.trim().toLowerCase() === email.trim().toLowerCase());
-      const matchedUser = users.find(u => u.email?.trim().toLowerCase() === email.trim().toLowerCase());
-      if (matchedCadre || matchedUser) {
+    if (!accountExists && isSupabaseConfigured && supabase) {
+      const { data: checkData } = await supabase.rpc("check_registration_account", {
+        p_email: cleanEmail,
+        p_event_id: targetEventId || null,
+      });
+      if (checkData?.accountExists) {
         accountExists = true;
-        cadreObj = matchedCadre || matchedUser;
         setIsExistingAccount(true);
-        setExistingCadreObj(cadreObj);
-        setExistingAccountName(cadreObj.name || "");
       }
     }
 
@@ -764,41 +786,34 @@ export default function RegisterPage() {
 
       setLoading(true);
       try {
-        let isValid = false;
-
-        // 1. Verifikasi dengan Supabase Auth
-        if (isSupabaseConfigured && supabase) {
-          try {
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-              email: email.trim().toLowerCase(),
-              password: password.trim()
-            });
-            if (authData?.user && !authError) {
-              isValid = true;
-            }
-          } catch (e) {}
+        if (!isSupabaseConfigured || !supabase) {
+          setError("Koneksi autentikasi server belum dikonfigurasi.");
+          setLoading(false);
+          return;
         }
 
-        // 2. Verifikasi dengan database lokal credential store
-        if (!isValid) {
-          const localPwd = db.getUserPassword(email.trim().toLowerCase()) 
-            || (cadreObj?.user_id && db.getUserPassword(cadreObj.user_id))
-            || (cadreObj?.id && db.getUserPassword(cadreObj.id));
-          if (localPwd && localPwd === password.trim()) {
-            isValid = true;
-          } else if (cadreObj?.password && cadreObj.password === password.trim()) {
-            isValid = true;
-          }
-        }
+        // Verifikasi eksklusif lewat Supabase Auth (tanpa fallback password lokal)
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: password.trim(),
+        });
 
-        if (!isValid) {
+        if (authError || !authData?.user) {
           setError("Kata sandi salah. Silakan periksa kembali kata sandi akun Anda.");
           setLoading(false);
           return;
         }
 
         setIsExistingPasswordVerified(true);
-        // Otomatis tarik data anggota yang sudah tersimpan jika field belum diisi
+
+        // Setelah login sah, ambil profil & data anggota milik user sendiri
+        const [profile, ownCadres] = await Promise.all([db.getMyProfile(), db.getCadres([])]);
+        cadreObj = ownCadres.find((c) => c.email?.trim().toLowerCase() === cleanEmail) || profile;
+        if (cadreObj) {
+          setExistingCadreObj(cadreObj);
+          setExistingAccountName(cadreObj.name || "");
+        }
+
         if (cadreObj?.name && !name.trim()) {
           const cleanName = cadreObj.name.replace(/^Sahabat\s+/i, "");
           setName(cleanName);
@@ -806,31 +821,20 @@ export default function RegisterPage() {
         if (cadreObj?.phone && !phone.trim()) setPhone(cadreObj.phone);
         if (cadreObj?.commissariat && !commissariat.trim()) setCommissariat(cadreObj.commissariat);
 
-        // Jika bukan pendaftaran event spesifik, ingatkan bahwa akun sudah terdaftar
         if (!targetEventId) {
           setError("Akun Anda sudah terdaftar di sistem. Silakan langsung masuk melalui halaman login.");
           setLoading(false);
           return;
         }
 
-        // Cek apakah sudah terdaftar pada kegiatan ini
-        const regList = await db.getRegistrations();
-        const alreadyReg = regList.find(
-          r => r.eventId === targetEventId && (
-            r.cadreEmail?.toLowerCase() === email.toLowerCase() ||
-            (r as any).email?.toLowerCase() === email.toLowerCase()
-          )
-        );
+        const alreadyReg = await checkEventRegistrationStatus(cleanEmail, targetEventId);
         if (alreadyReg) {
-          setAlreadyRegisteredData(alreadyReg);
-          if (alreadyReg.registrationNumber) setRegisteredNumber(alreadyReg.registrationNumber);
           setLoading(false);
           return;
         }
 
-        setCustomAnswers((prev) => syncAnswersWithData(prev, name, phone, email, cadreObj, eventDetails?.formFields));
-        setCustomAnswers((prev) => syncAnswersWithData(prev, name, phone, email, null, eventDetails?.formFields));
-      setStep(2);
+        setCustomAnswers((prev) => syncAnswersWithData(prev, name || cadreObj?.name || "", phone || cadreObj?.phone || "", cleanEmail, cadreObj, eventDetails?.formFields));
+        setStep(2);
       } catch (err) {
         console.error("Password verification error:", err);
         setError("Gagal memverifikasi kata sandi.");
@@ -851,32 +855,35 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const cadresList = await db.getCadres();
-      const isDuplicate = cadresList.some(c => c.email?.toLowerCase() === email.toLowerCase());
-      if (isDuplicate && !isGoogleAuthUser) {
-        setError("Alamat email sudah terdaftar. Masukkan kata sandi akun Anda untuk menghubungkan data profil.");
-        setIsExistingAccount(true);
-        setLoading(false);
-        return;
-      }
-
-      if (targetEventId) {
-        const regList = await db.getRegistrations();
-        const alreadyReg = regList.find(
-          r => r.eventId === targetEventId && (
-            r.cadreEmail?.toLowerCase() === email.toLowerCase() ||
-            (r as any).email?.toLowerCase() === email.toLowerCase()
-          )
-        );
-        if (alreadyReg) {
-          setAlreadyRegisteredData(alreadyReg);
-          if (alreadyReg.registrationNumber) setRegisteredNumber(alreadyReg.registrationNumber);
+      if (isSupabaseConfigured && supabase) {
+        const { data: checkData } = await supabase.rpc("check_registration_account", {
+          p_email: cleanEmail,
+          p_event_id: targetEventId || null,
+        });
+        if (checkData?.accountExists && !isGoogleAuthUser) {
+          setError("Alamat email sudah terdaftar. Masukkan kata sandi akun Anda untuk menghubungkan data profil.");
+          setIsExistingAccount(true);
+          setLoading(false);
+          return;
+        }
+        if (checkData?.alreadyRegistered && checkData.registration && targetEventId) {
+          const found = {
+            id: checkData.registration.id,
+            eventId: targetEventId,
+            cadreName: name,
+            cadreEmail: cleanEmail,
+            dateApplied: checkData.registration.dateApplied || new Date().toISOString().split("T")[0],
+            status: checkData.registration.status || "APPROVED",
+            registrationNumber: checkData.registration.registrationNumber,
+          } as ParticipantRegistration;
+          setAlreadyRegisteredData(found);
+          if (found.registrationNumber) setRegisteredNumber(found.registrationNumber);
           setLoading(false);
           return;
         }
       }
 
-      setCustomAnswers((prev) => syncAnswersWithData(prev, name, phone, email, null, eventDetails?.formFields));
+      setCustomAnswers((prev) => syncAnswersWithData(prev, name, phone, cleanEmail, null, eventDetails?.formFields));
       setStep(2);
     } catch (err) {
       console.error("Validation error", err);
@@ -915,26 +922,32 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const cadresList = await db.getCadres();
-      const isDuplicate = cadresList.some(c => c.email?.toLowerCase() === email.toLowerCase());
-      if (isDuplicate && !isGoogleAuthUser && !isExistingAccount) {
-        setError("Alamat email sudah terdaftar. Masukkan kata sandi akun Anda untuk menghubungkan profil.");
-        setLoading(false);
-        return;
-      }
-
+      const cleanEmail = email.trim().toLowerCase();
       const hasEvent = Boolean(targetEventId && eventDetails);
-      if (hasEvent) {
-        const regList = await db.getRegistrations();
-        const alreadyReg = regList.find(
-          r => r.eventId === targetEventId && (
-            r.cadreEmail?.toLowerCase() === email.toLowerCase() ||
-            (r as any).email?.toLowerCase() === email.toLowerCase()
-          )
-        );
-        if (alreadyReg) {
-          setAlreadyRegisteredData(alreadyReg);
-          if (alreadyReg.registrationNumber) setRegisteredNumber(alreadyReg.registrationNumber);
+
+      if (isSupabaseConfigured && supabase) {
+        const { data: checkData } = await supabase.rpc("check_registration_account", {
+          p_email: cleanEmail,
+          p_event_id: hasEvent ? targetEventId : null,
+        });
+        if (checkData?.accountExists && !isGoogleAuthUser && !isExistingAccount) {
+          setError("Alamat email sudah terdaftar. Masukkan kata sandi akun Anda untuk menghubungkan profil.");
+          setIsExistingAccount(true);
+          setLoading(false);
+          return;
+        }
+        if (hasEvent && checkData?.alreadyRegistered && checkData.registration) {
+          const found = {
+            id: checkData.registration.id,
+            eventId: targetEventId!,
+            cadreName: name,
+            cadreEmail: cleanEmail,
+            dateApplied: checkData.registration.dateApplied || new Date().toISOString().split("T")[0],
+            status: checkData.registration.status || "APPROVED",
+            registrationNumber: checkData.registration.registrationNumber,
+          } as ParticipantRegistration;
+          setAlreadyRegisteredData(found);
+          if (found.registrationNumber) setRegisteredNumber(found.registrationNumber);
           setLoading(false);
           return;
         }
@@ -949,8 +962,8 @@ export default function RegisterPage() {
             margin: 1,
             color: {
               dark: "#090d16",
-              light: "#ffffff"
-            }
+              light: "#ffffff",
+            },
           });
           setQrCodeDataUrl(generatedQr);
         } catch (qrErr) {
@@ -961,103 +974,48 @@ export default function RegisterPage() {
       const formattedName = name.replace(/^Sahabat\s+/i, "").trim();
       const userRole: UserRole = level !== "MAPABA" ? "anggota" : "peserta";
 
-      // 1. Sinkronisasi dengan Supabase Auth (auth.users sebagai Master Identity)
+      // 1. Daftarkan akun ke Supabase Auth jika akun baru
       let authUserId: string | undefined = existingCadreObj?.user_id || existingCadreObj?.id;
-      const effectivePassword = password.trim() || `GoogleAuth_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
       if (isSupabaseConfigured && supabase && !isExistingAccount) {
-        try {
-          const { data: userData } = await supabase.auth.getUser();
-          if (userData?.user?.id) {
-            authUserId = userData.user.id;
-          } else {
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-              email: email.trim().toLowerCase(),
-              password: effectivePassword,
-              options: {
-                data: {
-                  full_name: formattedName,
-                  commissariat: commissariat,
-                  level: level,
-                  role: userRole
-                }
-              }
-            });
-            if (authError && !authError.message?.toLowerCase().includes("already registered")) {
-              console.warn("Supabase Auth registration notice:", authError.message);
-            } else if (authData?.user) {
-              authUserId = authData.user.id;
-            }
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user?.id) {
+          authUserId = userData.user.id;
+        } else {
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: cleanEmail,
+            password: password.trim(),
+            options: {
+              data: {
+                name: formattedName,
+                full_name: formattedName,
+                commissariat,
+                level,
+                role: userRole,
+              },
+            },
+          });
+          if (authError && !authError.message?.toLowerCase().includes("already registered")) {
+            setError(authError.message || "Gagal mendaftarkan akun.");
+            setLoading(false);
+            return;
           }
-        } catch (authException) {
-          console.warn("Supabase Auth connection notice:", authException);
+          if (authData?.user) {
+            authUserId = authData.user.id;
+          }
         }
       }
-      
-      // 2. Simpan kredensial kata sandi ke credential store jika akun baru
-      if (!isExistingAccount) {
-        db.setUserPassword([authUserId, email.trim().toLowerCase(), formattedName, regNo], effectivePassword);
-      }
 
-      // 3. Rekam akun pengguna di tabel users sistem jika belum ada
-      const existingUsers = await db.getUsers();
-      let activeUserId = authUserId || `usr-${Date.now()}`;
-      if (!isExistingAccount) {
-        const newUserAccount: UserAccount = {
-          id: activeUserId,
-          user_id: authUserId,
+      const activeUserId = authUserId || existingCadreObj?.user_id || existingCadreObj?.id || "";
+
+      // 2. Perbarui biodata nama/telepon milik akun existing yang sudah terautentikasi
+      if (isExistingAccount && existingCadreObj?.id) {
+        await db.updateAnggota(existingCadreObj.id, {
           name: formattedName,
-          email: email.trim().toLowerCase(),
-          role: userRole,
-          commissariat: commissariat,
-          status: "AKTIF",
-          createdAt: new Date().toISOString()
-        };
-        await db.saveUsers([...existingUsers.filter(u => u.email?.toLowerCase() !== email.trim().toLowerCase()), newUserAccount]);
-      } else {
-        activeUserId = existingCadreObj?.user_id || existingCadreObj?.id || activeUserId;
-      }
-
-      // 4. ATURAN ORGANISASI: Data pendaftar MAPABA BARU berstatus PESERTA dan BELUM masuk ke tabel anggota.
-      //    Jika sudah merupakan akun anggota yang terdaftar (existing account), update nama yang diedit.
-      let createdCadre: CadreFollowUp | null = existingCadreObj || null;
-      if (isExistingAccount && existingCadreObj) {
-        const updatedList = cadresList.map(c => {
-          if (c.email?.toLowerCase() === email.trim().toLowerCase() || c.id === existingCadreObj.id) {
-            return {
-              ...c,
-              name: formattedName,
-              phone: phone.trim() || c.phone
-            };
-          }
-          return c;
+          phone: phone.trim() || existingCadreObj.phone,
         });
-        await db.saveCadres(updatedList);
-        createdCadre = { ...existingCadreObj, name: formattedName, phone: phone.trim() || existingCadreObj.phone };
-      } else if (!isExistingAccount && level !== "MAPABA") {
-        const newCadre: CadreFollowUp = {
-          id: `cadre-${Date.now()}`,
-          user_id: authUserId,
-          name: formattedName,
-          level: level,
-          commissariat: commissariat,
-          startDate: new Date().toISOString().split("T")[0],
-          status: "AKTIF",
-          submissions: [],
-          phone: phone.trim(),
-          email: email.trim().toLowerCase(),
-          address: `Komisariat ${commissariat}`,
-          isGraduated: true,
-          registrationNumber: regNo,
-          role: "anggota"
-        };
-        createdCadre = newCadre;
-        const updatedList = [...cadresList, newCadre];
-        await db.saveCadres(updatedList);
       }
 
-      // 5. Simpan data pendaftaran kegiatan (tabel pendaftaran)
-      const registrationsList = await db.getRegistrations();
+      // 3. Rekam pendaftaran kegiatan + evaluasi awal secara atomik melalui RPC aman
       const initialVerificationStatus: Record<string, boolean> = {};
       if (eventDetails) {
         (eventDetails.formFields || []).forEach((field) => {
@@ -1068,50 +1026,85 @@ export default function RegisterPage() {
       let effectiveEventId = targetEventId;
       if (!effectiveEventId) {
         const events = await db.getEvents();
-        const mapabaEvent = events.find(e => e.level === "MAPABA");
+        const mapabaEvent = events.find((ev) => ev.level === "MAPABA");
         effectiveEventId = mapabaEvent?.id || "act-mapaba";
       }
 
-      const newRegistration: ParticipantRegistration = {
-        id: `reg-${Date.now()}`,
-        eventId: effectiveEventId,
-        cadreName: formattedName,
-        cadreEmail: email.trim().toLowerCase(),
-        dateApplied: new Date().toISOString().split("T")[0],
-        status: "APPROVED",
-        notes: isExistingAccount ? "Pendaftaran anggota terverifikasi berhasil direkam." : "Pendaftaran calon peserta berhasil direkam.",
-        answers: customAnswers,
-        verificationStatus: initialVerificationStatus,
-        registrationNumber: regNo,
-        attendance: [],
-        isGraduated: existingCadreObj?.isGraduated ?? (level !== "MAPABA")
-      };
+      const targetTenantId =
+        (eventDetails as any)?.tenant_id ||
+        (eventDetails as any)?.komisariat_id ||
+        existingCadreObj?.tenant_id ||
+        existingCadreObj?.komisariat_id ||
+        null;
 
-      await db.saveRegistrations([...registrationsList, newRegistration]);
+      if (isSupabaseConfigured && supabase) {
+        const { data: regResult, error: regErr } = await supabase.rpc("submit_public_registration", {
+          p_event_id: effectiveEventId,
+          p_cadre_name: formattedName,
+          p_cadre_email: cleanEmail,
+          p_phone: phone.trim(),
+          p_level: level,
+          p_tenant_id: targetTenantId,
+          p_answers: customAnswers,
+          p_verification_status: initialVerificationStatus,
+          p_registration_number: regNo || null,
+          p_notes: isExistingAccount
+            ? "Pendaftaran anggota terverifikasi berhasil direkam."
+            : "Pendaftaran calon peserta berhasil direkam.",
+          p_is_existing: isExistingAccount,
+        });
 
-      try {
-        await ensureEvaluationForRegistration(newRegistration, null, createdCadre);
-      } catch (evalErr) {
-        console.warn("Failed to auto-sync evaluation on public register:", evalErr);
+        if (regErr) {
+          throw new Error(regErr.message || "Gagal menyimpan pendaftaran kegiatan.");
+        }
+        if (regResult?.alreadyRegistered) {
+          setAlreadyRegisteredData({
+            id: regResult.id,
+            eventId: effectiveEventId,
+            cadreName: formattedName,
+            cadreEmail: cleanEmail,
+            dateApplied: new Date().toISOString().split("T")[0],
+            status: regResult.status || "APPROVED",
+            registrationNumber: regResult.registrationNumber,
+          } as ParticipantRegistration);
+          if (regResult.registrationNumber) setRegisteredNumber(regResult.registrationNumber);
+          setLoading(false);
+          return;
+        }
       }
 
-      // Simpan session lokal jika akun terverifikasi (Google atau Akun Anggota yang sudah ada)
-      if (isGoogleAuthUser || isExistingAccount) {
+      // 4. Sinkronkan cache UI sesi (tanpa password) jika sudah terautentikasi
+      if (isGoogleAuthUser || isExistingAccount || authUserId) {
+        const freshProfile = await db.getMyProfile();
         const loggedInSession = {
-          id: activeUserId,
-          user_id: activeUserId,
-          name: formattedName,
-          email: email.trim().toLowerCase(),
-          role: existingCadreObj?.role || userRole,
-          commissariat: existingCadreObj?.commissariat || commissariat,
-          status: "active" as const,
-          avatar: googleAvatar || existingCadreObj?.avatar || "",
-          needsOnboarding: false,
-          allowedMenus: ["/anggota", "/anggota/kegiatan", "/anggota/materi", "/anggota/profil", "/anggota/laporan"]
+          id: freshProfile?.id || activeUserId,
+          user_id: freshProfile?.user_id || activeUserId,
+          name: freshProfile?.name || formattedName,
+          email: cleanEmail,
+          role: freshProfile?.role || existingCadreObj?.role || userRole,
+          commissariat: freshProfile?.commissariat || existingCadreObj?.commissariat || commissariat,
+          tenant_id: freshProfile?.tenant_id || targetTenantId,
+          komisariat_id: freshProfile?.komisariat_id || targetTenantId,
+          status: "AKTIF" as const,
+          avatar: freshProfile?.avatar || googleAvatar || existingCadreObj?.avatar || "",
+          needsOnboarding: Boolean(freshProfile?.needsOnboarding),
+          allowedMenus: freshProfile?.allowedMenus || [
+            "/anggota",
+            "/anggota/kegiatan",
+            "/anggota/materi",
+            "/anggota/profil",
+            "/anggota/laporan",
+          ],
         };
         localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInSession));
-        localStorage.setItem("PMII_ACTIVE_CADRE_ID", activeUserId);
-        localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", loggedInSession.commissariat);
+        const cadreId = freshProfile?.anggota_id || loggedInSession.id;
+        if (cadreId) {
+          localStorage.setItem("PMII_ACTIVE_CADRE_ID", cadreId);
+          localStorage.setItem("PMII_ACTIVE_ANGGOTA_ID", cadreId);
+        }
+        if (loggedInSession.commissariat) {
+          localStorage.setItem("PMII_ACTIVE_COMMISSARIAT", loggedInSession.commissariat);
+        }
       }
 
       setLoading(false);
@@ -1126,7 +1119,7 @@ export default function RegisterPage() {
         commissariat: existingCadreObj?.commissariat || commissariat,
         eventName: eventDetails?.name || "Kegiatan Kaderisasi",
         level: eventDetails?.level || level,
-        dateApplied: newRegistration.dateApplied,
+        dateApplied: new Date().toISOString().split("T")[0],
         role: effectiveRole,
         isExistingAccount: Boolean(isExistingAccount),
         isGoogleAuthUser: Boolean(isGoogleAuthUser),

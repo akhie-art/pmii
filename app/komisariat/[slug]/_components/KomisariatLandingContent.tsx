@@ -104,12 +104,13 @@ export function KomisariatLandingContent({ slug }: Props) {
 
     const loadData = async () => {
       try {
-        const [commList, boardList, cadresList, eventList, articleList] = await Promise.all([
+        const { supabase, isSupabaseConfigured } = await import("@/lib/supabase");
+        const [commList, boardList, eventList, articleList, statsRes] = await Promise.all([
           db.getCommissariats(DEFAULT_COMMISSARIATS),
           db.getBoards([]),
-          db.getCadres([]),
           db.getEvents([]),
-          db.getArticles()
+          db.getArticles(),
+          fetch("/api/public-stats").then((r) => r.json()).catch(() => null),
         ]);
 
         // Find matching commissariat by slug or id or partial name
@@ -128,8 +129,24 @@ export function KomisariatLandingContent({ slug }: Props) {
           setKomisariat(found);
           const bph = getKomisariatBph(found, boardList);
           setBphData(bph);
-          setCadres(cadresList);
           setGallery(found.gallery || []);
+
+          // Muat direktori avatar & gender pengurus secara aman melalui RPC (tanpa membaca tabel anggota)
+          if (isSupabaseConfigured && supabase) {
+            const { data: dirRows } = await supabase.rpc("get_public_board_directory", {
+              p_tenant_id: found.id,
+            });
+            if (Array.isArray(dirRows)) {
+              setCadres(
+                dirRows.map((d: any) => ({
+                  id: d.anggota_id || d.pengurus_id,
+                  name: d.name || "",
+                  avatar: d.avatar || "",
+                  gender: d.gender || "Laki-laki",
+                })) as any
+              );
+            }
+          }
 
           // Filter board members for this commissariat
           const fNorm = normalizeTenantName(found.name);
@@ -146,17 +163,10 @@ export function KomisariatLandingContent({ slug }: Props) {
           });
           setBoardMembers(commBoards);
 
-          // Count cadres belonging to this commissariat
-          const matchedCadres = cadresList.filter((c: any) => {
-            if (c.tenant_id === found.id || c.komisariat_id === found.id) return true;
-            const cComm = normalizeTenantName(c.commissariat || c.komisariat || c.campus || "");
-            return (
-              (fNorm && cComm === fNorm) ||
-              (fNorm && cComm.includes(fNorm)) ||
-              (uNorm && cComm.includes(uNorm))
-            );
-          });
-          setCadresCount(matchedCadres.length);
+          // Jumlah kader per komisariat dari agregat publik (tanpa PII)
+          const tenantCounts = statsRes?.tenantCounts || {};
+          const countForTenant = typeof tenantCounts[found.id] === "number" ? tenantCounts[found.id] : 0;
+          setCadresCount(countForTenant);
 
           // Filter events/kaderisasi organized by this commissariat
           const matchedEvents = eventList.filter((e: any) => {

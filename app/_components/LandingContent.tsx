@@ -112,23 +112,15 @@ export function LandingContent() {
     setMounted(true);
     setDarkMode(document.documentElement.classList.contains("dark"));
 
-    // 1. Load accurate cadre count from DB
-    db.getCadres([])
-      .then((cadres) => {
-        if (Array.isArray(cadres)) {
-          setCadresCount(cadres.length);
+    // 1. Load accurate public aggregate stats via API/RPC (tanpa ekspos tabel anggota)
+    fetch("/api/public-stats")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.cadresCount === "number") {
+          setCadresCount(data.cadresCount);
         }
       })
-      .catch(() => {
-        fetch("/api/public-stats")
-          .then((res) => res.json())
-          .then((data) => {
-            if (data && typeof data.cadresCount === "number") {
-              setCadresCount(data.cadresCount);
-            }
-          })
-          .catch(() => {});
-      })
+      .catch(() => {})
       .finally(() => {
         setIsLoadingStats(false);
       });
@@ -219,27 +211,7 @@ export function LandingContent() {
           setVerifyResults("NOT_FOUND");
         }
       } else {
-        const localCadres = await db.getCadres([]);
-        const qLower = query.toLowerCase();
-        const matches = localCadres
-          .filter(
-            (c: any) =>
-              (c.name && String(c.name).toLowerCase().includes(qLower)) ||
-              (c.nim && String(c.nim).toLowerCase().includes(qLower))
-          )
-          .slice(0, 5)
-          .map((m: any) => ({
-            name: m.name,
-            level: m.level || "Anggota",
-            commissariat: m.commissariat || "PC PMII Grobogan",
-            status: m.status || "Aktif",
-          }));
-
-        if (matches.length > 0) {
-          setVerifyResults(matches);
-        } else {
-          setVerifyResults("NOT_FOUND");
-        }
+        setVerifyResults("NOT_FOUND");
       }
     } catch {
       setVerifyResults("NOT_FOUND");

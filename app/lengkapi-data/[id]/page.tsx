@@ -128,23 +128,14 @@ export default function LengkapiDataPage() {
       try {
         let foundCadre: any = null;
 
-        // Coba cari dari Supabase terlebih dahulu
+        // Ambil data anggota tunggal secara aman melalui RPC (tanpa akses baca massal tabel anggota)
         if (isSupabaseConfigured && supabase) {
-          const { data, error } = await supabase
-            .from("anggota")
-            .select("*")
-            .eq("id", memberId)
-            .maybeSingle();
-
+          const { data, error } = await supabase.rpc("get_anggota_for_completion", {
+            p_id: memberId,
+          });
           if (!error && data) {
             foundCadre = data;
           }
-        }
-
-        // Fallback dari db.getCadres
-        if (!foundCadre) {
-          const cadres = await db.getCadres([]);
-          foundCadre = cadres.find((c: any) => c.id === memberId);
         }
 
         if (!foundCadre) {
@@ -253,18 +244,18 @@ export default function LengkapiDataPage() {
       setErrorMsg("Nomor WhatsApp/HP wajib diisi untuk verifikasi.");
       return;
     }
-    if (createAccount && email.trim() && !password.trim()) {
-      setErrorMsg("Silakan buat kata sandi akun untuk akses aplikasi.");
-      return;
+    if (createAccount && email.trim() && !memberData?.hasAccount) {
+      if (!password.trim() || password.trim().length < 6) {
+        setErrorMsg("Kata sandi akun minimal 6 karakter.");
+        return;
+      }
     }
 
     setSubmitting(true);
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const updatedCadre = {
-        ...memberData,
-        id: memberId,
+      const payload = {
         name: name.trim(),
         nim: nim.trim(),
         tempatLahir: tempatLahir.trim(),
@@ -272,71 +263,35 @@ export default function LengkapiDataPage() {
         gender,
         golonganDarah,
         phone: phone.trim(),
-        email: cleanEmail,
         alamatRumah: alamatRumah.trim(),
-        address: alamatRumah.trim(),
         alamatDomisili: alamatDomisili.trim(),
-        provinsi: provinsi.trim(),
-        kabupaten: kabupaten.trim(),
-        kecamatan: kecamatan.trim(),
         perguruanTinggi: perguruanTinggi.trim(),
         fakultas: fakultas.trim(),
         jurusan: jurusan.trim(),
         angkatan: angkatan.trim(),
-        level,
-        commissariat: komisariat,
         avatar,
-        status: "AKTIF"
       };
 
-      // 1. Simpan ke Supabase tabel anggota secara langsung (dengan fallback kader)
-      if (isSupabaseConfigured && supabase) {
-        const payload: any = { ...updatedCadre };
-        delete payload.commissariat;
-        delete payload.komisariat_id;
-        delete payload.password;
-        delete payload.role_detail;
-        delete payload.allowedMenus;
-        delete payload.needsOnboarding;
-
-        const { error: dbError } = await supabase
-          .from("anggota")
-          .update(payload)
-          .eq("id", memberId);
-
-        if (dbError) {
-          console.warn("Notice Supabase direct update on anggota:", dbError.message);
-        }
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("Koneksi basis data belum dikonfigurasi.");
       }
 
-      // 2. Simpan via db helper agar cache lokal tersinkronisasi
-      const cadres = await db.getCadres([]);
-      const updatedCadres = cadres.map((c: any) => (c.id === memberId ? updatedCadre : c));
-      await db.saveCadres(updatedCadres);
+      const { error: rpcError } = await supabase.rpc("complete_anggota_profile", {
+        p_id: memberId,
+        p_payload: payload,
+        p_email: cleanEmail || null,
+        p_password: createAccount && !memberData?.hasAccount && password.trim().length >= 6 ? password.trim() : null,
+      });
 
-      // 3. Jika kader mengisi email dan memilih buat akun, sinkronkan ke Supabase Users Authentication
-      if (cleanEmail && cleanEmail.includes("@")) {
-        const pwd = password.trim() || "pmii1960";
-        if (isSupabaseConfigured && supabase) {
-          try {
-            await supabase.rpc("sync_user_to_auth", {
-              p_email: cleanEmail,
-              p_password: pwd,
-              p_name: name.trim(),
-              p_role: "anggota",
-              p_commissariat: komisariat
-            });
-          } catch (authErr) {
-            console.warn("Notice sync user to auth:", authErr);
-          }
-        }
+      if (rpcError) {
+        throw new Error(rpcError.message || "Gagal menyimpan pembaruan biodata.");
       }
 
       setSuccess(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error updating member data:", err);
-      setErrorMsg(err.message || "Gagal menyimpan data. Silakan coba lagi.");
+      setErrorMsg(err instanceof Error ? err.message : "Gagal menyimpan data. Silakan coba lagi.");
     } finally {
       setSubmitting(false);
     }

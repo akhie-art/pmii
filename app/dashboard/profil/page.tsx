@@ -636,80 +636,24 @@ export default function DashboardProfilPage() {
     try {
       setIsSavingPassword(true);
 
-      // Record in credentials store
-      db.setUserPassword(
-        [
-          currentCadre?.id,
-          currentCadre?.user_id,
-          currentCadre?.email,
-          currentCadre?.nim || currentCadre?.nik,
-          currentCadre?.name
-        ],
-        newPassword
-      );
-
-      // Update cadre record
-      if (currentCadre) {
-        const updatedCadre = { ...currentCadre, password: newPassword };
-        setCurrentCadre(updatedCadre);
-        const updatedCadres = cadres.map(c => c.id === currentCadre.id ? updatedCadre : c);
-        await db.saveCadres(updatedCadres);
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("Koneksi autentikasi server belum dikonfigurasi.");
       }
 
-      // Update users
-      const users = await db.getUsers();
-      const userIdx = users.findIndex(
-        (u) =>
-          (currentCadre && u.id === currentCadre.id) ||
-          (currentCadre?.user_id && u.user_id === currentCadre.user_id) ||
-          (currentCadre?.email && u.email?.toLowerCase() === currentCadre.email.toLowerCase()) ||
-          (currentCadre?.name && u.name?.toLowerCase().trim() === currentCadre.name.toLowerCase().trim())
-      );
-      if (userIdx !== -1) {
-        users[userIdx] = {
-          ...users[userIdx],
-          password: newPassword
-        };
-        await db.saveUsers(users);
+      // Perbarui kata sandi secara aman langsung melalui Supabase Auth API (tanpa plaintext di localStorage)
+      const { error: authErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (authErr) {
+        throw new Error(authErr.message || "Gagal memperbarui kata sandi di server autentikasi.");
       }
 
-      // Update active session
-      if (typeof window !== "undefined") {
-        const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
-        if (savedUserStr) {
-          try {
-            const loggedInUser = JSON.parse(savedUserStr);
-            loggedInUser.password = newPassword;
-            localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(loggedInUser));
-          } catch (e) {}
-        }
-      }
-
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const targetEmail = (currentCadre?.email || "").trim().toLowerCase();
-          if (targetEmail.includes("@")) {
-            await supabase.rpc("sync_user_to_auth", {
-              p_email: targetEmail,
-              p_password: newPassword,
-              p_name: currentCadre?.name,
-              p_role: currentCadre?.role || "admin",
-              p_commissariat: currentCadre?.commissariat || "Ki Ageng Getas Pendawa"
-            });
-            await supabase.auth.signInWithPassword({
-              email: targetEmail,
-              password: newPassword
-            });
-          }
-        } catch (supabaseErr) {
-          console.warn("Supabase Auth password update error:", supabaseErr);
-        }
-      }
       setNewPassword("");
       setConfirmPassword("");
       toast.success("Kata sandi berhasil diubah! Silakan gunakan kata sandi baru ini saat login.");
-    } catch (err: any) {
-      toast.error(err.message || "Gagal mengubah kata sandi.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengubah kata sandi.");
     } finally {
       setIsSavingPassword(false);
     }

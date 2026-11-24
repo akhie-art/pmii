@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -15,35 +15,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const queryLower = query.toLowerCase();
-    const anggotaList = await db.getAnggota();
+    if (query.length > 100) {
+      return NextResponse.json(
+        { error: "Kata kunci pencarian terlalu panjang" },
+        { status: 400 }
+      );
+    }
 
-    const matches = anggotaList.filter(
-      (c: any) =>
-        (c.name && String(c.name).toLowerCase().includes(queryLower)) ||
-        (c.nim && String(c.nim).toLowerCase().includes(queryLower)) ||
-        (c.nik && String(c.nik).toLowerCase() === queryLower) ||
-        (c.id && String(c.id).toLowerCase() === queryLower)
-    );
-
-    if (matches.length === 0) {
+    if (!isSupabaseConfigured || !supabase) {
       return NextResponse.json({ found: false, results: [] });
     }
 
-    const mappedResults = matches.slice(0, 5).map((match: any) => ({
-      name: match.name,
-      level: match.level || "Anggota",
-      commissariat: match.commissariat || "PC PMII Grobogan",
-      status: match.status || "Aktif",
-    }));
+    // Gunakan RPC publik sempit yang hanya mengembalikan 4 kolom aman (maks 5 hasil), tanpa menarik seluruh tabel anggota
+    const { data, error } = await supabase.rpc("verify_anggota_public", {
+      p_query: query,
+    });
 
-    // Hanya kembalikan data publik yang aman untuk verifikasi
+    if (error) {
+      console.error("[API Verify Anggota RPC Error]:", error.message);
+      return NextResponse.json(
+        { error: "Terjadi kesalahan saat memverifikasi anggota" },
+        { status: 500 }
+      );
+    }
+
+    const mappedResults = Array.isArray(data) ? data : [];
+
+    if (mappedResults.length === 0) {
+      return NextResponse.json({ found: false, results: [] });
+    }
+
     return NextResponse.json({
       found: true,
       anggota: mappedResults[0],
       cadre: mappedResults[0],
       results: mappedResults,
-      totalMatches: matches.length,
+      totalMatches: mappedResults.length,
     });
   } catch (error) {
     console.error("[API Verify Anggota Error]:", error);

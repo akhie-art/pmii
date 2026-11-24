@@ -449,19 +449,18 @@ function DocumentViewerModal({
         const buffer = await res.arrayBuffer();
         if (!isMounted || !containerRef.current) return;
 
-        const XLSX = await import("xlsx");
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const htmlTable = XLSX.utils.sheet_to_html(worksheet, { id: "excel-preview-table" });
+        const { spreadsheetBufferToSafeHtml } = await import("@/lib/excel");
+        const { escapeHtml } = await import("@/lib/sanitize");
+        const { sheetName: firstSheetName, sheetCount, htmlTable } =
+          await spreadsheetBufferToSafeHtml(buffer, fileUrl);
 
         if (!isMounted || !containerRef.current) return;
         const targetEl = containerRef.current;
         targetEl.innerHTML = `
           <div class="w-full bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
             <div class="mb-3 flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-              <span class="text-xs font-bold text-zinc-800 dark:text-zinc-200">Lembar Kerja: ${firstSheetName}</span>
-              <span class="text-[10px] text-zinc-400">Total ${workbook.SheetNames.length} sheet</span>
+              <span class="text-xs font-bold text-zinc-800 dark:text-zinc-200">Lembar Kerja: ${escapeHtml(firstSheetName)}</span>
+              <span class="text-[10px] text-zinc-400">Total ${sheetCount} sheet</span>
             </div>
             <div class="overflow-x-auto text-xs [&>table]:w-full [&>table]:border-collapse [&_th]:bg-zinc-100 dark:[&_th]:bg-zinc-800 [&_th]:p-2 [&_th]:border [&_th]:border-zinc-200 dark:[&_th]:border-zinc-700 [&_td]:p-2 [&_td]:border [&_td]:border-zinc-200 dark:[&_td]:border-zinc-700 text-zinc-800 dark:text-zinc-200">
               ${htmlTable}

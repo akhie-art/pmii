@@ -787,7 +787,7 @@ export default function AnggotaPage() {
         memberEmail = `${fallbackSlug}@pmii.id`;
       }
 
-      let baseEmail = memberEmail;
+      const baseEmail = memberEmail;
       let emailCounter = 1;
       while (existingBatchEmails.has(memberEmail)) {
         const [userPart, domainPart] = baseEmail.split("@");
@@ -796,13 +796,13 @@ export default function AnggotaPage() {
       }
       existingBatchEmails.add(memberEmail);
 
-      // Tentukan password
-      let assignedPassword = accountSettings.customPassword || "pmii1960";
+      // Tentukan password (jika kosong, createAuthUser akan menghasilkan sandi acak yang aman)
+      let assignedPassword = accountSettings.customPassword?.trim() || "";
       if (accountSettings.passwordType === "nim" || accountSettings.passwordType === "nik") {
-        assignedPassword = cleanNim || accountSettings.customPassword || "pmii1960";
+        assignedPassword = cleanNim.length >= 6 ? cleanNim : accountSettings.customPassword?.trim() || "";
       } else if (accountSettings.passwordType === "birthdate") {
         const cleanBdate = (data.tanggalLahir || "").replace(/\D/g, "");
-        assignedPassword = cleanBdate.length >= 6 ? cleanBdate : accountSettings.customPassword || "pmii1960";
+        assignedPassword = cleanBdate.length >= 6 ? cleanBdate : accountSettings.customPassword?.trim() || "";
       }
 
       const newMember: Member = {
@@ -885,23 +885,20 @@ export default function AnggotaPage() {
         const mergedUsers = [...filteredNewUsers, ...currentUsers];
         await db.saveUsers(mergedUsers);
 
-        // Sinkronkan ke Supabase Auth jika terkonfigurasi (secara batch/chunk untuk menghindari rate-limit)
+        // Buat akun autentikasi secara aman via RPC create_auth_user (tanpa menimpa sesi admin yang sedang login)
         if (isSupabaseConfigured && supabase) {
+          const { createAuthUser } = await import("@/lib/db");
           const CHUNK_SIZE = 5;
           for (let i = 0; i < filteredNewUsers.length; i += CHUNK_SIZE) {
             const chunk = filteredNewUsers.slice(i, i + CHUNK_SIZE);
             await Promise.allSettled(
               chunk.map((u) =>
-                supabase!.auth.signUp({
+                createAuthUser({
                   email: u.email,
-                  password: u.password || "pmii1960",
-                  options: {
-                    data: {
-                      name: u.name,
-                      role: "anggota",
-                      commissariat: u.commissariat
-                    }
-                  }
+                  password: u.password && u.password.length >= 6 ? u.password : undefined,
+                  name: u.name,
+                  role: "anggota",
+                  commissariat: u.commissariat,
                 })
               )
             );
@@ -970,24 +967,16 @@ export default function AnggotaPage() {
           "Riwayat Penyakit": m.riwayatPenyakit || "-"
         }));
 
-        const XLSX = await import("xlsx");
-        const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
-
-        const objectWidths = headers.map((header) => {
-          let maxLen = header.length;
-          rows.forEach((row) => {
-            const val = String((row as any)[header] || "");
-            if (val.length > maxLen) maxLen = val.length;
-          });
-          return { wch: maxLen + 2 };
-        });
-        worksheet["!cols"] = objectWidths;
-
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Data Kader");
-        XLSX.writeFile(
-          workbook,
-          `Data_Kader_PMII_${new Date().toISOString().split("T")[0]}.xlsx`
+        const { exportToExcel } = await import("@/lib/excel");
+        await exportToExcel(
+          `Data_Kader_PMII_${new Date().toISOString().split("T")[0]}.xlsx`,
+          [
+            {
+              name: "Data Kader",
+              headers,
+              rows,
+            },
+          ]
         );
 
         setIsExporting(false);
