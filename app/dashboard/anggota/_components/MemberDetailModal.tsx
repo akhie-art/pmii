@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState } from "react";
 import {
   X,
@@ -240,9 +242,11 @@ export default function MemberDetailModal({
                       <span className="text-zinc-500 block text-[11px]">Pas Foto</span>
                       {photoSrc ? (
                         <div className="mt-1 flex items-center gap-2">
-                          <img
+                          <SmartImage
                             src={photoSrc}
                             alt={member.name}
+                            width={40}
+                            height={48}
                             className="w-10 h-12 object-cover rounded border border-zinc-200 dark:border-zinc-700 shrink-0"
                           />
                           <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 truncate">
@@ -518,7 +522,7 @@ export default function MemberDetailModal({
                 <div className="mt-6 flex items-center gap-4">
                   <div className="w-14 h-14 rounded-lg bg-white/10 ring-2 ring-amber-400/60 overflow-hidden flex items-center justify-center font-bold text-amber-300 text-lg shrink-0">
                     {photoSrc ? (
-                      <img src={photoSrc} alt={member.name} className="w-full h-full object-cover" />
+                      <SmartImage src={photoSrc} alt={member.name} width={56} height={56} className="w-full h-full object-cover" />
                     ) : (
                       initials
                     )}

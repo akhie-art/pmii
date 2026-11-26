@@ -77,43 +77,45 @@ export default function KaderKegiatanPage() {
   useEffect(() => {
     // 0. Instant Cache Hydration: langsung render dari data lokal agar tidak menunggu network request
     if (typeof window !== "undefined") {
-      try {
-        const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
-        if (savedUserStr) {
-          const u = JSON.parse(savedUserStr);
-          setActiveCadre({
-            id: u.id || u.user_id || `cadre-${Date.now()}`,
-            name: u.name || "Peserta PMII",
-            email: u.email || "",
-            level: "MAPABA",
-            commissariat: u.commissariat || "Ki Ageng Getas Pendawa",
-            status: "AKTIF",
-            submissions: []
-          });
-        }
-
-        const cachedEventsStr = localStorage.getItem(KEYS.EVENTS);
-        if (cachedEventsStr) {
-          const parsedEv = JSON.parse(cachedEventsStr);
-          if (Array.isArray(parsedEv) && parsedEv.length > 0) {
-            setEvents(parsedEv);
+      queueMicrotask(() => {
+        try {
+          const savedUserStr = localStorage.getItem("PMII_LOGGED_IN_USER");
+          if (savedUserStr) {
+            const u = JSON.parse(savedUserStr);
+            setActiveCadre({
+              id: u.id || u.user_id || `cadre-${Date.now()}`,
+              name: u.name || "Peserta PMII",
+              email: u.email || "",
+              level: "MAPABA",
+              commissariat: u.commissariat || "Ki Ageng Getas Pendawa",
+              status: "AKTIF",
+              submissions: []
+            });
           }
-        }
 
-        const cachedRegsStr = localStorage.getItem(KEYS.REGISTRATIONS);
-        if (cachedRegsStr) {
-          const parsedReg = JSON.parse(cachedRegsStr);
-          if (Array.isArray(parsedReg)) {
-            setRegistrations(parsedReg);
+          const cachedEventsStr = localStorage.getItem(KEYS.EVENTS);
+          if (cachedEventsStr) {
+            const parsedEv = JSON.parse(cachedEventsStr);
+            if (Array.isArray(parsedEv) && parsedEv.length > 0) {
+              setEvents(parsedEv);
+            }
           }
-        }
 
-        if (savedUserStr || cachedEventsStr) {
-          setMounted(true);
+          const cachedRegsStr = localStorage.getItem(KEYS.REGISTRATIONS);
+          if (cachedRegsStr) {
+            const parsedReg = JSON.parse(cachedRegsStr);
+            if (Array.isArray(parsedReg)) {
+              setRegistrations(parsedReg);
+            }
+          }
+
+          if (savedUserStr || cachedEventsStr) {
+            setMounted(true);
+          }
+        } catch (fastHydrateErr) {
+          console.warn("Fast hydration error:", fastHydrateErr);
         }
-      } catch (fastHydrateErr) {
-        console.warn("Fast hydration error:", fastHydrateErr);
-      }
+      });
     }
 
     const loadData = async () => {

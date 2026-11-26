@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -109,8 +111,10 @@ export function LandingContent() {
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    setDarkMode(document.documentElement.classList.contains("dark"));
+    queueMicrotask(() => {
+      setMounted(true);
+      setDarkMode(document.documentElement.classList.contains("dark"));
+    });
 
     // 1. Load accurate public aggregate stats via API/RPC (tanpa ekspos tabel anggota)
     fetch("/api/public-stats")
@@ -126,7 +130,6 @@ export function LandingContent() {
       });
 
     // 2. Load published articles
-    setIsLoadingArticles(true);
     db.getArticles()
       .then((arts) => {
         setArticles(Array.isArray(arts) ? arts.filter((a) => a.status === "DITAMPILKAN") : []);
@@ -318,9 +321,11 @@ export function LandingContent() {
         className={`${boxClass} rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center overflow-hidden shrink-0`}
       >
         {ok ? (
-          <img
+          <SmartImage
             src={kom.logo}
             alt={kom.name}
+            width={64}
+            height={64}
             onError={() => setBrokenLogos((prev) => ({ ...prev, [kom.id]: true }))}
             className="w-full h-full object-contain"
           />
@@ -877,9 +882,11 @@ export function LandingContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="w-11 h-11 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/80 p-1.5 flex items-center justify-center shrink-0 overflow-hidden">
                           {hasValidLogo ? (
-                            <img
+                            <SmartImage
                               src={kom.logo}
                               alt={kom.name}
+                              width={64}
+                              height={64}
                               onError={() =>
                                 setBrokenLogos((prev) => ({ ...prev, [kom.id]: true }))
                               }

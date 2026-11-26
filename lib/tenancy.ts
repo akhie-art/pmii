@@ -162,10 +162,20 @@ export function getKomisariatSlug(nameOrObj: string | { name: string; id?: strin
  */
 export function isCabangOrAdmin(user: UserAccount | null | undefined): boolean {
   if (!user) return false;
-  const email = (user.email || "").toLowerCase();
-  const role = (user.role || "").toUpperCase();
+  const role = (user.role || "").toUpperCase().trim();
   const comm = (user.commissariat || (user as any).komisariat || "").toUpperCase();
   const jabatan = ((user as any).jabatan || "").toUpperCase();
+
+  // Peran kader/peserta/instruktur tidak pernah memiliki hak akses admin cabang
+  if (
+    role === "ANGGOTA" ||
+    role === "PESERTA" ||
+    role === "KADER" ||
+    role === "CALON" ||
+    role === "INSTRUKTUR"
+  ) {
+    return false;
+  }
 
   // Jika peran eksplisit pengurus/ketua komisariat (bukan Cabang)
   if (
@@ -190,13 +200,7 @@ export function isCabangOrAdmin(user: UserAccount | null | undefined): boolean {
     return false;
   }
 
-  if (
-    email.includes("cabang") && !email.includes("komisariat")
-  ) {
-    return true;
-  }
-
-  // Role Cabang / PC / Pengurus Cabang
+  // Role Cabang / PC / Pengurus Cabang (otoritatif berdasarkan role/jabatan, BUKAN substring email)
   if (
     role === "CABANG" ||
     role === "PC" ||
@@ -435,22 +439,22 @@ export function enforceTenantWrite<T extends TenantScoped>(
   if (!user) return record;
 
   const updated: any = { ...record };
+  const isAdminOrCabang = isCabangOrAdmin(user);
 
-  // Jika record secara eksplisit ditujukan untuk tingkat Cabang
+  // Jika record secara eksplisit ditujukan untuk tingkat Cabang (hanya diizinkan bagi admin/cabang)
   if (
-    record.tenant_id === CABANG_TENANT_ID ||
-    record.komisariat_id === CABANG_TENANT_ID ||
-    record.tenant_id === LEGACY_CABANG_TENANT_ID ||
-    record.komisariat_id === LEGACY_CABANG_TENANT_ID ||
-    (record.commissariat && isCabangRecord(record))
+    isAdminOrCabang &&
+    (record.tenant_id === CABANG_TENANT_ID ||
+      record.komisariat_id === CABANG_TENANT_ID ||
+      record.tenant_id === LEGACY_CABANG_TENANT_ID ||
+      record.komisariat_id === LEGACY_CABANG_TENANT_ID ||
+      (record.commissariat && isCabangRecord(record)))
   ) {
     updated.tenant_id = CABANG_TENANT_ID;
     updated.komisariat_id = CABANG_TENANT_ID;
     updated.commissariat = "Pengurus Cabang Grobogan";
     return updated as T;
   }
-
-  const isAdminOrCabang = isCabangOrAdmin(user);
 
   let targetCommissariat = user.commissariat;
   let targetTenantId = user.tenant_id || user.komisariat_id || getTenantIdByName(user.commissariat);
@@ -486,15 +490,16 @@ export function enforceTenantWrite<T extends TenantScoped>(
     }
   }
 
-  // Tautkan Foreign Key tenant_id & komisariat_id secara otomatis
+  // Tautkan Foreign Key tenant_id & komisariat_id secara otomatis.
+  // Pengguna non-cabang WAJIB dikunci ke tenant miliknya (tidak boleh menimpa ke tenant lain).
   if (targetTenantId) {
-    updated.tenant_id = updated.tenant_id ?? targetTenantId;
-    updated.komisariat_id = updated.komisariat_id ?? targetTenantId;
+    updated.tenant_id = isAdminOrCabang ? (updated.tenant_id ?? targetTenantId) : targetTenantId;
+    updated.komisariat_id = isAdminOrCabang ? (updated.komisariat_id ?? targetTenantId) : targetTenantId;
   } else if (updated.commissariat) {
     const resolved = getTenantIdByName(updated.commissariat);
     if (resolved) {
-      updated.tenant_id = updated.tenant_id ?? resolved;
-      updated.komisariat_id = updated.komisariat_id ?? resolved;
+      updated.tenant_id = isAdminOrCabang ? (updated.tenant_id ?? resolved) : resolved;
+      updated.komisariat_id = isAdminOrCabang ? (updated.komisariat_id ?? resolved) : resolved;
     }
   }
 

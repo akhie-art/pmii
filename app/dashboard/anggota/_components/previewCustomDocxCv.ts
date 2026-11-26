@@ -4,6 +4,7 @@ import { Member, formatDateIndo, resolveMemberPhotoUrl } from "./types";
 import { base64ToArrayBuffer, fillDocxTemplate } from "@/app/dashboard/surat/component/docx-template-helper";
 import { getBase64Image, generateFallbackFormalPhoto, getPmiiPeriod } from "./generateCvPdf";
 import { parseOrgItems } from "@/app/anggota/profil/_components/HistoryTab";
+import { escapeHtml } from "@/lib/sanitize";
 
 /**
  * Membuka pratinjau (preview) CV dari template dokumen Word (.docx) yang diunggah
@@ -155,39 +156,45 @@ export async function previewCustomDocxCv(
 
   // 2. Jika pas foto belum muncul di DOM preview, sisipkan pas foto 3x4 di bawah Motto Hidup di sebelah kiri
   if (!foundPhotoInDom && photoDataUrl) {
-    const allElements = Array.from(renderContainer.querySelectorAll("p, tr, td, div, span"));
-    const mottoEl = allElements.find((el) => {
-      const txt = (el.textContent || "").trim().toLowerCase();
-      return txt.includes("motto hidup") || txt.includes("motto :");
-    });
+    const isSafePhotoSrc =
+      /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(photoDataUrl) ||
+      /^https?:\/\//i.test(photoDataUrl) ||
+      photoDataUrl.startsWith("blob:");
+    if (isSafePhotoSrc) {
+      const allElements = Array.from(renderContainer.querySelectorAll("p, tr, td, div, span"));
+      const mottoEl = allElements.find((el) => {
+        const txt = (el.textContent || "").trim().toLowerCase();
+        return txt.includes("motto hidup") || txt.includes("motto :");
+      });
 
-    const photoWrapper = document.createElement("div");
-    photoWrapper.className = "cv-pas-foto-container";
-    photoWrapper.style.cssText = "display: flex; justify-content: flex-start; margin-top: 14px; margin-bottom: 14px; text-align: left;";
-    photoWrapper.innerHTML = `
-      <div style="display: inline-block; text-align: left;">
-        <img
-          src="${photoDataUrl}"
-          alt="Pas Foto 3x4"
-          class="cv-photo-img"
-          style="width: 3cm !important; height: 4cm !important; object-fit: cover !important; border: 1.5px solid #000000 !important; box-shadow: none !important; display: block !important; background-color: #ffffff !important;"
-        />
-      </div>
-    `;
+      const photoWrapper = document.createElement("div");
+      photoWrapper.className = "cv-pas-foto-container";
+      photoWrapper.style.cssText = "display: flex; justify-content: flex-start; margin-top: 14px; margin-bottom: 14px; text-align: left;";
+      const innerDiv = document.createElement("div");
+      innerDiv.style.cssText = "display: inline-block; text-align: left;";
+      const imgEl = document.createElement("img");
+      imgEl.src = photoDataUrl;
+      imgEl.alt = "Pas Foto 3x4";
+      imgEl.className = "cv-photo-img";
+      imgEl.style.cssText =
+        "width: 3cm !important; height: 4cm !important; object-fit: cover !important; border: 1.5px solid #000000 !important; box-shadow: none !important; display: block !important; background-color: #ffffff !important;";
+      innerDiv.appendChild(imgEl);
+      photoWrapper.appendChild(innerDiv);
 
-    if (mottoEl) {
-      const tableParent = mottoEl.closest("table");
-      if (tableParent && tableParent.parentNode) {
-        tableParent.parentNode.insertBefore(photoWrapper, tableParent.nextSibling);
-      } else {
-        const pParent = mottoEl.closest("p") || mottoEl;
-        if (pParent.parentNode) {
-          pParent.parentNode.insertBefore(photoWrapper, pParent.nextSibling);
+      if (mottoEl) {
+        const tableParent = mottoEl.closest("table");
+        if (tableParent && tableParent.parentNode) {
+          tableParent.parentNode.insertBefore(photoWrapper, tableParent.nextSibling);
+        } else {
+          const pParent = mottoEl.closest("p") || mottoEl;
+          if (pParent.parentNode) {
+            pParent.parentNode.insertBefore(photoWrapper, pParent.nextSibling);
+          }
         }
+      } else {
+        const firstSection = renderContainer.querySelector("section.docx") || renderContainer;
+        firstSection.appendChild(photoWrapper);
       }
-    } else {
-      const firstSection = renderContainer.querySelector("section.docx") || renderContainer;
-      firstSection.appendChild(photoWrapper);
     }
   }
 
@@ -218,7 +225,7 @@ export async function previewCustomDocxCv(
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Curriculum Vitae — ${member.name || "Kader PMII"}</title>
+        <title>Curriculum Vitae — ${escapeHtml(member.name || "Kader PMII")}</title>
         ${allStyles}
         <style>
           @page {

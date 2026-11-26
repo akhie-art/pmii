@@ -580,7 +580,11 @@ export interface Article {
 export interface SuratTemplate {
   id: string;
   name: string;
+  subject?: string;
+  classification?: "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi" | string;
   content: string;
+  senderTitle?: string;
+  senderLocation?: string;
   fileUrl?: string;
   placeholders?: string[];
   isDocx?: boolean;

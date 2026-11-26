@@ -138,6 +138,7 @@ export default function UnifiedRtlVerifikasiPage() {
           db.getUsers()
         ]);
 
+        setActiveTenant(getActiveTenant() || "ALL");
         setEvents(loadedEvents);
         setRegistrations(loadedRegs);
         setRequirements(loadedReqs);
@@ -156,7 +157,6 @@ export default function UnifiedRtlVerifikasiPage() {
       }
     };
 
-    setActiveTenant(getActiveTenant() || "ALL");
     const handleTenant = (e: any) => {
       setActiveTenant(e.detail?.activeTenant || "ALL");
     };
@@ -290,7 +290,7 @@ export default function UnifiedRtlVerifikasiPage() {
         photoUrl
       };
     });
-  }, [registrations, selectedEventId, events, selectedEvent, requirements, cadres, users]);
+  }, [registrations, selectedEventId, events, selectedEvent, requirements, cadres, users, tenantEvents, currentUser, activeTenant]);
 
   // Submissions for Tab 1 (Verifikasi Antrean)
   const allSubmissions: DisplaySubmission[] = useMemo(() => {

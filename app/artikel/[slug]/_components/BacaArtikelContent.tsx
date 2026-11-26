@@ -47,8 +47,10 @@ export function BacaArtikelContent() {
 
   // Sync theme
   useEffect(() => {
-    setMounted(true);
-    setDarkMode(document.documentElement.classList.contains("dark"));
+    queueMicrotask(() => {
+      setMounted(true);
+      setDarkMode(document.documentElement.classList.contains("dark"));
+    });
   }, []);
 
   const toggleTheme = () => {

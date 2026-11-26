@@ -43,10 +43,12 @@ export function CvTemplateModal({ isOpen, onClose }: CvTemplateModalProps) {
 
   useEffect(() => {
     if (!isOpen) return;
-    const stored = localStorage.getItem(CV_TEMPLATE_STORAGE_KEY);
-    const storedName = localStorage.getItem(CV_TEMPLATE_NAME_KEY);
-    setHasCustomTemplate(Boolean(stored));
-    setCustomTemplateName(storedName || "Template_CV_Kustom.docx");
+    queueMicrotask(() => {
+      const stored = localStorage.getItem(CV_TEMPLATE_STORAGE_KEY);
+      const storedName = localStorage.getItem(CV_TEMPLATE_NAME_KEY);
+      setHasCustomTemplate(Boolean(stored));
+      setCustomTemplateName(storedName || "Template_CV_Kustom.docx");
+    });
   }, [isOpen]);
 
   const handleFileUpload = (file: File) => {

@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronRight, AlertCircle } from "lucide-react";
+import { useMounted } from "@/hooks/use-mounted";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { db, createAuthUser, updateAuthUser, normalizeKomisariat } from "@/lib/db";
@@ -30,7 +32,8 @@ import { UserBulkActionBar } from "./_components/UserBulkActionBar";
 import { UserBulkDeleteDialog } from "./_components/UserBulkDeleteDialog";
 
 export default function UserManagementPage() {
-  const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+  const mounted = useMounted();
   const [authorized, setAuthorized] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
@@ -63,7 +66,6 @@ export default function UserManagementPage() {
   const { showToast, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
-    setMounted(true);
     const checkAuthAndLoad = async () => {
       let isAllowed = false;
 
@@ -92,7 +94,16 @@ export default function UserManagementPage() {
 
       if (isAllowed) {
         try {
-          const userList = await db.getUsers();
+          const firstPage = await db.getUsersPaginated({ page: 1, pageSize: 200 });
+          let userList = firstPage.data;
+          if (firstPage.totalPages > 1) {
+            const rest = await Promise.all(
+              Array.from({ length: firstPage.totalPages - 1 }, (_, i) =>
+                db.getUsersPaginated({ page: i + 2, pageSize: 200 })
+              )
+            );
+            userList = [...userList, ...rest.flatMap((p) => p.data)];
+          }
           const seen = new Set<string>();
           const uniqueList = (userList || []).filter((u) => {
             const key = u.id || (u as any).user_id || u.email;
@@ -672,7 +683,7 @@ export default function UserManagementPage() {
           Halaman Manajemen Pengguna hanya dapat diakses oleh Administrator Sistem.
         </p>
         <Button
-          onClick={() => { window.location.href = "/dashboard"; }}
+          onClick={() => { router.push("/dashboard"); }}
           variant="outline"
           className="text-xs h-8 px-3 rounded-lg mt-2 cursor-pointer"
         >

@@ -38,6 +38,7 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import { db, generateUUID, QuizQuestion, ParticipantEvaluation, SessionScore } from "@/lib/db";
+import { createUniqueFileName, createTimestampedId } from "@/lib/utils";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { CAREER_MBTI_PROFILES, CAREER_QUESTIONS as careerQuestions, calculateCareerMBTI } from "@/lib/careerAssessment";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -53,6 +54,9 @@ import type {
   ParticipantRegistration,
   Requirement
 } from "./types";
+import { SyllabusDetailModal } from "./stages/SyllabusDetailModal";
+import { MaterialReaderModal } from "./stages/MaterialReaderModal";
+import { CareerAssessmentModal } from "./stages/CareerAssessmentModal";
 
 interface StagesModalProps {
   isOpen: boolean;
@@ -122,11 +126,13 @@ export const StagesModal: React.FC<StagesModalProps> = ({
   const [isReaderLoading, setIsReaderLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  useEffect(() => {
+  const [prevReadingUrl, setPrevReadingUrl] = useState<string | undefined>(undefined);
+  if (activeReadingModal?.fileUrl !== prevReadingUrl) {
+    setPrevReadingUrl(activeReadingModal?.fileUrl);
     if (activeReadingModal?.fileUrl) {
       setIsReaderLoading(true);
     }
-  }, [activeReadingModal?.fileUrl]);
+  }
 
   const handleDownloadMaterial = async (url?: string, fileName?: string) => {
     if (!url || url === "#") {
@@ -215,7 +221,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         const key = `PMII_QUIZ_RESULTS_${activeCadre?.id || "guest"}_${event.id}`;
         const raw = localStorage.getItem(key);
         if (raw) {
-          setQuizResults(JSON.parse(raw));
+          const parsedRaw = JSON.parse(raw);
+          queueMicrotask(() => setQuizResults(parsedRaw));
         }
 
         // Sinkronkan status kuis dengan data evaluations di database
@@ -305,8 +312,10 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         const rawCareer = localStorage.getItem(careerKey);
         if (rawCareer) {
           const parsed = JSON.parse(rawCareer);
-          setCareerResult(parsed);
-          setIsReviewingCareer(true);
+          queueMicrotask(() => {
+            setCareerResult(parsed);
+            setIsReviewingCareer(true);
+          });
         } else if (activeCadre?.id) {
           // Fallback load from evaluations in DB
           db.getEvaluations([]).then((allEvals) => {
@@ -417,17 +426,55 @@ export const StagesModal: React.FC<StagesModalProps> = ({
       }
     }
 
-    // Sync to evaluations in database for Admin Rekap Nilai
+    // Sync to evaluations in database for Admin Rekap Nilai (atomik via RPC anti-tamper)
     (async () => {
       try {
         if (!activeCadre || !event?.id) return;
+        const subjectKey = activeQuizSubject || activeQuizSession;
+
+        if (isSupabaseConfigured && supabase) {
+          const allEvals = await db.getEvaluations([]);
+          const participantEval = allEvals.find(
+            (e) => e.activityId === event.id && (e.cadreId === activeCadre.id || e.id === activeCadre.id)
+          );
+          const currentQuizResults = participantEval?.quizResults ? { ...participantEval.quizResults } : {};
+          const subjectEntry = currentQuizResults[subjectKey] ? { ...currentQuizResults[subjectKey] } : {};
+          if (activeQuizType === "PRE") subjectEntry.preTest = calculatedScore;
+          else subjectEntry.postTest = calculatedScore;
+          subjectEntry.submittedAt = timeStr;
+          currentQuizResults[subjectKey] = subjectEntry;
+
+          const preVals = Object.values(currentQuizResults).map((v) => v.preTest).filter((v): v is number => typeof v === "number");
+          const postVals = Object.values(currentQuizResults).map((v) => v.postTest).filter((v): v is number => typeof v === "number");
+          const preAvg = preVals.length > 0 ? Math.round(preVals.reduce((a, b) => a + b, 0) / preVals.length) : null;
+          const postAvg = postVals.length > 0 ? Math.round(postVals.reduce((a, b) => a + b, 0) / postVals.length) : null;
+
+          const sessionPatch = {
+            [subjectKey]: {
+              materiId: activeQuizSession,
+              materiTitle: activeQuizSubject || activeQuizSession,
+              ...(activeQuizType === "PRE" ? { preTestScore: calculatedScore } : { postTestScore: calculatedScore }),
+            },
+          };
+
+          const { error: rpcErr } = await supabase.rpc("submit_my_evaluation_self_data", {
+            p_activity_id: event.id,
+            p_quiz_results: currentQuizResults,
+            p_pre_avg: preAvg,
+            p_post_avg: postAvg,
+            p_session_quiz: sessionPatch,
+            p_career_assessment: null,
+          });
+          if (!rpcErr) return;
+          console.warn("submit_my_evaluation_self_data fallback:", rpcErr.message);
+        }
+
         const allEvals = await db.getEvaluations([]);
         const participantEval = allEvals.find(
           (e) => e.activityId === event.id && (e.cadreId === activeCadre.id || e.id === activeCadre.id)
         );
 
         const currentQuizResults = participantEval?.quizResults ? { ...participantEval.quizResults } : {};
-        const subjectKey = activeQuizSubject || activeQuizSession;
         const subjectEntry = currentQuizResults[subjectKey] ? { ...currentQuizResults[subjectKey] } : {};
 
         if (activeQuizType === "PRE") {
@@ -438,13 +485,11 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         subjectEntry.submittedAt = timeStr;
         currentQuizResults[subjectKey] = subjectEntry;
 
-        // Calculate pre and post averages
         const preVals = Object.values(currentQuizResults).map((v) => v.preTest).filter((v): v is number => typeof v === "number");
         const postVals = Object.values(currentQuizResults).map((v) => v.postTest).filter((v): v is number => typeof v === "number");
         const preAvg = preVals.length > 0 ? Math.round(preVals.reduce((a, b) => a + b, 0) / preVals.length) : undefined;
         const postAvg = postVals.length > 0 ? Math.round(postVals.reduce((a, b) => a + b, 0) / postVals.length) : undefined;
 
-        // Update sessionScores with individual pre/post score for the subject
         const currentSessionScores = participantEval?.sessionScores ? { ...participantEval.sessionScores } : {};
         const subjectSession: SessionScore = currentSessionScores[subjectKey] ? { ...currentSessionScores[subjectKey] } : {
           materiId: activeQuizSession,
@@ -487,7 +532,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             afektif: 0,
             psikomotorik: 0,
             finalScore: 0,
-            grade: "C",
+            grade: "E",
             status: "BELUM_DINILAI",
             quizResults: currentQuizResults,
             preTestAverage: preAvg,
@@ -528,12 +573,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     (async () => {
       try {
         if (event?.id && activeCadre?.id) {
-          // 1. Sync to evaluations table
-          const allEvals = await db.getEvaluations([]);
-          const existingEval = allEvals.find(
-            (e) => String(e.activityId) === String(event.id) && String(e.cadreId) === String(activeCadre.id)
-          );
-
+          // 1. Sync to evaluations table via atomic RPC (fallback ke saveEvaluations jika offline)
           const assessmentData = {
             mbtiCode: result.mbtiCode,
             talent: result.talent,
@@ -546,54 +586,68 @@ export const StagesModal: React.FC<StagesModalProps> = ({
             submittedAt: result.submittedAt
           };
 
-          if (existingEval) {
-            const updated = allEvals.map((e) =>
-              e.id === existingEval.id
-                ? { ...e, careerAssessment: assessmentData, updatedAt: new Date().toISOString() }
-                : e
-            );
-            await db.saveEvaluations(updated);
-          } else {
-            const newEval: ParticipantEvaluation = {
-              id: generateUUID(),
-              activityId: event.id,
-              activityName: event.name || "Kegiatan Kaderisasi",
-              cadreId: activeCadre.id,
-              participantName: activeCadre.name || myReg?.cadreName || "Peserta",
-              gender: activeCadre.gender,
-              commissariat: activeCadre.commissariat,
-              university: activeCadre.perguruanTinggi,
-              kognitif: 0,
-              afektif: 0,
-              psikomotorik: 0,
-              finalScore: 0,
-              grade: "C",
-              status: "BELUM_DINILAI",
-              updatedAt: new Date().toISOString(),
-              careerAssessment: assessmentData
-            };
-            await db.saveEvaluations([...allEvals, newEval]);
+          let syncedViaRpc = false;
+          if (isSupabaseConfigured && supabase) {
+            const { error: rpcErr } = await supabase.rpc("submit_my_evaluation_self_data", {
+              p_activity_id: event.id,
+              p_quiz_results: null,
+              p_pre_avg: null,
+              p_post_avg: null,
+              p_session_quiz: null,
+              p_career_assessment: assessmentData,
+            });
+            if (!rpcErr) {
+              syncedViaRpc = true;
+            }
           }
 
-          // 2. Sync to cadres table
-          const allCadres = await db.getCadres([]);
-          const cadreIndex = allCadres.findIndex((c) => String(c.id) === String(activeCadre.id));
-          if (cadreIndex !== -1) {
-            const updatedCadres = [...allCadres];
-            updatedCadres[cadreIndex] = {
-              ...updatedCadres[cadreIndex],
-              careerProfile: {
-                mbtiCode: result.mbtiCode,
-                talent: result.talent,
-                interest: result.interest,
-                formulaResult: result.formulaResult,
-                strategicRole: result.strategicRole,
-                description: result.description,
-                submittedAt: result.submittedAt
-              }
-            };
-            await db.saveCadres(updatedCadres);
+          if (!syncedViaRpc) {
+            const allEvals = await db.getEvaluations([]);
+            const existingEval = allEvals.find(
+              (e) => String(e.activityId) === String(event.id) && String(e.cadreId) === String(activeCadre.id)
+            );
+            if (existingEval) {
+              const updated = allEvals.map((e) =>
+                e.id === existingEval.id
+                  ? { ...e, careerAssessment: assessmentData, updatedAt: new Date().toISOString() }
+                  : e
+              );
+              await db.saveEvaluations(updated);
+            } else {
+              const newEval: ParticipantEvaluation = {
+                id: generateUUID(),
+                activityId: event.id,
+                activityName: event.name || "Kegiatan Kaderisasi",
+                cadreId: activeCadre.id,
+                participantName: activeCadre.name || myReg?.cadreName || "Peserta",
+                gender: activeCadre.gender,
+                commissariat: activeCadre.commissariat,
+                university: activeCadre.perguruanTinggi,
+                kognitif: 0,
+                afektif: 0,
+                psikomotorik: 0,
+                finalScore: 0,
+                grade: "E",
+                status: "BELUM_DINILAI",
+                updatedAt: new Date().toISOString(),
+                careerAssessment: assessmentData
+              };
+              await db.saveEvaluations([...allEvals, newEval]);
+            }
           }
+
+          // 2. Sync to cadres table (O(1) single-row update, bukan bulk upsert seluruh tabel)
+          await db.updateAnggota(activeCadre.id, {
+            careerProfile: {
+              mbtiCode: result.mbtiCode,
+              talent: result.talent,
+              interest: result.interest,
+              formulaResult: result.formulaResult,
+              strategicRole: result.strategicRole,
+              description: result.description,
+              submittedAt: result.submittedAt
+            }
+          });
         }
       } catch (dbErr) {
         console.warn("Failed to sync career assessment to database:", dbErr);
@@ -605,7 +659,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
 
   useEffect(() => {
     if (kurikulumData && Object.keys(kurikulumData).length > 0) {
-      setKurikulum(kurikulumData);
+      queueMicrotask(() => setKurikulum(kurikulumData));
     } else {
       db.getKurikulum().then((res) => {
         if (res) setKurikulum(res);
@@ -613,7 +667,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     }
 
     if (kaderisasiList && kaderisasiList.length > 0) {
-      setKaderisasi(kaderisasiList);
+      queueMicrotask(() => setKaderisasi(kaderisasiList));
     } else {
       db.getKaderisasi().then((res) => {
         if (res) setKaderisasi(res);
@@ -686,8 +740,8 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     try {
       let finalUrl = "";
       if (isSupabaseConfigured && supabase) {
-        const fileExt = taskUploadFile.name.split(".").pop();
-        const filePath = `rktl/${activeCadre.id || "cadre"}-${Date.now()}.${fileExt}`;
+        const fileExt = taskUploadFile.name.split(".").pop() || "bin";
+        const filePath = `rktl/${createUniqueFileName(activeCadre.id || "cadre", fileExt)}`;
         const { error: uploadError } = await supabase.storage
           .from("materials")
           .upload(filePath, taskUploadFile, { cacheControl: "3600", upsert: true });
@@ -704,7 +758,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
       }
 
       const newSubmission: any = {
-        id: `sub-${Date.now()}`,
+        id: createTimestampedId("sub"),
         requirementId: req.id,
         title: req.title,
         description: taskUploadNotes.trim(),
@@ -724,12 +778,7 @@ export const StagesModal: React.FC<StagesModalProps> = ({
         submissions: updatedSubmissions
       };
 
-      const latestAllCadres = await db.getCadres([]);
-      const updatedAllCadres = latestAllCadres.map((c: any) =>
-        c.id === activeCadre.id ? updatedCadre : c
-      );
-
-      await db.saveCadres(updatedAllCadres);
+      await db.updateAnggota(activeCadre.id, { submissions: updatedSubmissions });
       onCadreUpdated(updatedCadre);
 
       toast.success("Laporan tugas RTL berhasil dikirim! Menunggu verifikasi.");
@@ -2029,562 +2078,35 @@ export const StagesModal: React.FC<StagesModalProps> = ({
     </Dialog>
 
     {/* Modal Detail Silabus Sesi */}
-    <Dialog
-      open={Boolean(activeSyllabusModal)}
-      onOpenChange={(open) => {
-        if (!open) setActiveSyllabusModal(null);
-      }}
-    >
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-        {activeSyllabusModal && (
-          <div className="flex flex-col">
-            {/* Header */}
-            <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/60">
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-semibold px-2 py-0.5">
-                  Silabus Pembelajaran
-                </Badge>
-                {activeSyllabusModal.syllabus.category && (
-                  <Badge variant="outline" className="text-xs">
-                    {activeSyllabusModal.syllabus.category}
-                  </Badge>
-                )}
-                {activeSyllabusModal.syllabus.durationHours && (
-                  <span className="text-xs text-zinc-500 flex items-center gap-1 font-medium">
-                    <Clock className="w-3.5 h-3.5" /> Alokasi: {activeSyllabusModal.syllabus.durationHours} Menit
-                  </span>
-                )}
-              </div>
-              <DialogTitle className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                {activeSyllabusModal.syllabus.subjectName || activeSyllabusModal.sessionTitle}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-500 mt-0.5">
-                Rencana pembelajaran dan sasaran kompetensi kurikulum kaderisasi
-              </DialogDescription>
-            </div>
+    <SyllabusDetailModal
+      activeSyllabusModal={activeSyllabusModal}
+      onClose={() => setActiveSyllabusModal(null)}
+    />
 
-            {/* Body */}
-            <div className="p-5 space-y-4">
-              {/* Tujuan & Sasaran */}
-              {(activeSyllabusModal.syllabus.tujuan?.length > 0 || activeSyllabusModal.syllabus.goal) && (
-                <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 space-y-2">
-                  <div className="flex items-center gap-2 font-bold text-blue-900 dark:text-blue-300 text-xs">
-                    <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span>Tujuan & Sasaran Pembelajaran:</span>
-                  </div>
-                  <ul className="space-y-1.5 pl-5 list-disc text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                    {(activeSyllabusModal.syllabus.tujuan || [activeSyllabusModal.syllabus.goal]).map((t: string, tIdx: number) => (
-                      <li key={tIdx}>{t}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Pokok Pembahasan */}
-              {(activeSyllabusModal.syllabus.pokokPembahasan?.length > 0 || activeSyllabusModal.syllabus.description) && (
-                <div className="space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
-                    Pokok Pembahasan:
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(activeSyllabusModal.syllabus.pokokPembahasan || [activeSyllabusModal.syllabus.description]).map((pokok: string, pIdx: number) => (
-                      <div
-                        key={pIdx}
-                        className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/70 dark:border-zinc-700/60 text-xs flex items-start gap-2 text-zinc-800 dark:text-zinc-200"
-                      >
-                        <span className="w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                          {pIdx + 1}
-                        </span>
-                        <span className="leading-relaxed">{pokok}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Metode & Output */}
-              {(activeSyllabusModal.syllabus.metode?.length > 0 || activeSyllabusModal.syllabus.harapan?.length > 0) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  {activeSyllabusModal.syllabus.metode?.length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/70 dark:border-zinc-700/60 space-y-2">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-                        Metode Pembelajaran
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {activeSyllabusModal.syllabus.metode.map((m: string, mIdx: number) => (
-                          <Badge
-                            key={mIdx}
-                            variant="secondary"
-                            className="text-xs font-normal"
-                          >
-                            {m}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeSyllabusModal.syllabus.harapan?.length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/50 space-y-2">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">
-                        Target Capaian & Hasil
-                      </span>
-                      <ul className="space-y-1 text-xs text-zinc-700 dark:text-zinc-300">
-                        {activeSyllabusModal.syllabus.harapan.map((h: string, hIdx: number) => (
-                          <li key={hIdx} className="leading-snug">• {h}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setActiveSyllabusModal(null)}
-                className="px-4 text-xs cursor-pointer"
-              >
-                Tutup
-              </Button>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-
-    {/* Modal Baca Modul & Materi Sesi (Penampil Modul Pembelajaran Tanpa Pindah Halaman) */}
-    <Dialog
-      open={Boolean(activeReadingModal)}
-      onOpenChange={(open) => {
-        if (!open) setActiveReadingModal(null);
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        className="max-w-4xl w-[95vw] sm:w-[90vw] h-[90vh] max-h-[92vh] flex flex-col p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl"
-      >
-        {activeReadingModal && (() => {
-          const fileName = activeReadingModal.fileName || "Modul Materi";
-          const fileUrl = activeReadingModal.fileUrl;
-          const typeBadge = getFileTypeBadge(fileName);
-          const ext = fileName.split(".").pop()?.toLowerCase() || "";
-          const isPdf = ext === "pdf" || (fileUrl && fileUrl.toLowerCase().includes(".pdf"));
-          const isImage = ["jpg", "jpeg", "png", "webp", "svg", "gif"].includes(ext);
-          const isOfficeDoc = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
-          const isHttpUrl = Boolean(fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")));
-
-          // Di mobile/touch device, browser (khususnya iOS Safari & Android) tidak dapat me-render scroll multi-halaman pada file PDF mentah di dalam iframe (hanya zoom di halaman 1 dan membeku/tidak bisa di-scroll ke bawah).
-          // Menggunakan Google Docs Viewer (gview) merender PDF sebagai HTML scrollable yang dapat di-scroll lancar dengan sentuhan/swipe.
-          const isTouchOrMobile = isMobile || (typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0));
-          const shouldUseGoogleViewer = isHttpUrl && (isOfficeDoc || (isPdf && isTouchOrMobile));
-
-          const embedUrl = shouldUseGoogleViewer && fileUrl
-            ? `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`
-            : fileUrl;
-
-          return (
-            <div className="flex flex-col h-full overflow-hidden">
-              {/* Header */}
-              <div className="px-4 py-3 sm:px-5 sm:py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="w-8.5 h-8.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-900/40">
-                    <BookOpen className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${typeBadge.color}`}>
-                        {typeBadge.label}
-                      </Badge>
-                      {activeReadingModal.isRef && (
-                        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0.2 rounded font-medium">
-                          Referensi
-                        </Badge>
-                      )}
-                      {activeReadingModal.sessionTitle && (
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate max-w-xs">
-                          {activeReadingModal.sessionTitle}
-                        </span>
-                      )}
-                    </div>
-                    <DialogTitle className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate block">
-                      {fileName}
-                    </DialogTitle>
-                    <DialogDescription className="sr-only">
-                      Penampil modul materi kegiatan {fileName}
-                    </DialogDescription>
-                  </div>
-                </div>
-
-                {/* Header Actions */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {fileUrl && fileUrl !== "#" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isDownloading}
-                      onClick={() => handleDownloadMaterial(fileUrl, fileName)}
-                      className="h-7.5 px-2.5 text-xs font-medium gap-1.5 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 border-zinc-200 dark:border-zinc-800 rounded-md cursor-pointer shadow-none"
-                      title="Unduh untuk baca luring (offline)"
-                    >
-                      {isDownloading ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Download className="w-3.5 h-3.5" />
-                      )}
-                      <span className="hidden sm:inline">Unduh</span>
-                    </Button>
-                  )}
-
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setActiveReadingModal(null)}
-                    className="h-7.5 w-7.5 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-md cursor-pointer"
-                    title="Tutup penampil modul"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Reader Body */}
-              <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-1 sm:p-3 overflow-hidden relative flex flex-col items-center justify-center min-h-0">
-                {!fileUrl || fileUrl === "#" ? (
-                  <div className="p-8 text-center max-w-md space-y-3 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-xs">
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
-                      <Lock className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        Berkas Sedang Disiapkan
-                      </h4>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                        Instruktur belum mengunggah salinan digital untuk berkas ini. Anda dapat mempelajari silabus atau menghubungi panitia.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Loading State Overlay */}
-                    {isReaderLoading && (
-                      <div className="absolute inset-0 bg-zinc-100/90 dark:bg-zinc-950/90 backdrop-blur-2xs flex flex-col items-center justify-center gap-2 z-10">
-                        <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
-                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                          Memuat dokumen modul...
-                        </span>
-                      </div>
-                    )}
-
-                    {isImage ? (
-                      <div className="w-full h-full overflow-auto flex items-center justify-center p-2">
-                        <img
-                          src={fileUrl}
-                          alt={fileName}
-                          onLoad={() => setIsReaderLoading(false)}
-                          className="max-w-full max-h-full object-contain rounded-md shadow-md border border-zinc-200 dark:border-zinc-800"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-full h-full flex-1 flex flex-col rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-                        <iframe
-                          src={embedUrl}
-                          title={fileName}
-                          onLoad={() => setIsReaderLoading(false)}
-                          className="w-full h-full flex-1 border-0 rounded-md min-h-full"
-                          allow="autoplay; encrypted-media"
-                        />
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-      </DialogContent>
-    </Dialog>
+    {/* Modal Baca Modul & Materi Sesi */}
+    <MaterialReaderModal
+      activeReadingModal={activeReadingModal}
+      isMobile={isMobile}
+      isDownloading={isDownloading}
+      isReaderLoading={isReaderLoading}
+      setIsReaderLoading={setIsReaderLoading}
+      onDownload={handleDownloadMaterial}
+      onClose={() => setActiveReadingModal(null)}
+      getFileTypeBadge={getFileTypeBadge}
+    />
 
     {/* Modal Kuesioner & Hasil: Analisis Preferensi Kognitif & Arah Karier Mahasiswa */}
-    <Dialog open={isCareerModalOpen} onOpenChange={setIsCareerModalOpen}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-xl">
-        <div className="flex flex-col">
-          {/* Header */}
-          <div className="p-5 sm:p-6 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky top-0 z-10">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10.5px] font-semibold tracking-wider uppercase text-zinc-400 dark:text-zinc-500">
-                    Instrumen Mahasiswa
-                  </span>
-                  {careerResult && (
-                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/40 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      Selesai
-                    </span>
-                  )}
-                </div>
-                <DialogTitle className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                  Analisis Preferensi Kognitif & Arah Karier Mahasiswa
-                </DialogTitle>
-                <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Pemetaan gaya berpikir, bakat alamiah, dan rekomendasi arah profesi berbasis situasi sehari-hari.
-                </DialogDescription>
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsCareerModalOpen(false)}
-                className="h-8 w-8 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
-              >
-                <X className="w-4 h-4" />
-                <span className="sr-only">Tutup</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Body Content: Laporan Hasil OR Form Pengisian */}
-          {isReviewingCareer && careerResult ? (
-            /* VIEW LAPORAN HASIL - CLEAN & MINIMALIST */
-            <div className="p-5 sm:p-6 space-y-4">
-              {/* Formula Result Banner */}
-              <div className="p-4 sm:p-5 rounded-lg bg-zinc-50 dark:bg-zinc-850/60 border border-zinc-200/80 dark:border-zinc-800 space-y-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-mono font-bold">
-                      Tipe: {careerResult.mbtiCode}
-                    </span>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
-                      Hasil Analisis Kognitif
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                    {careerResult.submittedAt}
-                  </span>
-                </div>
-
-                <div className="pt-1">
-                  <p className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">
-                    {careerResult.formulaResult}
-                  </p>
-                </div>
-              </div>
-
-              {/* Grid 2 Kolom: Bakat & Minat */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1.5 shadow-2xs">
-                  <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200 font-semibold text-xs">
-                    <Brain className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
-                    <span>Bakat Dominan</span>
-                  </div>
-                  <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                    {careerResult.talent}
-                  </p>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    Kekuatan alamiah dalam pola berpikir konseptual, logika pemecahan masalah, dan pendekatan kerja.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1.5 shadow-2xs">
-                  <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200 font-semibold text-xs">
-                    <TrendingUp className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
-                    <span>Minat & Orientasi Karier</span>
-                  </div>
-                  <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                    {careerResult.interest}
-                  </p>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    Sektor profesi dan ragam bidang kerja yang paling selaras dengan motivasi berkarya Anda.
-                  </p>
-                </div>
-              </div>
-
-              {/* Rekomendasi Peran Strategis di Organisasi PMII */}
-              <div className="p-4 rounded-xl bg-zinc-50/50 dark:bg-zinc-850/40 border border-zinc-200/70 dark:border-zinc-800 space-y-1.5">
-                <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200 font-semibold text-xs">
-                  <Target className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
-                  <span>Rekomendasi Penugasan di PMII</span>
-                </div>
-                <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  {careerResult.strategicRole}
-                </p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  {careerResult.description}
-                </p>
-              </div>
-
-              {/* Komposisi Skor 4 Dimensi MBTI */}
-              {careerResult.dimensionScores && (
-                <div className="p-4 rounded-xl border border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2.5">
-                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">
-                    Breakdown 4 Polarisasi Preferensi:
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                    <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-850 border border-zinc-200/60 dark:border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Energi</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200 font-mono">
-                        E: {careerResult.dimensionScores.E} | I: {careerResult.dimensionScores.I}
-                      </span>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-850 border border-zinc-200/60 dark:border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Informasi</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200 font-mono">
-                        S: {careerResult.dimensionScores.S} | N: {careerResult.dimensionScores.N}
-                      </span>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-850 border border-zinc-200/60 dark:border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Keputusan</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200 font-mono">
-                        T: {careerResult.dimensionScores.T} | F: {careerResult.dimensionScores.F}
-                      </span>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-850 border border-zinc-200/60 dark:border-zinc-800">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Eksekusi</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200 font-mono">
-                        J: {careerResult.dimensionScores.J} | P: {careerResult.dimensionScores.P}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setIsReviewingCareer(false);
-                    setCareerAnswers({});
-                  }}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
-                >
-                  Isi Ulang Form
-                </Button>
-
-                <Button
-                  type="button"
-                  onClick={() => setIsCareerModalOpen(false)}
-                  className="h-8.5 px-4 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl cursor-pointer"
-                >
-                  Tutup
-                </Button>
-              </div>
-            </div>
-          ) : (
-            /* FORM PERTANYAAN PILIHAN - CLEAN & MINIMALIST */
-            <div className="p-5 sm:p-6 space-y-5">
-              {/* Progress Indicator */}
-              <div className="space-y-1.5 pb-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                    Progres Pengisian
-                  </span>
-                  <span className="text-zinc-500 dark:text-zinc-400 font-mono">
-                    {Object.keys(careerAnswers).length} / {careerQuestions.length} Terjawab
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-300 rounded-full"
-                    style={{
-                      width: `${(Object.keys(careerAnswers).length / careerQuestions.length) * 100}%`
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3.5">
-                {careerQuestions.map((q, qIdx) => {
-                  const selectedKey = careerAnswers[q.id];
-
-                  return (
-                    <div
-                      key={q.id}
-                      className="p-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-3 shadow-2xs"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                            No. {qIdx + 1 < 10 ? `0${qIdx + 1}` : qIdx + 1} • {q.category}
-                          </span>
-                        </div>
-                        <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">
-                          {q.question}
-                        </h4>
-                      </div>
-
-                      {/* Options in 2 columns */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
-                        {q.options.map((opt) => {
-                          const isSelected = selectedKey === opt.key;
-
-                          return (
-                            <button
-                              key={opt.key}
-                              type="button"
-                              onClick={() => {
-                                setCareerAnswers((prev) => ({
-                                  ...prev,
-                                  [q.id]: opt.key
-                                }));
-                              }}
-                              className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 cursor-pointer ${
-                                isSelected
-                                  ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-850 text-zinc-900 dark:text-zinc-100 ring-1 ring-zinc-900/10 dark:ring-zinc-100/10"
-                                  : "border-zinc-200/70 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300"
-                              }`}
-                            >
-                              <span
-                                className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
-                                  isSelected
-                                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
-                                }`}
-                              >
-                                {opt.key}
-                              </span>
-                              <span className="text-xs leading-relaxed flex-1">
-                                {opt.label}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Form Footer */}
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-3">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setIsCareerModalOpen(false)}
-                  className="h-8.5 text-xs px-4 text-zinc-500 hover:text-zinc-900 cursor-pointer"
-                >
-                  Batal
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSubmitCareerTest}
-                  disabled={Object.keys(careerAnswers).length < careerQuestions.length}
-                  className="h-8.5 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 px-5 rounded-xl cursor-pointer shadow-xs disabled:opacity-40"
-                >
-                  Simpan & Analisis Hasil
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <CareerAssessmentModal
+      isOpen={isCareerModalOpen}
+      onOpenChange={setIsCareerModalOpen}
+      isReviewingCareer={isReviewingCareer}
+      setIsReviewingCareer={setIsReviewingCareer}
+      careerResult={careerResult}
+      careerQuestions={careerQuestions}
+      careerAnswers={careerAnswers}
+      setCareerAnswers={setCareerAnswers}
+      onSubmitCareerTest={handleSubmitCareerTest}
+    />
   </>
 );
 };

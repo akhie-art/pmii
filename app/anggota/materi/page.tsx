@@ -93,7 +93,7 @@ export default function KaderMateriPage() {
   }, []);
 
   const currentLevel: KaderisasiLevel | undefined = kaderisasiData[selectedLevelId];
-  const syllabusList: SyllabusItem[] = currentLevel?.syllabus || [];
+  const syllabusList: SyllabusItem[] = useMemo(() => currentLevel?.syllabus || [], [currentLevel]);
   const materialsList: MaterialFile[] = currentLevel?.materials || [];
   const quizList: QuizQuestion[] = currentLevel?.quiz || [];
 

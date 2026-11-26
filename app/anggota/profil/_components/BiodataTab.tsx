@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useRef, useState } from "react";
 import { User, Calendar, MapPin, ShieldAlert, CreditCard, Home, Camera, ZoomIn, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,9 +76,11 @@ export function BiodataTab({
                 className="w-24 h-32 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 overflow-hidden cursor-pointer relative"
                 title="Klik untuk melihat foto penuh"
               >
-                <img
+                <SmartImage
                   src={pasFoto}
                   alt="Pas Foto Kader"
+                  width={96}
+                  height={128}
                   className="w-full h-full object-cover transition-transform group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs gap-1">
@@ -150,9 +154,10 @@ export function BiodataTab({
                 </DialogTitle>
               </DialogHeader>
               <div className="my-2 max-h-[70vh] flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded p-2">
-                <img
+                <SmartImage
                   src={pasFoto}
                   alt="Pas Foto Penuh"
+                  preserveAspect
                   className="max-h-[65vh] w-auto max-w-full object-contain rounded"
                 />
               </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useMemo } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
@@ -118,8 +120,10 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
-        setCardQrDataUrl(cached);
-        setIsCachedOffline(true);
+        queueMicrotask(() => {
+          setCardQrDataUrl(cached);
+          setIsCachedOffline(true);
+        });
       }
     } catch (e) {
       console.warn("Could not read QR from localStorage cache", e);
@@ -218,13 +222,13 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-xl bg-white/95 p-1 flex items-center justify-center shrink-0 border border-amber-500/40 shadow-xs">
-                      <img
+                      <SmartImage
                         src={tenantLogoUrl}
+                        fallbackSrc="/image/logo_komsat.png"
                         alt={`Logo ${organizerName}`}
+                        width={36}
+                        height={36}
                         className="w-full h-full object-contain"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/image/logo_komsat.png";
-                        }}
                       />
                     </div>
                     <div>
@@ -248,9 +252,11 @@ export const ParticipantCardModal: React.FC<ParticipantCardModalProps> = ({
                   {/* Wadah QR Code dengan corner guide visual */}
                   <div className="relative w-36 h-36 rounded-xl bg-white p-2 flex items-center justify-center shrink-0 shadow-md">
                     {cardQrDataUrl ? (
-                      <img
+                      <SmartImage
                         src={cardQrDataUrl}
                         alt="QR Peserta"
+                        width={144}
+                        height={144}
                         className="w-full h-full object-contain"
                       />
                     ) : (

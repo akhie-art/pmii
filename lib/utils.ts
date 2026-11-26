@@ -20,3 +20,20 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+export function createTimestampedId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createUniqueFileName(prefix: string, ext: string): string {
+  const safePrefix = (prefix || "file").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+  const safeExt = (ext || "bin").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "bin";
+  return `${safePrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+}
+
+export function createRegistrationCode(prefix: string, digits = 6): string {
+  const min = Math.pow(10, Math.max(1, digits - 1));
+  const range = Math.pow(10, Math.max(1, digits)) - min;
+  const num = Math.floor(min + Math.random() * range);
+  return `${prefix}-${num}`;
+}

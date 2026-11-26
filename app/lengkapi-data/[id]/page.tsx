@@ -56,6 +56,8 @@ export default function LengkapiDataPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [accessError, setAccessError] = useState<"ALREADY_ACTIVATED" | "INVALID_OR_EXPIRED_TOKEN" | null>(null);
+  const [completionToken, setCompletionToken] = useState<string>("");
   const [memberData, setMemberData] = useState<any>(null);
 
   // Form states
@@ -127,13 +129,25 @@ export default function LengkapiDataPage() {
 
       try {
         let foundCadre: any = null;
+        const urlToken =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("token") || ""
+            : "";
+        setCompletionToken(urlToken);
 
-        // Ambil data anggota tunggal secara aman melalui RPC (tanpa akses baca massal tabel anggota)
+        // Ambil data anggota tunggal secara aman melalui RPC bertoken (tanpa akses baca massal tabel anggota)
         if (isSupabaseConfigured && supabase) {
           const { data, error } = await supabase.rpc("get_anggota_for_completion", {
             p_id: memberId,
+            p_token: urlToken || null,
           });
           if (!error && data) {
+            if (data.error === "ALREADY_ACTIVATED" || data.error === "INVALID_OR_EXPIRED_TOKEN") {
+              setAccessError(data.error);
+              setNotFound(true);
+              setLoading(false);
+              return;
+            }
             foundCadre = data;
           }
         }
@@ -193,7 +207,7 @@ export default function LengkapiDataPage() {
       if (isSupabaseConfigured && supabase) {
         const fileExt = file.name.split(".").pop() || "jpg";
         const targetId = memberId || "avatar";
-        const filePath = `avatars/${targetId}-${Date.now()}.${fileExt}`;
+        const filePath = `registrations/avatars/${targetId}-${Date.now()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from("materials")
@@ -281,6 +295,7 @@ export default function LengkapiDataPage() {
         p_payload: payload,
         p_email: cleanEmail || null,
         p_password: createAccount && !memberData?.hasAccount && password.trim().length >= 6 ? password.trim() : null,
+        p_token: completionToken || null,
       });
 
       if (rpcError) {
@@ -316,13 +331,28 @@ export default function LengkapiDataPage() {
             <AlertCircle className="w-6 h-6" />
           </div>
           <CardTitle className="text-lg font-bold text-zinc-900 dark:text-white">
-            Tautan Tidak Ditemukan
+            {accessError === "ALREADY_ACTIVATED"
+              ? "Akun Anggota Sudah Aktif"
+              : accessError === "INVALID_OR_EXPIRED_TOKEN"
+              ? "Tautan Tidak Valid atau Kedaluwarsa"
+              : "Tautan Tidak Ditemukan"}
           </CardTitle>
           <CardDescription className="text-xs text-zinc-500 mt-2">
-            Data anggota tidak ditemukan dalam sistem atau tautan yang Anda buka telah kedaluwarsa.
-            Silakan hubungi pengurus komisariat Anda untuk mendapatkan tautan terbaru.
+            {accessError === "ALREADY_ACTIVATED"
+              ? "Akun keanggotaan Anda sudah aktif. Demi keamanan data pribadi, silakan masuk ke portal menggunakan akun Anda untuk memperbarui biodata di menu Profil."
+              : accessError === "INVALID_OR_EXPIRED_TOKEN"
+              ? "Tautan pemutakhiran data ini memerlukan token keamanan yang valid atau telah kedaluwarsa (berlaku 7 hari / sekali pakai). Silakan minta tautan baru ke pengurus komisariat Anda."
+              : "Data anggota tidak ditemukan dalam sistem atau tautan yang Anda buka telah kedaluwarsa. Silakan hubungi pengurus komisariat Anda untuk mendapatkan tautan terbaru."}
           </CardDescription>
-          <div className="mt-6">
+          <div className="mt-6 flex items-center justify-center gap-2">
+            {accessError === "ALREADY_ACTIVATED" && (
+              <Button
+                onClick={() => router.push("/login")}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Masuk ke Portal
+              </Button>
+            )}
             <Button
               onClick={() => router.push("/")}
               variant="outline"

@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import { SmartImage } from "@/components/ui/smart-image";
+
+import React, { useState, useRef } from "react";
 import {
   Upload,
   Copy,
@@ -17,7 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { cleanTwibbonFileGreenScreen } from "@/lib/chromaKey";
+import { useMounted } from "@/hooks/use-mounted";
 import type { EventActivity, TwibbonConfig } from "./types";
+
+function getDefaultCaption(eventName: string): string {
+  return `[KAMPANYE RESMI ${eventName.toUpperCase()}]\n\n"Tangan Terkepal dan Maju ke Muka!" 💙💛\n\nSaya siap hadir dan menyukseskan ${eventName}.\n\n#PMII #SalamPergerakan #${eventName.replace(/\s+/g, "")} #KaderPMII`;
+}
 
 interface TwibbonTabProps {
   event: EventActivity | null;
@@ -26,6 +33,7 @@ interface TwibbonTabProps {
 
 export default function TwibbonTab({ event, onUpdateEvent }: TwibbonTabProps) {
   const currentTwibbon = event?.twibbon;
+  const mounted = useMounted();
 
   const [frameUrl, setFrameUrl] = useState<string>(currentTwibbon?.frameUrl || "");
   const [caption, setCaption] = useState<string>(
@@ -35,26 +43,10 @@ export default function TwibbonTab({ event, onUpdateEvent }: TwibbonTabProps) {
     currentTwibbon?.isActive !== undefined ? Boolean(currentTwibbon.isActive) : true
   );
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isShareCopied, setIsShareCopied] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // URL Publik Twibbon
-  const [origin, setOrigin] = useState<string>("");
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setOrigin(window.location.origin);
-    }
-  }, []);
-
-  const shareUrl = event
-    ? `${origin || ""}/twibbon?event=${encodeURIComponent(event.id)}`
-    : "";
-
-  // Sync state saat event berganti
-  useEffect(() => {
+  const eventSyncKey = `${event?.id || ""}:${event?.twibbon?.frameUrl || ""}:${event?.twibbon?.caption || ""}:${String(event?.twibbon?.isActive)}`;
+  const [prevEventSyncKey, setPrevEventSyncKey] = useState(eventSyncKey);
+  if (eventSyncKey !== prevEventSyncKey) {
+    setPrevEventSyncKey(eventSyncKey);
     if (event) {
       setFrameUrl(event.twibbon?.frameUrl || "");
       setCaption(
@@ -64,11 +56,20 @@ export default function TwibbonTab({ event, onUpdateEvent }: TwibbonTabProps) {
         event.twibbon?.isActive !== undefined ? Boolean(event.twibbon.isActive) : true
       );
     }
-  }, [event?.id, event?.twibbon]);
-
-  function getDefaultCaption(eventName: string): string {
-    return `[KAMPANYE RESMI ${eventName.toUpperCase()}]\n\n"Tangan Terkepal dan Maju ke Muka!" 💙💛\n\nSaya siap hadir dan menyukseskan ${eventName}.\n\n#PMII #SalamPergerakan #${eventName.replace(/\s+/g, "")} #KaderPMII`;
   }
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isShareCopied, setIsShareCopied] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // URL Publik Twibbon
+  const origin = mounted && typeof window !== "undefined" ? window.location.origin : "";
+
+  const shareUrl = event
+    ? `${origin || ""}/twibbon?event=${encodeURIComponent(event.id)}`
+    : "";
 
   // Handle upload frame PNG
   const handleUploadFrame = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -255,9 +256,10 @@ export default function TwibbonTab({ event, onUpdateEvent }: TwibbonTabProps) {
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-12 h-12 rounded-md border border-zinc-200 dark:border-zinc-800 bg-[repeating-conic-gradient(#f4f4f5_0%_25%,#e4e4e7_0%_50%)_50%/8px_8px] overflow-hidden flex items-center justify-center p-0.5 shrink-0">
-                <img
+                <SmartImage
                   src={frameUrl}
                   alt="Bingkai"
+                  preserveAspect
                   className="max-w-full max-h-full object-contain"
                 />
               </div>

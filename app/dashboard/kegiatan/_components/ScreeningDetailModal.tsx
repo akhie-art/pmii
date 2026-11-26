@@ -42,13 +42,16 @@ export default function ScreeningDetailModal({
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
+  const [prevRegId, setPrevRegId] = useState<string | null>(null);
+  const currentRegKey = registration ? `${registration.id}:${registration.status}:${registration.notes || ""}` : null;
+  if (currentRegKey !== prevRegId) {
+    setPrevRegId(currentRegKey);
     if (registration) {
       setStatus(registration.status === "REJECTED" ? "REJECTED" : "APPROVED");
       setNotes(registration.notes || "");
       setVerificationStatus(registration.verificationStatus || {});
     }
-  }, [registration]);
+  }
 
   if (!isOpen || !registration || !event) return null;
 

@@ -69,507 +69,9 @@ import {
   SelectItem
 } from "@/components/ui/select";
 import { toast } from "sonner";
-
-// Helper membaca file sebagai base64 DataURL (persisten di LocalStorage saat luring)
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// Helper upload berkas ke Supabase Storage bucket 'materials'
-async function uploadDocFile(file: File, folder = "pengajuan-sk"): Promise<string> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, "_");
-      const path = `${folder}/${Date.now()}-${cleanName}.${ext}`;
-      const contentType =
-        file.type ||
-        (ext === "pdf"
-          ? "application/pdf"
-          : ext === "docx"
-          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          : ext === "doc"
-          ? "application/msword"
-          : undefined);
-      const { error } = await supabase.storage.from("materials").upload(path, file, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType
-      });
-      if (!error) {
-        const { data } = supabase.storage.from("materials").getPublicUrl(path);
-        if (data?.publicUrl) return data.publicUrl;
-      } else {
-        console.warn("Gagal unggah Supabase Storage:", error.message);
-      }
-    } catch (e) {
-      console.warn("Gagal unggah ke storage, beralih ke local fallback:", e);
-    }
-  }
-
-  // Fallback: Jika berkas <= 2.5 MB, simpan sebagai DataURL base64 agar persisten di LocalStorage
-  if (file.size <= 2.5 * 1024 * 1024) {
-    try {
-      return await readFileAsDataUrl(file);
-    } catch (e) {
-      console.warn("Gagal membaca DataURL:", e);
-    }
-  }
-
-  // Fallback darurat: Object URL sementara untuk sesi saat ini
-  return URL.createObjectURL(file);
-}
-
-// Helper ekstraksi nama berkas dari URL/Path
-function extractFileName(url?: string): string {
-  if (!url) return "";
-  try {
-    const raw = url.split("/").pop() || "";
-    const clean = decodeURIComponent(raw).replace(/^\d+-/, "");
-    return clean || "Berkas_Terlampir.pdf";
-  } catch {
-    return "Berkas_Terlampir.pdf";
-  }
-}
-
-// Subkomponen Modern Interactive File Drop Card
-interface FileDropCardProps {
-  label: string;
-  sublabel: string;
-  required?: boolean;
-  fileUrl?: string;
-  fileName?: string;
-  isUploading: boolean;
-  onUpload: (file: File) => void;
-  onRemove: () => void;
-  onPreview?: (fileUrl: string, fileName?: string) => void;
-  accept?: string;
-}
-
-function FileDropCard({
-  label,
-  sublabel,
-  required = false,
-  fileUrl,
-  fileName,
-  isUploading,
-  onUpload,
-  onRemove,
-  onPreview,
-  accept = ".pdf,.docx,.doc"
-}: FileDropCardProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      onUpload(file);
-    }
-  };
-
-  return (
-    <div
-      className={`relative rounded-xl border transition-all duration-150 p-3 flex flex-col justify-between ${
-        isDragging
-          ? "border-blue-500 bg-blue-50/40 dark:bg-blue-950/30 ring-2 ring-blue-500/20"
-          : fileUrl
-          ? "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
-          : "border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50/50 dark:bg-zinc-900/30 hover:border-zinc-300 dark:hover:border-zinc-700"
-      }`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onUpload(file);
-          e.target.value = "";
-        }}
-      />
-
-      {/* Header: Label & Status Badge */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-medium text-xs text-zinc-900 dark:text-zinc-100 truncate">
-            {label}
-          </span>
-          {required ? (
-            <span className="shrink-0 text-[10px] font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-200/60 dark:border-rose-900/50">
-              Wajib
-            </span>
-          ) : (
-            <span className="shrink-0 text-[10px] text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.2 rounded">
-              Opsional
-            </span>
-          )}
-        </div>
-
-        {fileUrl && (
-          <span className="shrink-0 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/50 dark:border-emerald-800/40 px-1.5 py-0.5 rounded-md">
-            <Check className="w-2.5 h-2.5 stroke-[3]" /> Terunggah
-          </span>
-        )}
-      </div>
-
-      {/* Body Area */}
-      {isUploading ? (
-        <div className="py-4 flex flex-col items-center justify-center gap-1.5 text-blue-600 dark:text-blue-400">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-          <p className="text-[11px] font-medium text-zinc-500 animate-pulse">Mengunggah berkas...</p>
-        </div>
-      ) : fileUrl ? (
-        /* Attached File State */
-        <div className="flex items-center justify-between gap-2 bg-zinc-50 dark:bg-zinc-950/70 border border-zinc-200/70 dark:border-zinc-800/80 rounded-lg p-2">
-          <div
-            onClick={() => (onPreview ? onPreview(fileUrl, fileName) : window.open(fileUrl, "_blank"))}
-            className="flex items-center gap-2 min-w-0 cursor-pointer flex-1 group/item"
-            title="Klik untuk pratinjau dokumen"
-          >
-            <div className="w-7 h-7 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover/item:bg-blue-100 dark:group-hover/item:bg-blue-900/60 transition-colors">
-              <FileText className="w-3.5 h-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate group-hover/item:text-blue-600 dark:group-hover/item:text-blue-400 transition-colors">
-                {fileName || "Dokumen_Terlampir"}
-              </p>
-              <p className="text-[10px] text-zinc-400">Klik untuk pratinjau</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => (onPreview ? onPreview(fileUrl, fileName) : window.open(fileUrl, "_blank"))}
-              className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-              title="Pratinjau"
-            >
-              <Eye className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-              title="Ganti Berkas"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={onRemove}
-              className="p-1 rounded-md text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
-              title="Hapus"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Empty Dropzone Trigger State */
-        <div
-          onClick={() => inputRef.current?.click()}
-          className="cursor-pointer py-2.5 px-3 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-white/70 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/40 flex items-center gap-3 transition-colors group/box"
-        >
-          <div className="w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 group-hover/box:text-blue-600 group-hover/box:bg-blue-50 dark:group-hover/box:bg-blue-950/50 flex items-center justify-center shrink-0 transition-colors">
-            <UploadCloud className="w-3.5 h-3.5" />
-          </div>
-          <div className="min-w-0 text-left">
-            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 group-hover/box:text-blue-600 dark:group-hover/box:text-blue-400 transition-colors">
-              Pilih atau seret berkas
-            </p>
-            <p className="text-[10px] text-zinc-400 truncate">{sublabel}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Helper deteksi ekstensi berkas yang andal dari URL dan Nama Berkas
-function getFileExtension(url: string, name?: string): string {
-  const cleanUrl = (url || "").split("?")[0].split("#")[0];
-  const urlExt = cleanUrl.includes(".") ? cleanUrl.split(".").pop()?.toLowerCase() || "" : "";
-  const cleanName = (name || "").split("?")[0].split("#")[0];
-  const nameExt = cleanName.includes(".") ? cleanName.split(".").pop()?.toLowerCase() || "" : "";
-
-  const known = ["docx", "doc", "pdf", "xlsx", "xls", "jpg", "jpeg", "png", "webp", "gif", "svg", "csv"];
-  if (known.includes(nameExt)) return nameExt;
-  if (known.includes(urlExt)) return urlExt;
-  if (nameExt && nameExt.length <= 5) return nameExt;
-  if (urlExt && urlExt.length <= 5) return urlExt;
-  return "";
-}
-
-// Subkomponen Modal Pratinjau Dokumen Universal (Murni Pratinjau, Tanpa Download)
-function DocumentViewerModal({
-  isOpen,
-  onClose,
-  fileUrl,
-  fileName
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  fileUrl: string;
-  fileName: string;
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string>("");
-
-  const ext = getFileExtension(fileUrl, fileName);
-  const isDocx = ext === "docx" || ext === "doc";
-  const isPdf = ext === "pdf";
-  const isXlsx = ext === "xlsx" || ext === "xls" || ext === "csv";
-  const isImage = ["jpg", "jpeg", "png", "webp", "gif", "svg"].includes(ext);
-
-  // Efek memuat PDF via Blob agar browser TIDAK memicu download
-  useEffect(() => {
-    if (!isOpen || !fileUrl || !isPdf) {
-      setPdfUrl("");
-      return;
-    }
-
-    let active = true;
-    let blobUrl = "";
-    setIsLoading(true);
-    setLoadError(null);
-
-    (async () => {
-      try {
-        const res = await fetch(fileUrl);
-        if (!res.ok) throw new Error("Gagal mengambil berkas PDF");
-        const blob = await res.blob();
-        if (!active) return;
-        blobUrl = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-        setPdfUrl(blobUrl);
-      } catch {
-        if (active) setPdfUrl(fileUrl);
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [isOpen, fileUrl, isPdf]);
-
-  // Efek merender DOCX / DOC
-  useEffect(() => {
-    if (!isOpen || !fileUrl || !isDocx) return;
-
-    let isMounted = true;
-    setIsLoading(true);
-    setLoadError(null);
-
-    (async () => {
-      try {
-        const res = await fetch(fileUrl);
-        if (!res.ok) throw new Error("Gagal mengambil berkas dokumen");
-        const buffer = await res.arrayBuffer();
-        if (!isMounted || !containerRef.current) return;
-
-        const targetEl = containerRef.current;
-        targetEl.innerHTML = "";
-
-        try {
-          const docx = await import("docx-preview");
-          await docx.renderAsync(buffer, targetEl, undefined, {
-            className: "docx",
-            inWrapper: true,
-            ignoreWidth: false,
-            ignoreHeight: false,
-            breakPages: true,
-            useBase64URL: true,
-            renderHeaders: true,
-            renderFooters: true,
-            renderAltChunks: true
-          });
-        } catch (docxErr) {
-          console.warn("docx-preview gagal, mencoba mammoth fallback:", docxErr);
-          const mammoth = await import("mammoth");
-          const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
-          if (!isMounted || !containerRef.current) return;
-          targetEl.innerHTML = `<div class="p-8 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-xl shadow border border-zinc-200 dark:border-zinc-800 max-w-3xl w-full mx-auto leading-relaxed text-sm font-sans">${result.value}</div>`;
-        }
-      } catch (err: any) {
-        console.error("Gagal render preview Word docx:", err);
-        if (isMounted) {
-          setLoadError("Pratinjau dokumen Word tidak dapat ditampilkan.");
-        }
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, fileUrl, isDocx]);
-
-  // Efek merender Excel (XLSX / XLS / CSV)
-  useEffect(() => {
-    if (!isOpen || !fileUrl || !isXlsx) return;
-
-    let isMounted = true;
-    setIsLoading(true);
-    setLoadError(null);
-
-    (async () => {
-      try {
-        const res = await fetch(fileUrl);
-        if (!res.ok) throw new Error("Gagal mengambil berkas spreadsheet");
-        const buffer = await res.arrayBuffer();
-        if (!isMounted || !containerRef.current) return;
-
-        const { spreadsheetBufferToSafeHtml } = await import("@/lib/excel");
-        const { escapeHtml } = await import("@/lib/sanitize");
-        const { sheetName: firstSheetName, sheetCount, htmlTable } =
-          await spreadsheetBufferToSafeHtml(buffer, fileUrl);
-
-        if (!isMounted || !containerRef.current) return;
-        const targetEl = containerRef.current;
-        targetEl.innerHTML = `
-          <div class="w-full bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
-            <div class="mb-3 flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-              <span class="text-xs font-bold text-zinc-800 dark:text-zinc-200">Lembar Kerja: ${escapeHtml(firstSheetName)}</span>
-              <span class="text-[10px] text-zinc-400">Total ${sheetCount} sheet</span>
-            </div>
-            <div class="overflow-x-auto text-xs [&>table]:w-full [&>table]:border-collapse [&_th]:bg-zinc-100 dark:[&_th]:bg-zinc-800 [&_th]:p-2 [&_th]:border [&_th]:border-zinc-200 dark:[&_th]:border-zinc-700 [&_td]:p-2 [&_td]:border [&_td]:border-zinc-200 dark:[&_td]:border-zinc-700 text-zinc-800 dark:text-zinc-200">
-              ${htmlTable}
-            </div>
-          </div>
-        `;
-      } catch (err: any) {
-        console.error("Gagal render preview Excel:", err);
-        if (isMounted) {
-          setLoadError("Pratinjau spreadsheet tidak dapat ditampilkan.");
-        }
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, fileUrl, isXlsx]);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl">
-        {/* Header - Murni Pratinjau, Tanpa Tombol Unduh */}
-        <div className="px-5 py-3.5 pr-12 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="font-bold text-xs text-zinc-900 dark:text-zinc-100 truncate max-w-sm sm:max-w-md">
-                {fileName || "Pratinjau Dokumen"}
-              </p>
-              <p className="text-[10px] text-zinc-500">
-                Mode Pratinjau Dokumen {ext ? `(${ext.toUpperCase()})` : ""}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Content Viewer Body */}
-        <div className="flex-1 overflow-y-auto p-4 bg-zinc-100/60 dark:bg-zinc-950/80 min-h-[400px] max-h-[78vh] flex flex-col items-center">
-          {isLoading && (
-            <div className="py-24 flex flex-col items-center justify-center gap-3 text-blue-600">
-              <Loader2 className="w-8 h-8 animate-spin" />
-              <p className="text-xs font-medium animate-pulse">Memuat pratinjau dokumen...</p>
-            </div>
-          )}
-
-          {loadError && !isLoading && (
-            <div className="py-20 flex flex-col items-center justify-center gap-2.5 text-center max-w-md">
-              <AlertCircle className="w-8 h-8 text-amber-500" />
-              <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{loadError}</p>
-              <p className="text-[11px] text-zinc-500">
-                Dokumen tidak dapat dibuka di dalam pratinjau browser saat ini.
-              </p>
-            </div>
-          )}
-
-          {/* Word (DOCX / DOC) atau Excel (XLSX / XLS) */}
-          {(isDocx || isXlsx) && (
-            <div
-              ref={containerRef}
-              className={`w-full overflow-y-auto flex flex-col items-center ${isLoading || loadError ? "hidden" : "block"}`}
-            />
-          )}
-
-          {/* PDF Viewer */}
-          {isPdf && !loadError && (
-            <div className={`w-full h-full flex flex-col ${isLoading ? "hidden" : "block"}`}>
-              <iframe
-                src={pdfUrl || fileUrl}
-                className="w-full h-[74vh] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white"
-                title={fileName}
-              />
-            </div>
-          )}
-
-          {/* Gambar */}
-          {isImage && (
-            <div className="flex items-center justify-center p-2">
-              <img
-                src={fileUrl}
-                alt={fileName}
-                className="max-h-[72vh] max-w-full object-contain rounded-xl shadow-md border border-zinc-200 dark:border-zinc-800"
-              />
-            </div>
-          )}
-
-          {/* Fallback untuk format lain yang tidak didukung langsung browser (TIDAK BOLEH IFRAME AGAR TIDAK DOWNLOAD) */}
-          {!isDocx && !isXlsx && !isPdf && !isImage && !isLoading && !loadError && (
-            <div className="py-20 flex flex-col items-center justify-center text-center max-w-md mx-auto">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center mb-3">
-                <FileText className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 mb-1">
-                {fileName || "Dokumen Lampiran"}
-              </p>
-              <p className="text-xs text-zinc-500 max-w-sm">
-                Format berkas ({ext ? `.${ext.toUpperCase()}` : "tidak dikenal"}) ini tidak didukung untuk pratinjau visual langsung di browser.
-              </p>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { uploadDocFile, extractFileName } from "./_components/sk-file-helpers";
+import { FileDropCard } from "./_components/FileDropCard";
+import { DocumentViewerModal } from "./_components/DocumentViewerModal";
 
 export default function PengajuanSKPage() {
   const [submissions, setSubmissions] = useState<PengajuanSK[]>([]);
@@ -653,11 +155,11 @@ export default function PengajuanSKPage() {
   };
 
   // Helper mendapatkan nama komisariat
-  const getKomisariatName = (komisariatId?: string | null) => {
+  const getKomisariatName = React.useCallback((komisariatId?: string | null) => {
     if (!komisariatId) return "Komisariat PMII";
     const found = commissariats.find((c) => c.id === komisariatId);
     return found?.name || "Komisariat PMII";
-  };
+  }, [commissariats]);
 
   // Helper mendapatkan periode dari data tenant
   const getTenantPeriod = (komisariatId?: string | null) => {
@@ -688,19 +190,28 @@ export default function PengajuanSKPage() {
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setCurrentUser(parsed);
-          if (parsed.tenant_id || parsed.komisariat_id) {
-            setFormKomisariatId(parsed.tenant_id || parsed.komisariat_id);
-          }
-        } catch {}
+    let active = true;
+    const init = async () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (active) {
+              setCurrentUser(parsed);
+              if (parsed.tenant_id || parsed.komisariat_id) {
+                setFormKomisariatId(parsed.tenant_id || parsed.komisariat_id);
+              }
+            }
+          } catch {}
+        }
       }
-    }
-    loadData();
+      await loadData();
+    };
+    void init();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const userRole = (currentUser?.role || "").toLowerCase();
@@ -747,7 +258,7 @@ export default function PengajuanSKPage() {
 
       return matchSearch && matchStatus && matchTenant;
     });
-  }, [submissions, searchQuery, statusFilter, tenantFilter, isAdmin, currentUser, commissariats]);
+  }, [submissions, searchQuery, statusFilter, tenantFilter, isAdmin, currentUser, getKomisariatName]);
 
   // Open Form Create
   const handleOpenCreate = () => {

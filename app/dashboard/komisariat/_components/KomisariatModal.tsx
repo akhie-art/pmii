@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -73,35 +75,40 @@ export function KomisariatModal({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (editingItem) {
-      const detectedBph = getKomisariatBph(editingItem, boardMembers);
-      setFormData({
-        id: editingItem.id,
-        name: editingItem.name || "",
-        university: editingItem.university || editingItem.campusName || "",
-        logo: editingItem.logo || "",
-        logoInitial: editingItem.logoInitial || "",
-        establishedDate: editingItem.establishedDate || "",
-        establishedYear: editingItem.establishedYear,
-        contactEmail: editingItem.contactEmail || "",
-        structure: {
-          chairman: editingItem.structure?.chairman || (detectedBph.chairman !== "-" ? detectedBph.chairman : ""),
-          chairman_id: editingItem.structure?.chairman_id || null,
-          secretary: editingItem.structure?.secretary || (detectedBph.secretary !== "-" ? detectedBph.secretary : ""),
-          secretary_id: editingItem.structure?.secretary_id || null,
-          treasurer: editingItem.structure?.treasurer || (detectedBph.treasurer !== "-" ? detectedBph.treasurer : ""),
-          treasurer_id: editingItem.structure?.treasurer_id || null,
-          period: editingItem.structure?.period || (detectedBph.period ? detectedBph.period : "2026 - 2027"),
-        },
-        gallery: editingItem.gallery || [],
-      });
-    } else {
-      setFormData(DEFAULT_FORM_DATA);
+  const syncKey = open ? `${editingItem?.id || "new"}:${defaultTab || "umum"}` : "";
+  const [prevSyncKey, setPrevSyncKey] = useState("");
+  if (syncKey !== prevSyncKey) {
+    setPrevSyncKey(syncKey);
+    if (open) {
+      if (editingItem) {
+        const detectedBph = getKomisariatBph(editingItem, boardMembers);
+        setFormData({
+          id: editingItem.id,
+          name: editingItem.name || "",
+          university: editingItem.university || editingItem.campusName || "",
+          logo: editingItem.logo || "",
+          logoInitial: editingItem.logoInitial || "",
+          establishedDate: editingItem.establishedDate || "",
+          establishedYear: editingItem.establishedYear,
+          contactEmail: editingItem.contactEmail || "",
+          structure: {
+            chairman: editingItem.structure?.chairman || (detectedBph.chairman !== "-" ? detectedBph.chairman : ""),
+            chairman_id: editingItem.structure?.chairman_id || null,
+            secretary: editingItem.structure?.secretary || (detectedBph.secretary !== "-" ? detectedBph.secretary : ""),
+            secretary_id: editingItem.structure?.secretary_id || null,
+            treasurer: editingItem.structure?.treasurer || (detectedBph.treasurer !== "-" ? detectedBph.treasurer : ""),
+            treasurer_id: editingItem.structure?.treasurer_id || null,
+            period: editingItem.structure?.period || (detectedBph.period ? detectedBph.period : "2026 - 2027"),
+          },
+          gallery: editingItem.gallery || [],
+        });
+      } else {
+        setFormData(DEFAULT_FORM_DATA);
+      }
+      setActiveTab(defaultTab || "umum");
+      setErrorMsg("");
     }
-    setActiveTab(defaultTab || "umum");
-    setErrorMsg("");
-  }, [editingItem, open, defaultTab]);
+  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -424,9 +431,11 @@ export function KomisariatModal({
                   <div className="flex items-center gap-3 pt-1">
                     {formData.logo ? (
                       <div className="relative group w-14 h-14 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1 flex items-center justify-center shrink-0 shadow-xs">
-                        <img
+                        <SmartImage
                           src={formData.logo}
                           alt="Logo Komisariat"
+                          width={64}
+                          height={64}
                           className="w-full h-full object-contain rounded-lg"
                         />
                         <button
@@ -663,7 +672,7 @@ export function KomisariatModal({
                     <div className="flex flex-wrap items-center gap-3">
                       {newPhoto.imageUrl ? (
                         <div className="relative w-16 h-12 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 shrink-0">
-                          <img src={newPhoto.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                          <SmartImage src={newPhoto.imageUrl} alt="Preview" width={96} height={96} className="w-full h-full object-cover" />
                           <button
                             type="button"
                             onClick={() => setNewPhoto({ ...newPhoto, imageUrl: "" })}
@@ -737,9 +746,11 @@ export function KomisariatModal({
                           className="group relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs"
                         >
                           <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-                            <img
+                            <SmartImage
                               src={photo.imageUrl}
-                              alt={photo.title}
+                              alt={photo.title || "Foto Galeri Komisariat"}
+                              width={240}
+                              height={180}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             />
                             <span className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-[9px] font-semibold text-white px-1.5 py-0.5 rounded">

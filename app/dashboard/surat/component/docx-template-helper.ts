@@ -115,6 +115,293 @@ export function extractDocxPlaceholders(arrayBuffer: ArrayBuffer): {
   }
 }
 
+export interface DocxQrFooterOptions {
+  qrDataUrl: string;
+  letterId: string;
+  nomor?: string;
+  verificationUrl: string;
+  orgLabel?: string;
+}
+
+function appendRelationshipXml(relsXml: string, relationshipTag: string): string {
+  if (/<Relationships\b[^>]*\/>/.test(relsXml)) {
+    return relsXml.replace(
+      /<Relationships([^>]*)\/>/,
+      `<Relationships$1>${relationshipTag}</Relationships>`
+    );
+  }
+  if (relsXml.includes("</Relationships>")) {
+    return relsXml.replace("</Relationships>", `${relationshipTag}</Relationships>`);
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationshipTag}</Relationships>`;
+}
+
+function ensureFooterNamespaces(ftrXml: string): string {
+  let out = ftrXml;
+  const nsList: Array<[string, string]> = [
+    ["xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"],
+    ["xmlns:wp", "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"],
+    ["xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main"],
+    ["xmlns:pic", "http://schemas.openxmlformats.org/drawingml/2006/picture"],
+  ];
+  for (const [attr, uri] of nsList) {
+    if (!out.includes(`${attr}=`)) {
+      out = out.replace("<w:ftr", `<w:ftr ${attr}="${uri}"`);
+    }
+  }
+  return out;
+}
+
+function buildDocxQrDrawingXml(relId: string, sizeEmu = 522000): string {
+  // Ukuran QR Code ~1.45 cm x 1.45 cm (522000 EMU), bersih tanpa teks tambahan
+  return (
+    `<w:drawing>` +
+    `<wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    `<wp:extent cx="${sizeEmu}" cy="${sizeEmu}"/>` +
+    `<wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    `<wp:docPr id="9012041" name="QR Verifikasi Surat"/>` +
+    `<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+    `<a:graphic>` +
+    `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:pic>` +
+    `<pic:nvPicPr><pic:cNvPr id="9012041" name="qr_verifikasi_surat.png"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${sizeEmu}" cy="${sizeEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    `</pic:pic>` +
+    `</a:graphicData>` +
+    `</a:graphic>` +
+    `</wp:inline>` +
+    `</w:drawing>`
+  );
+}
+
+function buildDocxQrFooterXml(relId: string): string {
+  const qrDrawingXml = buildDocxQrDrawingXml(relId, 576000);
+  return `<w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="40" w:after="0"/></w:pPr><w:r>${qrDrawingXml}</w:r></w:p>`;
+}
+
+/**
+ * Menempatkan QR Code sejajar di sisi kiri dan konten footer asli tetap tepat di tengah halaman
+ * menggunakan tabel simetris 3 kolom tanpa garis (18% QR | 64% Footer Asli | 18% Penyeimbang)
+ * sehingga tidak menambah tinggi vertikal footer maupun mendorong teks motto ke atas.
+ */
+function buildSideBySideQrFooterTableXml(relId: string, existingInnerXml: string): string {
+  const qrDrawingXml = buildDocxQrDrawingXml(relId, 522000);
+  const noBorders =
+    `<w:tblBorders>` +
+    `<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>` +
+    `<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>` +
+    `<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>` +
+    `<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>` +
+    `<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>` +
+    `<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>` +
+    `</w:tblBorders>`;
+  const zeroMar =
+    `<w:tblCellMar>` +
+    `<w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>` +
+    `<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>` +
+    `</w:tblCellMar>`;
+
+  return (
+    `<w:tbl>` +
+    `<w:tblPr><w:tblW w:w="5000" w:type="pct"/>${noBorders}${zeroMar}<w:tblLayout w:type="fixed"/></w:tblPr>` +
+    `<w:tr>` +
+    `<w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>` +
+    `<w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r>${qrDrawingXml}</w:r></w:p>` +
+    `</w:tc>` +
+    `<w:tc><w:tcPr><w:tcW w:w="3200" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>` +
+    `${existingInnerXml}` +
+    `</w:tc>` +
+    `<w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>` +
+    `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>` +
+    `</w:tc>` +
+    `</w:tr>` +
+    `</w:tbl>`
+  );
+}
+
+/**
+ * Menyematkan QR Code verifikasi ke bagian footer dokumen Word (.docx)
+ * baik ke footer yang sudah ada maupun membuat footer baru jika template belum memilikinya.
+ */
+export function embedQrFooterInDocx(zip: PizZip, opts: DocxQrFooterOptions): PizZip {
+  try {
+    if (!opts?.qrDataUrl) return zip;
+
+    const cleanBase64 = opts.qrDataUrl.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+    const qrBinary = base64ToArrayBuffer(cleanBase64);
+    zip.file("word/media/qr_verifikasi_surat.png", qrBinary);
+
+    // 1. Pastikan Content-Type untuk .png terdaftar di [Content_Types].xml
+    const ctFile = zip.file("[Content_Types].xml");
+    let ctXml = ctFile ? ctFile.asText() : "";
+    if (ctXml && !/Extension="png"/i.test(ctXml)) {
+      ctXml = ctXml.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>');
+      zip.file("[Content_Types].xml", ctXml);
+    }
+
+    const qrRelId = "rIdQrVerifySurat";
+    const qrRelTag = `<Relationship Id="${qrRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/qr_verifikasi_surat.png"/>`;
+    const qrFooterXml = buildDocxQrFooterXml(qrRelId);
+
+    const docFile = zip.file("word/document.xml");
+    if (!docFile) return zip;
+    let docXml = docFile.asText();
+
+    const docRelsPath = "word/_rels/document.xml.rels";
+    const docRelsFile = zip.file(docRelsPath);
+    let docRelsXml = docRelsFile
+      ? docRelsFile.asText()
+      : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>';
+
+    const attachQrToExistingFooter = (footerTarget: string): boolean => {
+      const normalizedPath = footerTarget.startsWith("word/")
+        ? footerTarget
+        : `word/${footerTarget.replace(/^\/+/, "")}`;
+      const ftrFile = zip.file(normalizedPath);
+      if (!ftrFile) return false;
+
+      let ftrXml = ensureFooterNamespaces(ftrFile.asText());
+      if (ftrXml.includes('name="QR Verifikasi Surat"')) {
+        return true;
+      }
+      if (ftrXml.includes("</w:ftr>")) {
+        const ftrMatch = ftrXml.match(/(<w:ftr\b[^>]*>)([\s\S]*)(<\/w:ftr>)/);
+        const existingInner = ftrMatch?.[2]?.trim() || "";
+        const hasVisibleExistingContent =
+          /<w:t\b[^>]*>[^<]*\S[^<]*<\/w:t>|<w:drawing\b|<w:pict\b|<w:tbl\b/.test(existingInner);
+
+        if (ftrMatch && hasVisibleExistingContent && !/<w:tbl\b/.test(existingInner)) {
+          const sideBySideTable = buildSideBySideQrFooterTableXml(qrRelId, existingInner);
+          ftrXml = ftrXml.replace(ftrMatch[0], `${ftrMatch[1]}${sideBySideTable}${ftrMatch[3]}`);
+        } else {
+          ftrXml = ftrXml.replace("</w:ftr>", `${qrFooterXml}</w:ftr>`);
+        }
+        zip.file(normalizedPath, ftrXml);
+      }
+
+      const footerFileName = normalizedPath.split("/").pop() || "footer1.xml";
+      const footerRelsPath = `word/_rels/${footerFileName}.rels`;
+      const existingFtrRels = zip.file(footerRelsPath)?.asText() ||
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>';
+      if (!existingFtrRels.includes(`Id="${qrRelId}"`)) {
+        zip.file(footerRelsPath, appendRelationshipXml(existingFtrRels, qrRelTag));
+      }
+      return true;
+    };
+
+    // Cari referensi footer yang sudah ada di word/document.xml
+    const footerRefMatches = Array.from(
+      docXml.matchAll(/<w:footerReference\b[^>]*w:type="([^"]+)"[^>]*r:id="([^"]+)"[^>]*\/>/g)
+    );
+    const defaultFooterRef = footerRefMatches.find((m) => m[1] === "default");
+    const firstFooterRef = footerRefMatches.find((m) => m[1] === "first");
+
+    const resolveTargetByRelId = (relId: string): string | null => {
+      const regex = new RegExp(`<Relationship\\b[^>]*Id="${relId}"[^>]*Target="([^"]+)"`, "i");
+      const m = docRelsXml.match(regex);
+      if (m?.[1]) return m[1];
+      const regexRev = new RegExp(`<Relationship\\b[^>]*Target="([^"]+)"[^>]*Id="${relId}"`, "i");
+      return docRelsXml.match(regexRev)?.[1] || null;
+    };
+
+    let attachedDefault = false;
+    if (defaultFooterRef?.[2]) {
+      const target = resolveTargetByRelId(defaultFooterRef[2]);
+      if (target) {
+        attachedDefault = attachQrToExistingFooter(target);
+      }
+    }
+    if (firstFooterRef?.[2]) {
+      const target = resolveTargetByRelId(firstFooterRef[2]);
+      if (target) {
+        attachQrToExistingFooter(target);
+      }
+    }
+
+    // Jika template belum punya footer default, buat word/footer_qr_verify.xml baru
+    if (!attachedDefault) {
+      const footerName = "footer_qr_verify.xml";
+      const footerRelId = "rIdFooterQrVerify";
+      const newFooterXml =
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ` +
+        `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
+        `xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ` +
+        `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+        `xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+        `${qrFooterXml}` +
+        `</w:ftr>`;
+
+      zip.file(`word/${footerName}`, newFooterXml);
+      zip.file(
+        `word/_rels/${footerName}.rels`,
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+          `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${qrRelTag}</Relationships>`
+      );
+
+      if (!docRelsXml.includes(`Id="${footerRelId}"`)) {
+        const footerRelTag = `<Relationship Id="${footerRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="${footerName}"/>`;
+        docRelsXml = appendRelationshipXml(docRelsXml, footerRelTag);
+        zip.file(docRelsPath, docRelsXml);
+      }
+
+      if (ctXml && !ctXml.includes(`/word/${footerName}`)) {
+        ctXml = ctXml.replace(
+          "</Types>",
+          `<Override PartName="/word/${footerName}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>`
+        );
+        zip.file("[Content_Types].xml", ctXml);
+      }
+
+      if (!docXml.includes("xmlns:r=")) {
+        docXml = docXml.replace(
+          "<w:document ",
+          '<w:document xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+        );
+      }
+
+      const needsFirstRef = docXml.includes("<w:titlePg") && !firstFooterRef;
+      const footerRefsXml =
+        `<w:footerReference w:type="default" r:id="${footerRelId}"/>` +
+        (needsFirstRef ? `<w:footerReference w:type="first" r:id="${footerRelId}"/>` : "");
+
+      const lastSectIdx = docXml.lastIndexOf("<w:sectPr");
+      if (lastSectIdx !== -1) {
+        const sectTagEnd = docXml.indexOf(">", lastSectIdx);
+        if (sectTagEnd !== -1) {
+          docXml =
+            docXml.slice(0, sectTagEnd + 1) +
+            footerRefsXml +
+            docXml.slice(sectTagEnd + 1);
+        }
+        // Pastikan w:pgMar memiliki jarak footer agar footer tampil rapi di bawah
+        const sectCloseIdx = docXml.indexOf("</w:sectPr>", lastSectIdx);
+        if (sectCloseIdx !== -1) {
+          const sectSlice = docXml.slice(lastSectIdx, sectCloseIdx);
+          if (sectSlice.includes("<w:pgMar") && !sectSlice.includes("w:footer=")) {
+            const updatedSect = sectSlice.replace(
+              /<w:pgMar([^>]*)\/>/,
+              '<w:pgMar$1 w:footer="450"/>'
+            );
+            docXml = docXml.slice(0, lastSectIdx) + updatedSect + docXml.slice(sectCloseIdx);
+          }
+        }
+      } else if (docXml.includes("</w:body>")) {
+        docXml = docXml.replace(
+          "</w:body>",
+          `<w:sectPr>${footerRefsXml}<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:footer="450"/></w:sectPr></w:body>`
+        );
+      }
+
+      zip.file("word/document.xml", docXml);
+    }
+  } catch (err) {
+    console.warn("Gagal menyematkan QR Code verifikasi ke footer DOCX:", err);
+  }
+  return zip;
+}
+
 /**
  * Isi template DOCX dengan data placeholder menggunakan docxtemplater + PizZip
  * Format asli dokumen (font, margin, header, footer, tabel) tetap 100% utuh!
@@ -122,7 +409,8 @@ export function extractDocxPlaceholders(arrayBuffer: ArrayBuffer): {
 export function fillDocxTemplate(
   arrayBuffer: ArrayBuffer,
   data: Record<string, any>,
-  photoBase64?: string
+  photoBase64?: string,
+  qrFooter?: DocxQrFooterOptions
 ): {
   blob: Blob;
   arrayBuffer: ArrayBuffer;
@@ -239,6 +527,11 @@ export function fillDocxTemplate(
       }
     }
 
+    // Jika ada QR Code verifikasi surat keluar, sematkan ke footer dokumen Word (.docx)
+    if (qrFooter?.qrDataUrl) {
+      embedQrFooterInDocx(outZip, qrFooter);
+    }
+
     const outBuffer = outZip.generate({
       type: "arraybuffer",
       mimeType: DOCX_MIME_TYPE
@@ -262,6 +555,7 @@ export function fillDocxTemplate(
 }
 
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { uploadPrivateDocument, resolveStorageUrl, PRIVATE_DOC_MAX_BYTES } from "@/lib/storage";
 
 /**
  * Format ukuran berkas (bytes ke KB/MB)
@@ -276,43 +570,49 @@ export function formatBytes(bytes: number, decimals = 1): string {
 }
 
 /**
- * Unggah file dokumen ke Supabase Storage bucket 'materials'
+ * Unggah dokumen persuratan (lampiran & master template) ke bucket privat 'private-docs'
+ * dengan isolasi path tenant (<tenantId>/surat/...) tanpa fallback ke bucket publik.
+ * Mengembalikan referensi storage kanonik (`private-docs/...`) untuk dibuka lewat Signed URL.
  */
 export async function uploadFileToStorage(
   file: File | Blob,
   folder: "surat-templates" | "surat-attachments",
-  originalName: string
-): Promise<{ url: string; path: string; sizeFormatted: string } | null> {
+  originalName: string,
+  tenantId?: string | null
+): Promise<{ url: string; signedUrl?: string; path: string; sizeFormatted: string } | null> {
   if (!isSupabaseConfigured || !supabase) {
     console.warn("Supabase tidak terkonfigurasi, unggah storage dilewati.");
     return null;
   }
 
   try {
-    const cleanExt = originalName.includes(".") ? originalName.split(".").pop() : "";
-    const baseClean = originalName.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, "_");
-    const filePath = `${folder}/${Date.now()}-${baseClean}${cleanExt ? `.${cleanExt}` : ""}`;
+    const fileSize = file instanceof File ? file.size : (file as Blob).size;
+    if (fileSize > PRIVATE_DOC_MAX_BYTES) {
+      console.warn(`Ukuran dokumen persuratan (${formatBytes(fileSize)}) melebihi batas 10 MB.`);
+      return null;
+    }
+    const uploadableFile =
+      file instanceof File
+        ? file
+        : new File([file], originalName || "dokumen-surat.docx", {
+            type: file.type || DOCX_MIME_TYPE
+          });
 
-    const { error: uploadError } = await supabase.storage
-      .from("materials")
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: true
-      });
+    const uploaded = await uploadPrivateDocument(uploadableFile, {
+      category: "surat",
+      tenantId: tenantId || null,
+      prefix: folder === "surat-templates" ? "template" : "lampiran",
+      allowPublicFallback: false
+    });
 
-    if (uploadError) {
-      console.error("Gagal unggah ke Supabase Storage:", uploadError);
+    if (!uploaded) {
       return null;
     }
 
-    const { data: publicData } = supabase.storage
-      .from("materials")
-      .getPublicUrl(filePath);
-
-    const fileSize = file instanceof File ? file.size : (file as Blob).size;
     return {
-      url: publicData.publicUrl,
-      path: filePath,
+      url: uploaded.storageRef,
+      signedUrl: uploaded.signedUrl,
+      path: uploaded.path,
       sizeFormatted: formatBytes(fileSize)
     };
   } catch (err) {
@@ -322,7 +622,8 @@ export async function uploadFileToStorage(
 }
 
 /**
- * Mendapatkan ArrayBuffer dokumen .docx baik dari URL Cloud Storage maupun Base64
+ * Mendapatkan ArrayBuffer dokumen .docx baik dari referensi private-docs (Signed URL),
+ * URL Cloud Storage legacy, maupun Base64.
  */
 export async function getDocxArrayBuffer(template: {
   fileUrl?: string;
@@ -330,9 +631,12 @@ export async function getDocxArrayBuffer(template: {
 }): Promise<ArrayBuffer> {
   if (template.fileUrl) {
     try {
-      const res = await fetch(template.fileUrl);
-      if (res.ok) {
-        return await res.arrayBuffer();
+      const resolvedUrl = await resolveStorageUrl(template.fileUrl);
+      if (resolvedUrl) {
+        const res = await fetch(resolvedUrl);
+        if (res.ok) {
+          return await res.arrayBuffer();
+        }
       }
     } catch (err) {
       console.warn("Gagal mengambil file DOCX dari fileUrl, mencoba fallback base64:", err);

@@ -1,4 +1,5 @@
 // components/FileDetailPanel.tsx
+import { SmartImage } from "@/components/ui/smart-image";
 import React, { useState, useEffect } from "react";
 import { X, FileText, Download, Trash2, ShieldCheck, Eye, FileSpreadsheet, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DocumentItem } from "@/types/drive";
 import { AccessBadge, CategoryBadge } from "./DriveBadges";
+import { isPrivateStorageRef, resolveStorageUrl } from "@/lib/storage";
 
 interface Props {
   selectedDoc: DocumentItem | null;
@@ -45,31 +47,30 @@ export function ExcelCsvPreview({ fileUrl, title }: ExcelCsvPreviewProps) {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
-    fetch(fileUrl)
-      .then((res) => {
+    let cancelled = false;
+    const loadCsv = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(fileUrl);
         if (!res.ok) throw new Error("Gagal mengambil isi file CSV");
-        return res.text();
-      })
-      .then((text) => {
-        // Parse CSV text
+        const text = await res.text();
+        if (cancelled) return;
         const rows = text.split("\n").map((row) => {
-          // simple CSV parsing supporting double quotes
           const matches = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(",");
           return matches.map((cell) => cell.replace(/^"|"$/g, "").trim());
         }).filter(row => row.length > 0 && row.some(cell => cell !== ""));
-        
-        setData(rows.slice(0, 100)); // Limit to first 100 rows for performance
-      })
-      .catch((err) => {
-        console.error("Error reading CSV:", err);
-        setError("Tidak dapat memuat konten CSV secara dinamis, menampilkan visualisasi spreadsheet.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+        setData(rows.slice(0, 100));
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || "Gagal memuat file CSV");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void loadCsv();
+    return () => {
+      cancelled = true;
+    };
   }, [fileUrl, isCsv]);
 
   // Generate gorgeous mock spreadsheet rows if it is xlsx/xls or if CSV fetch fails
@@ -199,6 +200,47 @@ export function ExcelCsvPreview({ fileUrl, title }: ExcelCsvPreviewProps) {
 }
 
 export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handleDownload, documents, setDocuments, setSelectedDoc, onPreviewClick, onDeleteClick }: Props) {
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+
+  let rawFileUrl = "";
+  let textDescription = selectedDoc?.description || "";
+
+  if (textDescription.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(textDescription);
+      rawFileUrl = parsed.fileUrl || "";
+      textDescription = parsed.text || "";
+    } catch {
+      // fallback
+    }
+  } else if (
+    textDescription.startsWith("http://") ||
+    textDescription.startsWith("https://") ||
+    textDescription.startsWith("private-docs/")
+  ) {
+    rawFileUrl = textDescription;
+    textDescription = "Dokumen eksternal yang diarsip secara digital.";
+  }
+
+  useEffect(() => {
+    if (!rawFileUrl || !isPrivateStorageRef(rawFileUrl)) return;
+    let active = true;
+    resolveStorageUrl(rawFileUrl).then((resolved) => {
+      if (active && resolved) {
+        setSignedUrls((prev) => ({ ...prev, [rawFileUrl]: resolved }));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [rawFileUrl]);
+
+  const fileUrl = rawFileUrl
+    ? isPrivateStorageRef(rawFileUrl)
+      ? signedUrls[rawFileUrl] || ""
+      : rawFileUrl
+    : "";
+
   if (!selectedDoc) {
     return (
       <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg p-5 shadow-none overflow-hidden h-full flex flex-col items-center justify-center">
@@ -220,23 +262,6 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
       setSelectedDoc(updated[0] || null);
     }
   };
-
-  // Parse JSON description if applicable to get fileUrl
-  let fileUrl = "";
-  let textDescription = selectedDoc.description || "";
-  
-  if (textDescription.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(textDescription);
-      fileUrl = parsed.fileUrl || "";
-      textDescription = parsed.text || "";
-    } catch (e) {
-      // fallback
-    }
-  } else if (textDescription.startsWith("http://") || textDescription.startsWith("https://")) {
-    fileUrl = textDescription;
-    textDescription = "Dokumen eksternal yang diarsip secara digital.";
-  }
 
   const getCleanExtension = (url: string) => {
     try {
@@ -270,10 +295,11 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
     if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))) {
       if (isImage) {
         return (
-          <img 
-            src={fileUrl} 
-            alt={selectedDoc.title} 
-            className="max-w-full max-h-full object-contain p-2" 
+          <SmartImage
+            src={fileUrl}
+            alt={selectedDoc.title}
+            preserveAspect
+            className="max-w-full max-h-full object-contain p-2"
           />
         );
       }
@@ -502,7 +528,7 @@ export default function FileDetailPanel({ selectedDoc, setShowRightPanel, handle
               <div className="flex items-center gap-1.5">
                 {selectedDoc.uploaderAvatar ? (
                   <div className="w-4 h-4 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 shrink-0">
-                    <img src={selectedDoc.uploaderAvatar} alt={selectedDoc.uploader} className="w-full h-full object-cover" />
+                    <SmartImage src={selectedDoc.uploaderAvatar} alt={selectedDoc.uploader} width={16} height={16} className="w-full h-full object-cover" />
                   </div>
                 ) : (
                   <div className="w-4 h-4 rounded-full bg-blue-600 text-white font-bold text-[7.5px] flex items-center justify-center shrink-0">

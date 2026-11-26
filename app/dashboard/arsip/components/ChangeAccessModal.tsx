@@ -44,12 +44,15 @@ export default function ChangeAccessModal({
   const [selected, setSelected] = React.useState<AccessLevel>(currentAccess);
   const [copied, setCopied] = React.useState(false);
 
-  React.useEffect(() => {
+  const accessSyncKey = isOpen ? currentAccess : "";
+  const [prevAccessSyncKey, setPrevAccessSyncKey] = React.useState("");
+  if (accessSyncKey !== prevAccessSyncKey) {
+    setPrevAccessSyncKey(accessSyncKey);
     if (isOpen) {
       setSelected(currentAccess);
       setCopied(false);
     }
-  }, [isOpen, currentAccess]);
+  }
 
   const handleCopyLink = async () => {
     const linkToCopy = fileUrl || window.location.href;

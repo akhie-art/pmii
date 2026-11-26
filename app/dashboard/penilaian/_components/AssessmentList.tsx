@@ -1,4 +1,5 @@
 import React from "react";
+import { SmartImage } from "@/components/ui/smart-image";
 import { Users, Pencil, Brain, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -135,9 +136,11 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
                       {item.participantName.substring(0, 2).toUpperCase()}
                     </span>
                     {getParticipantAvatar(item) && (
-                      <img
+                      <SmartImage
                         src={getParticipantAvatar(item)}
                         alt={item.participantName}
+                        width={40}
+                        height={40}
                         className="absolute inset-0 w-full h-full object-cover rounded-full"
                         onError={(e) => {
                           (e.currentTarget as HTMLElement).style.display = "none";

@@ -29,27 +29,72 @@ import {
   Tag,
   Eye,
   Edit3,
-  Layers
+  Layers,
+  Paperclip,
+  Save
 } from "lucide-react";
 import PizZip from "pizzip";
 import { exportToExcel, readSpreadsheetTo2DArray } from "@/lib/excel";
+import { sanitizeLetterHtml, escapeHtml } from "@/lib/sanitize";
 import { toast } from "sonner";
-import { db, SuratTemplate } from "@/lib/db";
+import { db, generateUUID, SuratTemplate, type UserAccount } from "@/lib/db";
+import { isRecordInTenant, enforceTenantWrite } from "@/lib/tenancy";
 import {
   base64ToArrayBuffer,
   arrayBufferToBase64,
   getDocxArrayBuffer,
   fillDocxTemplate,
   parseTemplateContent,
-  downloadDocxBlob
+  downloadDocxBlob,
+  type DocxQrFooterOptions
 } from "./docx-template-helper";
+import {
+  renderDocxToElement,
+  buildPrintFontContext,
+  buildDocxPrintStyleBlock,
+  buildPrintAutoTriggerScript,
+} from "./docx-preview-helper";
+import {
+  generateLetterQrDataUrl,
+  buildHtmlQrFooter,
+  upsertHtmlQrFooter,
+  stripHtmlQrFooter
+} from "./letter-qr-helper";
 import { LetterNumberingBoxes } from "./letter-numbering-boxes";
 import { LetterExcelImporter } from "./letter-excel-importer";
 import { LetterDocxPlaceholders } from "./letter-docx-placeholders";
+import {
+  isCoreStandardKey,
+  buildLetterMergeData,
+  humanizePlaceholderKey,
+  isMultilineField,
+  openLetterPrintWindow,
+  parsePmiiNomorToBoxes,
+  parseBulkRangeNomor,
+  getMaxSequenceFromNomor,
+  expandNomorOccurrences,
+  formatBulkNomorSummary,
+  formatBulkRecipientSummary,
+  deduplicateBulkPagesHtml,
+  embedLetterEditMetadata,
+  extractLetterEditMetadata,
+  stripLetterEditMetadata,
+  type LetterEditMetadata,
+} from "./letter-generator-helpers";
+import {
+  filterMailsForSameTenant,
+  formatDateToIndo,
+  isFormattedHtmlContent,
+  normalizeMailStatusForType,
+  parseMailDateToIso,
+  resolveTargetRecordTenant,
+} from "./letter-record-helper";
+import type { MailItem } from "./types";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { SmartImage } from "@/components/ui/smart-image";
 
 import {
   Dialog,
@@ -69,62 +114,11 @@ import {
   SelectItem
 } from "@/components/ui/select";
 
-const isCoreStandardKey = (key: string) => {
-  const lk = key.toLowerCase();
-  return (
-    lk === "nomor" ||
-    lk === "no" ||
-    lk === "perihal" ||
-    lk === "hal" ||
-    lk === "penerima" ||
-    lk === "kepada" ||
-    lk === "lokasi" ||
-    lk === "kota" ||
-    lk === "tanggal" ||
-    lk === "hari_tanggal"
-  );
-};
-
-const humanizePlaceholderKey = (key: string): string => {
-  const lk = key.toLowerCase();
-  if (lk === "isi") return "Isi Surat / Redaksi Pokok";
-  if (lk === "kegiatan" || lk === "acara") return "Nama Kegiatan / Acara";
-  if (lk === "tema") return "Tema Kegiatan";
-  if (lk === "tempat") return "Tempat / Lokasi Kegiatan";
-  if (lk === "waktu" || lk === "pukul") return "Waktu / Pukul Pelaksanaan";
-  if (lk === "hari") return "Hari Pelaksanaan";
-  if (lk === "lampiran" || lk === "lamp") return "Lampiran Surat";
-  if (lk === "narasumber" || lk === "pemateri") return "Nama Narasumber / Pemateri";
-  if (lk === "nama") return "Nama Lengkap";
-  if (lk === "ketua") return "Nama Ketua / Pimpinan";
-  if (lk === "sekretaris") return "Nama Sekretaris";
-  if (lk === "peserta") return "Target Peserta";
-  if (lk === "keterangan" || lk === "catatan") return "Keterangan / Catatan Tambahan";
-
-  return key
-    .replace(/_/g, " ")
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (str) => str.toUpperCase())
-    .trim();
-};
-
-const isMultilineField = (key: string): boolean => {
-  const lk = key.toLowerCase();
-  return (
-    lk === "isi" ||
-    lk === "deskripsi" ||
-    lk === "agenda" ||
-    lk === "catatan" ||
-    lk === "keterangan" ||
-    lk.includes("konten") ||
-    lk.includes("materi")
-  );
-};
-
 interface LetterGeneratorDialogProps {
   onPublish: (
     newMailData:
       | {
+          id?: string;
           nomor: string;
           recipient: string;
           subject: string;
@@ -132,8 +126,11 @@ interface LetterGeneratorDialogProps {
           content: string;
           senderTitle: string;
           senderLocation: string;
+          dateIndo?: string;
+          bulkCount?: number;
         }
       | Array<{
+          id?: string;
           nomor: string;
           recipient: string;
           subject: string;
@@ -141,23 +138,57 @@ interface LetterGeneratorDialogProps {
           content: string;
           senderTitle: string;
           senderLocation: string;
+          dateIndo?: string;
+          bulkCount?: number;
         }>
-  ) => void;
+  ) => void | Promise<void>;
+  onUpdateMail?: (updatedMail: MailItem) => void | Promise<void>;
+  editingMail?: MailItem | null;
+  onCloseEdit?: () => void;
+  onOpenArchiveEdit?: (mail: MailItem) => void;
   existingMails?: any[];
   onOpenTemplateManager?: () => void;
   defaultMode?: "single" | "bulk";
+  currentUser?: UserAccount | null;
+  activeTenant?: string;
 }
+
+const EXISTING_DOCUMENT_TEMPLATE_ID = "__existing_document__";
 
 export default function LetterGeneratorDialog({
   onPublish,
+  onUpdateMail,
+  editingMail = null,
+  onCloseEdit,
+  onOpenArchiveEdit,
   existingMails,
   onOpenTemplateManager,
-  defaultMode = "single"
+  defaultMode = "single",
+  currentUser = null,
+  activeTenant = "ALL"
 }: LetterGeneratorDialogProps) {
+  const isEditMode = Boolean(editingMail);
+  const targetTenantInfo = React.useMemo(
+    () => resolveTargetRecordTenant(editingMail, currentUser, activeTenant),
+    [editingMail, currentUser, activeTenant]
+  );
+  const isCabangScope = targetTenantInfo.isCabang;
+
   const [isOpen, setIsOpen] = useState(false);
+  const dialogOpen = isOpen || isEditMode;
   const [letterMode, setLetterMode] = useState<"single" | "bulk">(defaultMode);
   const [mailHistory, setMailHistory] = useState<any[]>(existingMails || []);
   const [hasAutoFilled, setHasAutoFilled] = useState(false);
+  const [duplicateConfirmMode, setDuplicateConfirmMode] = useState<"single" | "bulk" | null>(null);
+  const [editStatus, setEditStatus] = useState<MailItem["status"]>("Terkirim");
+  const [useCustomNomor, setUseCustomNomor] = useState<boolean>(false);
+  const [customNomorInput, setCustomNomorInput] = useState<string>("");
+  const [savedExistingHtml, setSavedExistingHtml] = useState<string>("");
+  const [plainTextFallbackNote, setPlainTextFallbackNote] = useState<string>("");
+  const [pendingEditTemplateMeta, setPendingEditTemplateMeta] = useState<LetterEditMetadata | null>(null);
+  const [savingEditAction, setSavingEditAction] = useState<"save" | "save_print" | null>(null);
+  const isSavingEdit = savingEditAction !== null;
+  const printAfterSaveRef = useRef<boolean>(false);
   const canvasTextareaRef = useRef<HTMLDivElement>(null);
 
   // States khusus Surat Massal
@@ -188,42 +219,83 @@ export default function LetterGeneratorDialog({
   // Selection range tracker untuk penempatan placeholder di posisi kursor
   const lastSelectionRangeRef = useRef<Range | null>(null);
 
-  // Sync Mail History
+  // ID surat & cache QR Code verifikasi terpadu (1 arsip = 1 UUID, valid untuk tunggal maupun seluruh halaman surat massal)
+  const [singleLetterId, setSingleLetterId] = useState<string>(() => generateUUID());
+  const qrCacheRef = useRef<
+    Map<string, { qrDataUrl: string; verificationUrl: string; shortCode: string }>
+  >(new Map());
+  const [activeQrMeta, setActiveQrMeta] = useState<{
+    letterId: string;
+    qrDataUrl: string;
+    verificationUrl: string;
+    shortCode: string;
+  } | null>(null);
+
+  const getLetterIdForIndex = React.useCallback((): string => {
+    return editingMail?.id || singleLetterId;
+  }, [editingMail?.id, singleLetterId]);
+
+  const getOrCreateQrMeta = React.useCallback(async (letterId: string) => {
+    const cached = qrCacheRef.current.get(letterId);
+    if (cached) return cached;
+    const generated = await generateLetterQrDataUrl(letterId);
+    qrCacheRef.current.set(letterId, generated);
+    return generated;
+  }, []);
+
+  const resetDraftLetterIds = React.useCallback(() => {
+    setSingleLetterId(generateUUID());
+    qrCacheRef.current.clear();
+  }, []);
+
+  // Sync Mail History (terisolasi sesuai tenant aktif)
   useEffect(() => {
-    if (existingMails && existingMails.length > 0) {
-      setMailHistory(existingMails);
-    } else {
+    let active = true;
+    if (existingMails !== undefined) {
+      queueMicrotask(() => {
+        if (active) setMailHistory(existingMails);
+      });
+    } else if (dialogOpen) {
       db.getSurat().then((res) => {
-        if (res && Array.isArray(res)) {
-          const outOnly = res.filter((m: any) => m.type === "KELUAR" || !m.type);
+        if (active && res && Array.isArray(res)) {
+          const outOnly = res.filter(
+            (m: any) =>
+              (m.type === "KELUAR" || !m.type) &&
+              (!currentUser || isRecordInTenant(currentUser, m, activeTenant))
+          );
           setMailHistory(outOnly);
         }
       });
     }
-  }, [existingMails, isOpen]);
+    return () => {
+      active = false;
+    };
+  }, [existingMails, dialogOpen, currentUser, activeTenant]);
 
-  const getHighestSeqNumber = (mails: any[]): number => {
+  const scopedMailHistory = React.useMemo(
+    () =>
+      filterMailsForSameTenant(
+        mailHistory as MailItem[],
+        targetTenantInfo.tenantId,
+        targetTenantInfo.isCabang
+      ),
+    [mailHistory, targetTenantInfo.tenantId, targetTenantInfo.isCabang]
+  );
+
+  const getNextSeqNumber = React.useCallback((mails: any[]): string => {
     let maxSeq = 0;
     mails.forEach((m) => {
       if (!m.nomor) return;
-      const match = m.nomor.trim().match(/^(\d{1,4})/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxSeq && num < 10000) {
-          maxSeq = num;
-        }
+      const num = getMaxSequenceFromNomor(m.nomor);
+      if (num > maxSeq) {
+        maxSeq = num;
       }
     });
-    return maxSeq;
-  };
+    return (maxSeq + 1).toString().padStart(3, "0");
+  }, []);
 
-  const getNextSeqNumber = (mails: any[]): string => {
-    const highest = getHighestSeqNumber(mails);
-    return (highest + 1).toString().padStart(3, "0");
-  };
-
-  // Form States (Google Docs editable mode)
-  const [createTemplate, setCreateTemplate] = useState<string>("custom_blank");
+  // Form States (Template Word .docx & Edit Langsung)
+  const [createTemplate, setCreateTemplate] = useState<string>("");
   const [customTemplates, setCustomTemplates] = useState<SuratTemplate[]>([]);
 
   // Konsep Pengisi Template DOCX (docxtemplater + PizZip + docx-preview)
@@ -238,6 +310,9 @@ export default function LetterGeneratorDialog({
     "Instruksi" | "Permohonan" | "Undangan" | "Keputusan" | "Rekomendasi"
   >("Permohonan");
   const [createContent, setCreateContent] = useState("");
+  const [createSenderTitle, setCreateSenderTitle] = useState(
+    isCabangScope ? "Ketua Cabang" : "Ketua Komisariat"
+  );
   const [createSenderLocation, setCreateSenderLocation] = useState("Purwodadi");
   const [letterDate, setLetterDate] = useState(() => {
     const months = [
@@ -248,10 +323,16 @@ export default function LetterGeneratorDialog({
     return `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   });
 
-  // Kop & Footer Settings (Default PK PMII Ki Ageng Getas Pendawa)
+  // Kop & Footer Settings (Dinamis berdasarkan ruang lingkup Cabang / Komisariat)
   const [createKopTitle, setCreateKopTitle] = useState("PERGERAKAN MAHASISWA ISLAM INDONESIA");
-  const [createKopSubtitle, setCreateKopSubtitle] = useState("PENGURUS KOMISARIAT");
-  const [createKopEnglish, setCreateKopEnglish] = useState("(Commissariat Board Indonesian Islamic Student Movement)");
+  const [createKopSubtitle, setCreateKopSubtitle] = useState(
+    isCabangScope ? "PENGURUS CABANG" : "PENGURUS KOMISARIAT"
+  );
+  const [createKopEnglish, setCreateKopEnglish] = useState(
+    isCabangScope
+      ? "(Branch Board Indonesian Islamic Student Movement)"
+      : "(Commissariat Board Indonesian Islamic Student Movement)"
+  );
   const [createKopAddress, setCreateKopAddress] = useState(
     "Jl. Getas Pendawa RT 01/RW 12 Kec. Purwodadi Kab. Grobogan\nEmail : pb.pmii@gmail.com Website : https://pmii.or.id"
   );
@@ -260,7 +341,7 @@ export default function LetterGeneratorDialog({
 
   // STATE MODE 1: SINGLE SURAT (9 Kotak PMII)
   const [numBox1, setNumBox1] = useState("001");
-  const [numBox2, setNumBox2] = useState("PK");
+  const [numBox2, setNumBox2] = useState(isCabangScope ? "PC" : "PK");
   const [numBox3, setNumBox3] = useState("XI");
   const [numBox4, setNumBox4] = useState("Z-03");
   const [numBox5, setNumBox5] = useState("01");
@@ -269,19 +350,119 @@ export default function LetterGeneratorDialog({
   const [numBox8, setNumBox8] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
   const [numBox9, setNumBox9] = useState(String(new Date().getFullYear()));
 
-  // Auto assign next number when modal opens
-  useEffect(() => {
-    if (isOpen && mailHistory.length > 0 && !hasAutoFilled) {
-      const next = getNextSeqNumber(mailHistory);
-      setNumBox1(next);
-      setNumBox8(String(new Date().getMonth() + 1).padStart(2, "0"));
-      setNumBox9(String(new Date().getFullYear()));
+  // Sinkronisasi state form saat membuka Mode Edit Surat Keluar (Tunggal maupun Massal 1-Arsip)
+  const editSyncKey = editingMail
+    ? `edit:${editingMail.id}:${editingMail.nomor}:${editingMail.dateIndo || editingMail.date}`
+    : "";
+  const [prevEditSyncKey, setPrevEditSyncKey] = useState("");
+  if (editSyncKey !== prevEditSyncKey) {
+    setPrevEditSyncKey(editSyncKey);
+    if (editingMail) {
+      const extractedMeta = extractLetterEditMetadata(editingMail.content);
+      const bulkMeta =
+        extractedMeta?.mode === "bulk" &&
+        extractedMeta.bulk &&
+        extractedMeta.bulk.recipients.length > 0
+          ? extractedMeta.bulk
+          : null;
+
+      setLetterMode(bulkMeta ? "bulk" : "single");
+      setHtmlCanvasMode("edit");
+      setDuplicateConfirmMode(null);
+      setSingleLetterId(editingMail.id);
+      setEditStatus(normalizeMailStatusForType(editingMail.status, "KELUAR"));
+      setCreateSubject(editingMail.subject || "");
+      setCreateClassification(editingMail.classification || "Permohonan");
+      setCreateSenderTitle(
+        editingMail.senderTitle ||
+          (targetTenantInfo.isCabang ? "Ketua Cabang" : "Ketua Komisariat")
+      );
+      setCreateSenderLocation(editingMail.senderLocation || "Purwodadi");
+      setLetterDate(
+        editingMail.dateIndo?.trim() ||
+          formatDateToIndo(parseMailDateToIso(editingMail.date, editingMail.dateIndo))
+      );
+
+      if (bulkMeta) {
+        setBulkRecipientsText(bulkMeta.recipients.join("\n"));
+        setIsSequentialNumbering(bulkMeta.isSequentialNumbering);
+        setExcelColumns(bulkMeta.excelColumns || []);
+        setExcelRowsData(bulkMeta.excelRowsData || []);
+        setPreviewBulkIndex(0);
+        setCreateRecipient(bulkMeta.recipients[0] || editingMail.senderOrRecipient || "");
+      } else {
+        setBulkRecipientsText("");
+        setIsSequentialNumbering(true);
+        setExcelColumns([]);
+        setExcelRowsData([]);
+        setPreviewBulkIndex(0);
+        setCreateRecipient(editingMail.senderOrRecipient || "");
+      }
+
+      const nomorForBoxes = bulkMeta
+        ? bulkMeta.startNomor || parseBulkRangeNomor(editingMail.nomor)?.startNomor || editingMail.nomor
+        : editingMail.nomor;
+      const parsedBoxes = parsePmiiNomorToBoxes(nomorForBoxes);
+      if (parsedBoxes) {
+        setUseCustomNomor(false);
+        setCustomNomorInput("");
+        setNumBox1(parsedBoxes[0]);
+        setNumBox2(parsedBoxes[1]);
+        setNumBox3(parsedBoxes[2]);
+        setNumBox4(parsedBoxes[3]);
+        setNumBox5(parsedBoxes[4]);
+        setNumBox6(parsedBoxes[5]);
+        setNumBox7(parsedBoxes[6]);
+        setNumBox8(parsedBoxes[7]);
+        setNumBox9(parsedBoxes[8]);
+      } else {
+        setUseCustomNomor(true);
+        setCustomNomorInput(nomorForBoxes || "");
+      }
+
+      setPendingEditTemplateMeta(extractedMeta);
+
+      const rawWithoutMeta = stripLetterEditMetadata(editingMail.content || "");
+      const hasHtml = isFormattedHtmlContent(rawWithoutMeta);
+      const cleanedEditableHtml = hasHtml ? stripHtmlQrFooter(rawWithoutMeta) : "";
+      const plainNote =
+        !hasHtml &&
+        rawWithoutMeta.trim() &&
+        rawWithoutMeta.trim().toLowerCase() !== "isi surat terlampir."
+          ? rawWithoutMeta.trim()
+          : "";
+
+      setSavedExistingHtml(cleanedEditableHtml);
+      setPlainTextFallbackNote(plainNote);
+      setCreateTemplate(hasHtml ? EXISTING_DOCUMENT_TEMPLATE_ID : "");
+      setActiveFileBase64("");
+      setActivePlaceholders(
+        bulkMeta?.excelColumns?.map((c) => c.key).filter((k) => !isCoreStandardKey(k)) || []
+      );
+      setDocxValues(extractedMeta?.docxValues || {});
+      setCreateContent(cleanedEditableHtml);
       setHasAutoFilled(true);
     }
-  }, [isOpen, mailHistory, hasAutoFilled]);
+  }
+
+  // Auto assign next number & scope defaults when modal opens (Create mode only)
+  useEffect(() => {
+    if (isOpen && !isEditMode && !hasAutoFilled) {
+      const next = getNextSeqNumber(scopedMailHistory);
+      queueMicrotask(() => {
+        setNumBox1(next);
+        setNumBox2(isCabangScope ? "PC" : "PK");
+        setNumBox8(String(new Date().getMonth() + 1).padStart(2, "0"));
+        setNumBox9(String(new Date().getFullYear()));
+        setCreateSenderTitle(isCabangScope ? "Ketua Cabang" : "Ketua Komisariat");
+        setHasAutoFilled(true);
+      });
+    }
+  }, [isOpen, isEditMode, scopedMailHistory, hasAutoFilled, getNextSeqNumber, isCabangScope]);
 
   const handleAutoAssignNextNumber = () => {
-    const next = getNextSeqNumber(mailHistory);
+    const next = getNextSeqNumber(scopedMailHistory);
+    setUseCustomNomor(false);
     setNumBox1(next);
     setNumBox8(String(new Date().getMonth() + 1).padStart(2, "0"));
     setNumBox9(String(new Date().getFullYear()));
@@ -299,8 +480,11 @@ export default function LetterGeneratorDialog({
     useRef<HTMLInputElement>(null)
   ];
 
-  const baseSingleNomor = `${numBox1}.${numBox2}-${numBox3}.${numBox4}.${numBox5}.${numBox6}.${numBox7}.${numBox8}.${numBox9}`;
-  const activeSenderTitle = "Sahabat Ketua Umum";
+  const standardSingleNomor = `${numBox1}.${numBox2}-${numBox3}.${numBox4}.${numBox5}.${numBox6}.${numBox7}.${numBox8}.${numBox9}`;
+  const baseSingleNomor =
+    isEditMode && useCustomNomor ? customNomorInput.trim() : standardSingleNomor;
+  const activeSenderTitle =
+    createSenderTitle.trim() || (isCabangScope ? "Ketua Cabang" : "Ketua Komisariat");
 
   // Parsing Daftar Penerima Surat Massal
   const parsedBulkRecipients = React.useMemo(() => {
@@ -310,15 +494,16 @@ export default function LetterGeneratorDialog({
       .filter((line) => line.length > 0);
   }, [bulkRecipientsText]);
 
-  // Jaga indeks preview agar tetap dalam rentang
+  // Jaga indeks preview agar tetap dalam rentang daftar penerima massal
   useEffect(() => {
     if (previewBulkIndex >= parsedBulkRecipients.length && parsedBulkRecipients.length > 0) {
-      setPreviewBulkIndex(parsedBulkRecipients.length - 1);
+      const clamped = parsedBulkRecipients.length - 1;
+      queueMicrotask(() => setPreviewBulkIndex(clamped));
     }
   }, [parsedBulkRecipients.length, previewBulkIndex]);
 
   // Kalkulasi nomor surat per indeks penerima massal
-  const getNomorForIndex = (index: number) => {
+  const getNomorForIndex = React.useCallback((index: number) => {
     if (!isSequentialNumbering) {
       return baseSingleNomor;
     }
@@ -327,7 +512,7 @@ export default function LetterGeneratorDialog({
     const padLength = Math.max(numBox1.length, 3);
     const paddedNum = currentNum.toString().padStart(padLength, "0");
     return `${paddedNum}.${numBox2}-${numBox3}.${numBox4}.${numBox5}.${numBox6}.${numBox7}.${numBox8}.${numBox9}`;
-  };
+  }, [isSequentialNumbering, baseSingleNomor, numBox1, numBox2, numBox3, numBox4, numBox5, numBox6, numBox7, numBox8, numBox9]);
 
   // Ref & Handler Upload Excel untuk Surat Massal
   const excelFileInputRef = useRef<HTMLInputElement>(null);
@@ -532,54 +717,48 @@ export default function LetterGeneratorDialog({
     insertPlaceholderAtCursor(cleanKey, defaultVal);
   };
 
-  // Ambil data variabel baris untuk indeks penerima tertentu
-  const getRowDataForIndex = (index: number): Record<string, string> => {
-    const recName = parsedBulkRecipients[index] || createRecipient || "";
-    const matched =
-      excelRowsData[index] ||
-      excelRowsData.find(
-        (r) => r.recipient.trim().toLowerCase() === recName.trim().toLowerCase()
-      );
+  // Ambil data variabel baris untuk indeks penerima tertentu (single & bulk mail-merge)
+  const getRowDataForIndex = React.useCallback(
+    (index: number, modeOverride?: "single" | "bulk"): Record<string, string> => {
+      const effectiveMode = modeOverride ?? letterMode;
+      const recName =
+        effectiveMode === "bulk"
+          ? parsedBulkRecipients[index] || ""
+          : createRecipient || "";
+      const nomor =
+        effectiveMode === "bulk" ? getNomorForIndex(index) : baseSingleNomor;
 
-    // Fallback awal dari docxValues dan nilai contoh excelColumns
-    const defaultData: Record<string, string> = { ...docxValues };
-    excelColumns.forEach((c) => {
-      if (c.sampleValue && !defaultData[c.key]) {
-        defaultData[c.key] = c.sampleValue;
-      }
-    });
-
-    const baseData: Record<string, string> = {
-      ...defaultData,
-      ...(matched ? matched.data : {})
-    };
-
-    // Nilai manual docxValues diprioritaskan jika diisi pengguna
-    Object.entries(docxValues).forEach(([k, v]) => {
-      if (v !== undefined && v !== "") {
-        baseData[k] = v;
-      }
-    });
-
-    // Gandakan dalam huruf kecil agar pencarian case-insensitive selalu cocok
-    Object.entries({ ...baseData }).forEach(([k, v]) => {
-      baseData[k.toLowerCase()] = v;
-    });
-
-    baseData["penerima"] = recName || baseData["penerima"] || "";
-    baseData["nama_penerima"] = recName || baseData["nama_penerima"] || "";
-    baseData["kepada"] = recName || baseData["kepada"] || "";
-    baseData["nomor"] = getNomorForIndex(index);
-    baseData["no"] = baseData["nomor"];
-    baseData["perihal"] = currentPreviewSubject;
-    baseData["hal"] = currentPreviewSubject;
-    baseData["lokasi"] = currentPreviewLocation;
-    baseData["kota"] = currentPreviewLocation;
-    baseData["tanggal"] = letterDate;
-    baseData["hari_tanggal"] = letterDate;
-
-    return baseData;
-  };
+      return buildLetterMergeData({
+        mode: effectiveMode,
+        index,
+        core: {
+          nomor,
+          recipient: recName,
+          subject: createSubject,
+          location: createSenderLocation,
+          date: letterDate,
+        },
+        manualValues: docxValues,
+        excelColumns,
+        excelRowsData,
+        activePlaceholders,
+      });
+    },
+    [
+      letterMode,
+      parsedBulkRecipients,
+      createRecipient,
+      getNomorForIndex,
+      baseSingleNomor,
+      createSubject,
+      createSenderLocation,
+      letterDate,
+      docxValues,
+      excelColumns,
+      excelRowsData,
+      activePlaceholders,
+    ]
+  );
 
   // Helper interpolasi variabel {{...}} ke dalam HTML surat
   const replacePlaceholdersInHtml = (
@@ -799,23 +978,30 @@ export default function LetterGeneratorDialog({
       setBulkRecipientsText(extractedNames.join("\n"));
       setPreviewBulkIndex(0);
 
-      // Daftarkan kolom kustom ke activePlaceholders
+      // Daftarkan kolom kustom ke activePlaceholders (kecuali alias field inti surat)
       const extraKeys = detectedCols
         .map((c) => c.key)
-        .filter((k) => !["no", "nomor", "penerima", "nama_penerima", "nama"].includes(k));
+        .filter((k) => !isCoreStandardKey(k) && k !== "nama");
 
       setActivePlaceholders((prev) => {
         const set = new Set([...prev, ...extraKeys]);
         return Array.from(set);
       });
 
-      // Update docxValues dengan data baris pertama
-      if (parsedRowsData[0]) {
-        setDocxValues((prev) => ({
-          ...prev,
-          ...parsedRowsData[0].data
-        }));
-      }
+      // Jangan salin data baris #0 ke docxValues global agar data per baris Excel tidak tertimpa.
+      // Bersihkan key di docxValues yang sekarang dikelola per-baris oleh kolom Excel.
+      const excelKeySet = new Set(
+        detectedCols.flatMap((c) => [c.key, c.key.toLowerCase(), c.originalHeader, c.originalHeader.toLowerCase()])
+      );
+      setDocxValues((prev) => {
+        const cleaned: Record<string, string> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          if (!excelKeySet.has(k) && !excelKeySet.has(k.toLowerCase())) {
+            cleaned[k] = v;
+          }
+        }
+        return cleaned;
+      });
 
       toast.success(
         `Berhasil mengimpor ${extractedNames.length} nama penerima & ${detectedCols.length} kolom data dari Excel!`
@@ -838,34 +1024,42 @@ export default function LetterGeneratorDialog({
     setPreviewBulkIndex(0);
   };
 
-  // Deteksi Duplikat Nomor Surat Keluar (Single Mode)
-  const currentNormalizedNomor = baseSingleNomor.trim().toLowerCase();
-  const duplicateEntry = mailHistory.find((m) => {
-    if (!m.nomor) return false;
-    return m.nomor.trim().toLowerCase() === currentNormalizedNomor;
-  });
+  // Daftar nomor & urutan yang sudah terpakai (mendukung arsip tunggal maupun rentang massal 001-005.PK-...)
+  const occupiedHistoryEntries = React.useMemo(() => {
+    return scopedMailHistory
+      .filter((m) => Boolean(m.nomor) && (!editingMail || m.id !== editingMail.id))
+      .map((m) => ({
+        mail: m,
+        ...expandNomorOccurrences(m.nomor),
+      }));
+  }, [scopedMailHistory, editingMail]);
 
-  const duplicateSeqEntry = !duplicateEntry
-    ? mailHistory.find((m) => {
-        if (!m.nomor) return false;
-        const seq = m.nomor.trim().match(/^(\d{1,4})/)?.[1];
-        return seq && parseInt(seq, 10) === parseInt(numBox1, 10);
-      })
+  // Deteksi Duplikat Nomor Surat Keluar (Single Mode, mengecualikan surat yang sedang diedit)
+  const currentNormalizedNomor = baseSingleNomor.trim().toLowerCase();
+  const duplicateEntry = occupiedHistoryEntries.find((entry) =>
+    entry.normalizedNomors.includes(currentNormalizedNomor)
+  )?.mail;
+
+  const currentSeqNum = parseInt(numBox1, 10);
+  const duplicateSeqEntry = !duplicateEntry && !(isEditMode && useCustomNomor) && !isNaN(currentSeqNum)
+    ? occupiedHistoryEntries.find((entry) => entry.seqNumbers.includes(currentSeqNum))?.mail || null
     : null;
 
-  // Deteksi Duplikat Nomor Surat Keluar (Bulk Mode)
+  // Deteksi Duplikat Nomor Surat Keluar (Bulk Mode — juga mengecualikan surat massal yang sedang direvisi)
   const bulkDuplicateEntries = React.useMemo(() => {
     if (letterMode !== "bulk" || parsedBulkRecipients.length === 0) return [];
     const duplicates: { index: number; nomor: string; recipient: string; matchedMail: any }[] = [];
     parsedBulkRecipients.forEach((rec, idx) => {
       const nom = getNomorForIndex(idx).trim().toLowerCase();
-      const match = mailHistory.find((m) => m.nomor && m.nomor.trim().toLowerCase() === nom);
+      const match = occupiedHistoryEntries.find((entry) =>
+        entry.normalizedNomors.includes(nom)
+      )?.mail;
       if (match) {
         duplicates.push({ index: idx, nomor: getNomorForIndex(idx), recipient: rec, matchedMail: match });
       }
     });
     return duplicates;
-  }, [letterMode, parsedBulkRecipients, isSequentialNumbering, numBox1, numBox2, numBox3, numBox4, numBox5, numBox6, numBox7, numBox8, numBox9, mailHistory]);
+  }, [letterMode, parsedBulkRecipients, getNomorForIndex, occupiedHistoryEntries]);
 
   // Deklarasi Variabel Preview Utama (Mendukung Single & Bulk)
   const currentPreviewNomor =
@@ -881,62 +1075,115 @@ export default function LetterGeneratorDialog({
   const currentPreviewSubject = createSubject;
   const currentPreviewLocation = createSenderLocation;
   const currentPreviewFooterLeft = createFooterLeft;
+  const activeOrgLabel =
+    createKopSubtitle ||
+    (isCabangScope
+      ? "PENGURUS CABANG PMII"
+      : currentUser?.commissariat || "PENGURUS KOMISARIAT PMII");
+  const activePreviewLetterId = getLetterIdForIndex();
 
-  // Sinkronisasi Kop Surat & Logo Otomatis dari Pengaturan Sistem
+  // Siapkan QR Code verifikasi aktif untuk pratinjau live
   useEffect(() => {
-    if (typeof window !== "undefined" && isOpen) {
-      try {
-        const savedSettings = localStorage.getItem("PMII_SYSTEM_SETTINGS");
-        if (savedSettings) {
-          const parsed = JSON.parse(savedSettings);
-          const org = parsed?.organization;
-          if (org) {
-            if (org.cabangName) {
-              setCreateKopSubtitle(org.cabangName.toUpperCase());
+    if (!dialogOpen || !activePreviewLetterId) return;
+    let cancelled = false;
+    getOrCreateQrMeta(activePreviewLetterId)
+      .then((meta) => {
+        if (!cancelled) {
+          setActiveQrMeta({ letterId: activePreviewLetterId, ...meta });
+        }
+      })
+      .catch((err) => {
+        console.warn("Gagal membuat QR verifikasi surat:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, activePreviewLetterId, getOrCreateQrMeta]);
+
+  // Sinkronisasi Kop Surat & Logo Otomatis dari Pengaturan Sistem & Ruang Lingkup Tenant
+  useEffect(() => {
+    if (typeof window !== "undefined" && dialogOpen) {
+      queueMicrotask(() => {
+        try {
+          const savedSettings = localStorage.getItem("PMII_SYSTEM_SETTINGS");
+          const komLabel =
+            (isEditMode && editingMail?.commissariat) ||
+            (activeTenant && activeTenant !== "ALL"
+              ? activeTenant
+              : currentUser?.commissariat || "PENGURUS KOMISARIAT");
+
+          if (savedSettings) {
+            const parsed = JSON.parse(savedSettings);
+            const org = parsed?.organization;
+            if (org) {
+              if (isCabangScope && org.cabangName) {
+                setCreateKopSubtitle(org.cabangName.toUpperCase());
+                setCreateKopEnglish("(Branch Board Indonesian Islamic Student Movement)");
+              } else if (!isCabangScope) {
+                setCreateKopSubtitle(komLabel.toUpperCase());
+                setCreateKopEnglish("(Commissariat Board Indonesian Islamic Student Movement)");
+              }
+              const addressParts: string[] = [];
+              if (org.address) addressParts.push(`Sekretariat: ${org.address}`);
+              if (org.phone) addressParts.push(`Telp: ${org.phone}`);
+              if (org.email) addressParts.push(`Email: ${org.email}`);
+              if (addressParts.length > 0) {
+                setCreateKopAddress(addressParts.join(" | "));
+              }
+              if (!isEditMode && (org.city || org.kota)) {
+                setCreateSenderLocation(org.city || org.kota);
+              }
+              if (org.logo) {
+                setCreateLogoUrl(org.logo);
+              }
             }
-            const addressParts: string[] = [];
-            if (org.address) addressParts.push(`Sekretariat: ${org.address}`);
-            if (org.phone) addressParts.push(`Telp: ${org.phone}`);
-            if (org.email) addressParts.push(`Email: ${org.email}`);
-            if (addressParts.length > 0) {
-              setCreateKopAddress(addressParts.join(" | "));
-            }
-            if (org.logo) {
-              setCreateLogoUrl(org.logo);
+          } else {
+            if (isCabangScope) {
+              setCreateKopSubtitle("PENGURUS CABANG");
+              setCreateKopEnglish("(Branch Board Indonesian Islamic Student Movement)");
+            } else {
+              setCreateKopSubtitle(komLabel.toUpperCase());
+              setCreateKopEnglish("(Commissariat Board Indonesian Islamic Student Movement)");
             }
           }
+        } catch (e) {
+          console.error("Failed to load system settings for letter kop:", e);
         }
-      } catch (e) {
-        console.error("Failed to load system settings for letter kop:", e);
-      }
+      });
     }
-  }, [isOpen]);
+  }, [dialogOpen, isEditMode, editingMail?.commissariat, isCabangScope, activeTenant, currentUser]);
 
-  // Render Preview Menggunakan docxtemplater + PizZip + docx-preview (100% Persis Word Asli)
-  const renderFilledDocxPreview = async (b64: string, data: Record<string, string>) => {
+  // Render Preview Menggunakan docxtemplater + PizZip + docx-preview (100% Persis Word Asli + QR Footer)
+  const renderFilledDocxPreview = async (
+    b64: string,
+    data: Record<string, string>,
+    letterIdOverride?: string
+  ) => {
     const canvasEl = canvasTextareaRef.current;
     if (!b64 || !canvasEl) return;
     setIsRenderingDocx(true);
     try {
+      const targetLetterId = letterIdOverride || activePreviewLetterId;
+      const qrMeta = await getOrCreateQrMeta(targetLetterId);
+      const qrFooter: DocxQrFooterOptions = {
+        qrDataUrl: qrMeta.qrDataUrl,
+        letterId: targetLetterId,
+        nomor: data.nomor || currentPreviewNomor,
+        verificationUrl: qrMeta.verificationUrl,
+        orgLabel: activeOrgLabel,
+      };
+
       const arrayBuffer = base64ToArrayBuffer(b64);
-      const { arrayBuffer: filledBuffer, error } = fillDocxTemplate(arrayBuffer, data);
+      const { arrayBuffer: filledBuffer, error } = fillDocxTemplate(
+        arrayBuffer,
+        data,
+        undefined,
+        qrFooter
+      );
       if (error) {
         console.warn("Docxtemplater warning:", error);
       }
-      const docx = await import("docx-preview");
-      canvasEl.innerHTML = "";
-      await docx.renderAsync(filledBuffer, canvasEl, undefined, {
-        className: "docx",
-        inWrapper: true,
-        ignoreWidth: false,
-        ignoreHeight: false,
-        ignoreFonts: false,
-        breakPages: true,
-        useBase64URL: true,
-        renderHeaders: true,
-        renderFooters: true,
-        renderAltChunks: true
-      });
+      await renderDocxToElement(filledBuffer, canvasEl);
       setCreateContent(canvasEl.innerHTML);
     } catch (e) {
       console.error("Gagal render docx preview:", e);
@@ -945,55 +1192,60 @@ export default function LetterGeneratorDialog({
     }
   };
 
-  const handleDownloadDocxResult = () => {
+  const handleDownloadDocxResult = async () => {
     if (!activeFileBase64) return;
     try {
       const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
-      const { blob, error } = fillDocxTemplate(arrayBuffer, docxValues);
+      const idx = letterMode === "bulk" ? previewBulkIndex : 0;
+      const mergedData = getRowDataForIndex(idx);
+      const targetLetterId = getLetterIdForIndex();
+      const qrMeta = await getOrCreateQrMeta(targetLetterId);
+      const { blob, error } = fillDocxTemplate(arrayBuffer, mergedData, undefined, {
+        qrDataUrl: qrMeta.qrDataUrl,
+        letterId: targetLetterId,
+        nomor: mergedData.nomor || currentPreviewNomor,
+        verificationUrl: qrMeta.verificationUrl,
+        orgLabel: activeOrgLabel,
+      });
       if (error) {
         toast.error("Gagal mengisi data ke docx: " + error);
         return;
       }
       const safeNomor = currentPreviewNomor.replace(/[/\\?%*:|"<>]/g, "_");
-      const safeRecipient = currentPreviewRecipient.replace(/[/\\?%*:|"<>]/g, "_");
+      const safeRecipient = (currentPreviewRecipient || "Penerima").replace(/[/\\?%*:|"<>]/g, "_");
       const fileName = `${safeNomor}_${safeRecipient}`;
       downloadDocxBlob(blob, fileName);
-      toast.success("Dokumen Word (.docx) berhasil diunduh!");
+      toast.success("Dokumen Word (.docx) dengan QR verifikasi berhasil diunduh!");
     } catch (e: any) {
       toast.error("Gagal mengunduh file: " + e.message);
     }
   };
 
-  const handleDownloadBulkZip = () => {
+  const handleDownloadBulkZip = async () => {
     if (!activeFileBase64 || parsedBulkRecipients.length === 0) return;
     try {
       const zip = new PizZip();
       const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
 
-      parsedBulkRecipients.forEach((rec, idx) => {
+      const unifiedLetterId = getLetterIdForIndex();
+      const qrMeta = await getOrCreateQrMeta(unifiedLetterId);
+
+      for (let idx = 0; idx < parsedBulkRecipients.length; idx++) {
+        const rec = parsedBulkRecipients[idx];
         const nomor = getNomorForIndex(idx);
-        const rowData = getRowDataForIndex(idx);
-        const data: Record<string, string> = { ...docxValues, ...rowData };
+        const data = getRowDataForIndex(idx, "bulk");
 
-        activePlaceholders.forEach((k) => {
-          const lk = k.toLowerCase();
-          if (lk === "nomor" || lk === "no") data[k] = nomor;
-          else if (lk === "penerima" || lk === "kepada") data[k] = rec;
-          else if (lk === "perihal" || lk === "hal") data[k] = currentPreviewSubject;
-          else if (lk === "lokasi" || lk === "kota") data[k] = currentPreviewLocation;
-          else if (lk === "tanggal" || lk === "hari_tanggal") data[k] = letterDate;
-          else if (rowData[k] !== undefined) data[k] = rowData[k];
-          else if (rowData[lk] !== undefined) data[k] = rowData[lk];
+        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data, undefined, {
+          qrDataUrl: qrMeta.qrDataUrl,
+          letterId: unifiedLetterId,
+          nomor,
+          verificationUrl: qrMeta.verificationUrl,
+          orgLabel: activeOrgLabel,
         });
-        Object.entries(rowData).forEach(([k, v]) => {
-          data[k] = v;
-        });
-
-        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data);
         const safeNomor = nomor.replace(/[/\\?%*:|"<>]/g, "_");
         const safeRec = rec.replace(/[/\\?%*:|"<>]/g, "_");
         zip.file(`${safeNomor}_${safeRec}.docx`, filledBuffer);
-      });
+      }
 
       const zipBlob = zip.generate({ type: "blob" });
       const url = URL.createObjectURL(zipBlob);
@@ -1004,14 +1256,21 @@ export default function LetterGeneratorDialog({
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 2500);
-      toast.success(`Berhasil mengunduh paket ZIP (${parsedBulkRecipients.length} file .docx)!`);
+      toast.success(`Berhasil mengunduh paket ZIP (${parsedBulkRecipients.length} file .docx ber-QR)!`);
     } catch (e: any) {
       console.error("Gagal buat ZIP docx:", e);
       toast.error("Gagal mengunduh ZIP: " + e.message);
     }
   };
 
-  const applyTemplateSelection = async (tmpl: SuratTemplate) => {
+  const applyTemplateSelection = async (
+    tmpl: SuratTemplate,
+    options?: {
+      preserveExistingFields?: boolean;
+      initialDocxValues?: Record<string, string>;
+    }
+  ) => {
+    const preserve = options?.preserveExistingFields === true;
     const parsed = parseTemplateContent(tmpl.content);
     let b64 = parsed.fileBase64 || "";
     const fileUrl = tmpl.fileUrl || parsed.fileUrl;
@@ -1027,11 +1286,39 @@ export default function LetterGeneratorDialog({
     }
 
     setActiveFileBase64(b64);
-    setActivePlaceholders(ph);
+    const mergedPlaceholders = Array.from(
+      new Set([
+        ...ph,
+        ...excelColumns
+          .map((c) => c.key)
+          .filter((k) => !isCoreStandardKey(k) && k !== "nama"),
+      ])
+    );
+    setActivePlaceholders(mergedPlaceholders);
 
-    setCreateSubject(tmpl.name || "");
-    setCreateClassification("Permohonan");
-    setCreateSenderLocation("Purwodadi");
+    const nextSubject = preserve ? createSubject : tmpl.subject || tmpl.name || "";
+    if (!preserve) {
+      setCreateSubject(nextSubject);
+      if (
+        tmpl.classification &&
+        ["Instruksi", "Permohonan", "Undangan", "Keputusan", "Rekomendasi"].includes(
+          tmpl.classification
+        )
+      ) {
+        setCreateClassification(tmpl.classification as typeof createClassification);
+      } else {
+        setCreateClassification("Permohonan");
+      }
+    }
+    const loc = preserve
+      ? createSenderLocation || "Purwodadi"
+      : tmpl.senderLocation || createSenderLocation || "Purwodadi";
+    if (!preserve) {
+      setCreateSenderLocation(loc);
+      if (tmpl.senderTitle) {
+        setCreateSenderTitle(tmpl.senderTitle);
+      }
+    }
 
     const months = [
       "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -1039,135 +1326,187 @@ export default function LetterGeneratorDialog({
     ];
     const today = `${new Date().getDate()} ${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
 
-    const initVals: Record<string, string> = {};
+    const seedVals = options?.initialDocxValues || (preserve ? docxValues : {});
+    const initManualVals: Record<string, string> = {};
     ph.forEach((k) => {
-      const lk = k.toLowerCase();
-      if (lk === "nomor" || lk === "no") initVals[k] = currentPreviewNomor;
-      else if (lk === "perihal" || lk === "hal") initVals[k] = tmpl.name || "";
-      else if (lk === "penerima" || lk === "kepada") initVals[k] = createRecipient || "";
-      else if (lk === "lokasi" || lk === "kota") initVals[k] = "Purwodadi";
-      else if (lk === "tanggal" || lk === "hari_tanggal") initVals[k] = letterDate || today;
-      else initVals[k] = "";
+      if (!isCoreStandardKey(k)) {
+        initManualVals[k] = seedVals[k] ?? seedVals[k.toLowerCase()] ?? "";
+      }
     });
-    setDocxValues(initVals);
+    setDocxValues(initManualVals);
+
+    const initialMerged = buildLetterMergeData({
+      mode: letterMode,
+      index: letterMode === "bulk" ? previewBulkIndex : 0,
+      core: {
+        nomor: currentPreviewNomor,
+        recipient: currentPreviewRecipient,
+        subject: nextSubject,
+        location: loc,
+        date: letterDate || today,
+      },
+      manualValues: initManualVals,
+      excelColumns,
+      excelRowsData,
+      activePlaceholders: ph,
+    });
 
     if (b64) {
-      renderFilledDocxPreview(b64, initVals);
+      renderFilledDocxPreview(b64, initialMerged, activePreviewLetterId);
     } else {
       setCreateContent(parsed.html || tmpl.content);
       if (canvasTextareaRef.current) {
-        canvasTextareaRef.current.innerHTML = parsed.html || tmpl.content;
+        canvasTextareaRef.current.innerHTML = sanitizeLetterHtml(parsed.html || tmpl.content, {
+          preservePlaceholders: true,
+          preserveDocxLayout: true,
+        });
       }
     }
   };
 
-  // Sinkronisasi Template Custom dari Database
+  const previewMergedData = React.useMemo(
+    () => getRowDataForIndex(letterMode === "bulk" ? previewBulkIndex : 0),
+    [getRowDataForIndex, letterMode, previewBulkIndex]
+  );
+
+  const templateSyncRef = useRef({
+    createTemplate,
+    applyTemplateSelection,
+    getRowDataForIndex,
+    previewMergedData,
+    renderFilledDocxPreview,
+    pendingEditTemplateMeta,
+  });
   useEffect(() => {
-    if (isOpen) {
+    templateSyncRef.current = {
+      createTemplate,
+      applyTemplateSelection,
+      getRowDataForIndex,
+      previewMergedData,
+      renderFilledDocxPreview,
+      pendingEditTemplateMeta,
+    };
+  });
+
+  // Sinkronisasi Template Custom dari Database (terisolasi per tenant + real-time sync)
+  useEffect(() => {
+    if (!dialogOpen) return;
+    let active = true;
+    const effectiveTenantFilter =
+      isEditMode && editingMail?.commissariat ? editingMail.commissariat : activeTenant;
+
+    const fetchScopedTemplates = () => {
       db.getSuratTemplates()
         .then((res) => {
-          if (res && Array.isArray(res)) {
-            setCustomTemplates(res);
-            // Hanya auto-select template pertama jika bukan mode surat massal
-            if (letterMode !== "bulk" && (!createTemplate || createTemplate === "custom_blank") && res.length > 0) {
-              const first = res[0];
-              setCreateTemplate(first.id);
-              applyTemplateSelection(first);
+          if (!active || !res || !Array.isArray(res)) return;
+          const scoped = currentUser
+            ? res.filter((t) =>
+                isRecordInTenant(
+                  currentUser,
+                  {
+                    commissariat: t.commissariat,
+                    komisariat_id: t.komisariat_id,
+                    tenant_id: t.tenant_id || t.komisariat_id
+                  },
+                  effectiveTenantFilter
+                )
+              )
+            : res;
+
+          setCustomTemplates(scoped);
+
+          // Di Mode Edit: jangan timpa isi surat yang sedang diedit dengan template default.
+          // Jika surat punya metadata template .docx tersimpan, pulihkan template & variabelnya otomatis!
+          if (isEditMode) {
+            const pendingMeta = templateSyncRef.current.pendingEditTemplateMeta;
+            if (pendingMeta?.templateId) {
+              const matchedTmpl =
+                scoped.find((t) => t.id === pendingMeta.templateId) ||
+                res.find((t) => t.id === pendingMeta.templateId);
+              setPendingEditTemplateMeta(null);
+              if (matchedTmpl) {
+                setCreateTemplate(matchedTmpl.id);
+                void templateSyncRef.current.applyTemplateSelection(matchedTmpl, {
+                  preserveExistingFields: true,
+                  initialDocxValues: pendingMeta.docxValues,
+                });
+              }
+            }
+            return;
+          }
+
+          const currentTemplateId = templateSyncRef.current.createTemplate;
+          const stillExists = Boolean(
+            currentTemplateId && scoped.some((t) => t.id === currentTemplateId)
+          );
+
+          if (!stillExists) {
+            if (scoped.length > 0) {
+              setCreateTemplate(scoped[0].id);
+              void templateSyncRef.current.applyTemplateSelection(scoped[0]);
+            } else {
+              setCreateTemplate("");
+              setActiveFileBase64("");
+              setActivePlaceholders([]);
+              setCreateContent("");
             }
           }
         })
         .catch((e) => {
           console.error("Gagal memuat template dari database:", e);
         });
-    }
-  }, [isOpen, letterMode]);
+    };
+
+    fetchScopedTemplates();
+
+    const handleTableSync = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      if (detail?.table === "surat_templates") {
+        fetchScopedTemplates();
+      }
+    };
+    window.addEventListener("PMII_TABLE_SYNC", handleTableSync);
+
+    return () => {
+      active = false;
+      window.removeEventListener("PMII_TABLE_SYNC", handleTableSync);
+    };
+  }, [dialogOpen, isEditMode, editingMail?.id, editingMail?.commissariat, letterMode, currentUser, activeTenant]);
 
   const handleTemplateChange = (val: string | null) => {
     if (!val) return;
     setCreateTemplate(val);
-    if (val === "custom_blank") {
+    setPendingEditTemplateMeta(null);
+
+    if (val === EXISTING_DOCUMENT_TEMPLATE_ID) {
       setActiveFileBase64("");
       setActivePlaceholders([]);
-      setDocxValues({});
-      setCreateSubject("");
-      setCreateClassification("Permohonan");
-      setCreateRecipient("");
-      const initialHtml = buildCanvasHtml();
-      setCreateContent(initialHtml);
+      setCreateContent(savedExistingHtml);
       if (canvasTextareaRef.current) {
-        canvasTextareaRef.current.innerHTML = initialHtml;
+        canvasTextareaRef.current.innerHTML = sanitizeLetterHtml(savedExistingHtml, {
+          preservePlaceholders: true,
+          preserveDocxLayout: true,
+        });
       }
       return;
     }
+
     const customTmpl = customTemplates.find((t) => t.id === val);
     if (customTmpl) {
-      applyTemplateSelection(customTmpl);
+      void applyTemplateSelection(customTmpl, { preserveExistingFields: isEditMode });
     }
   };
 
-  // Sinkronisasi nilai field standar PMII & data baris Excel ke placeholder DOCX
-  useEffect(() => {
-    if (!activeFileBase64 || activePlaceholders.length === 0) return;
-    setDocxValues((prev) => {
-      const next = { ...prev };
-      let changed = false;
-
-      // Sinkronisasi field pokok
-      activePlaceholders.forEach((k) => {
-        const lk = k.toLowerCase();
-        if ((lk === "nomor" || lk === "no") && next[k] !== currentPreviewNomor) {
-          next[k] = currentPreviewNomor;
-          changed = true;
-        } else if ((lk === "perihal" || lk === "hal") && next[k] !== currentPreviewSubject) {
-          next[k] = currentPreviewSubject;
-          changed = true;
-        } else if ((lk === "penerima" || lk === "kepada") && next[k] !== currentPreviewRecipient) {
-          next[k] = currentPreviewRecipient;
-          changed = true;
-        } else if ((lk === "lokasi" || lk === "kota") && next[k] !== currentPreviewLocation) {
-          next[k] = currentPreviewLocation;
-          changed = true;
-        } else if ((lk === "tanggal" || lk === "hari_tanggal") && next[k] !== letterDate) {
-          next[k] = letterDate;
-          changed = true;
-        }
-      });
-
-      // Jika dalam mode surat massal, timpa dengan data baris Excel penerima aktif
-      if (letterMode === "bulk") {
-        const rowData = getRowDataForIndex(previewBulkIndex);
-        Object.entries(rowData).forEach(([rk, rv]) => {
-          if (rv !== undefined && next[rk] !== rv) {
-            next[rk] = rv;
-            changed = true;
-          }
-        });
-      }
-
-      return changed ? next : prev;
-    });
-  }, [
-    currentPreviewNomor,
-    currentPreviewSubject,
-    currentPreviewRecipient,
-    currentPreviewLocation,
-    letterDate,
-    activeFileBase64,
-    activePlaceholders,
-    letterMode,
-    previewBulkIndex,
-    excelRowsData
-  ]);
-
-  // Debounced auto-render saat data placeholder diubah pengguna
+  // Debounced auto-render saat data placeholder, nomor, penerima, ID surat, atau baris Excel berubah
   useEffect(() => {
     if (activeFileBase64) {
       const timer = setTimeout(() => {
-        renderFilledDocxPreview(activeFileBase64, docxValues);
+        renderFilledDocxPreview(activeFileBase64, previewMergedData, activePreviewLetterId);
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [docxValues, activeFileBase64]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewMergedData, activeFileBase64, activePreviewLetterId, activeOrgLabel]);
 
 
   const handleBoxChange = (index: number, value: string, setBoxState: (val: string) => void, maxLength: number) => {
@@ -1178,8 +1517,8 @@ export default function LetterGeneratorDialog({
   };
 
   // Bangun HTML canvas default surat resmi PMII dengan placeholder lengkap
-  const buildCanvasHtml = () => {
-    if (createContent && createContent.trim().length > 0) {
+  const buildCanvasHtml = (forceFresh = false) => {
+    if (!forceFresh && createContent && createContent.trim().length > 0) {
       return createContent;
     }
 
@@ -1188,6 +1527,18 @@ export default function LetterGeneratorDialog({
       "Juli", "Agustus", "September", "Oktober", "November", "Desember"
     ];
     const today = `${new Date().getDate()} ${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
+    const bodyParagraph = plainTextFallbackNote
+      ? `<p style="margin:0 0 8px 0; white-space:pre-line;">${escapeHtml(plainTextFallbackNote)}</p>`
+      : `<p style="margin:0 0 8px 0;">Sehubungan dengan akan dilaksanakannya agenda kegiatan organisasi Pengurus Komisariat PMII, maka dengan ini kami memohon/mengundang Sahabat/i untuk dapat hadir pada:</p>
+
+    <div style="margin:10px 0 10px 24px; font-size:13px;">
+      <table style="border-collapse:collapse; font-size:13px;">
+        <tr><td style="width:110px; padding:3px 0;">Hari / Tanggal</td><td style="width:10px;">:</td><td style="font-weight:bold;">{{tanggal}}</td></tr>
+        <tr><td style="padding:3px 0;">Waktu</td><td>:</td><td>09.00 WIB s.d Selesai</td></tr>
+        <tr><td style="padding:3px 0;">Tempat</td><td>:</td><td>Gedung PCNU Lt. 2 Purwodadi</td></tr>
+        <tr><td style="padding:3px 0;">Agenda Acara</td><td>:</td><td style="font-weight:bold; color:#1e3a8a;">{{perihal}}</td></tr>
+      </table>
+    </div>`;
 
     return `<div style="font-family:'Arial Narrow', Arial, sans-serif; line-height:1.45; color:#0f172a; max-width:100%;">
   <!-- KOP SURAT PMII -->
@@ -1208,7 +1559,7 @@ export default function LetterGeneratorDialog({
         <td style="width:75px; padding:2px 0;">Nomor</td>
         <td style="width:10px; padding:2px 0;">:</td>
         <td style="padding:2px 0; font-weight:bold;" data-field="nomor-value">{{nomor}}</td>
-        <td style="text-align:right; padding:2px 0;" data-field="location-date">${createSenderLocation || "Purwodadi"}, ${today}</td>
+        <td style="text-align:right; padding:2px 0;" data-field="location-date">${createSenderLocation || "Purwodadi"}, ${letterDate || today}</td>
       </tr>
       <tr>
         <td style="padding:2px 0;">Lampiran</td>
@@ -1237,17 +1588,7 @@ export default function LetterGeneratorDialog({
   <div style="font-size:13px; line-height:1.65; text-align:justify; margin-bottom:20px;">
     <p style="margin:0 0 8px 0;"><i><b>Assalamu'alaikum Warahmatullahi Wabarakatuh</b></i></p>
     <p style="margin:0 0 8px 0;">Salam silaturrahim teriring do'a kami sampaikan kepada Sahabat/i, semoga senantiasa dalam lindungan Allah SWT serta eksis dalam menjalankan aktifitas keseharian. Amin.</p>
-    <p style="margin:0 0 8px 0;">Sehubungan dengan akan dilaksanakannya agenda kegiatan organisasi Pengurus Komisariat PMII, maka dengan ini kami memohon/mengundang Sahabat/i untuk dapat hadir pada:</p>
-
-    <div style="margin:10px 0 10px 24px; font-size:13px;">
-      <table style="border-collapse:collapse; font-size:13px;">
-        <tr><td style="width:110px; padding:3px 0;">Hari / Tanggal</td><td style="width:10px;">:</td><td style="font-weight:bold;">{{tanggal}}</td></tr>
-        <tr><td style="padding:3px 0;">Waktu</td><td>:</td><td>09.00 WIB s.d Selesai</td></tr>
-        <tr><td style="padding:3px 0;">Tempat</td><td>:</td><td>Gedung PCNU Lt. 2 Purwodadi</td></tr>
-        <tr><td style="padding:3px 0;">Agenda Acara</td><td>:</td><td style="font-weight:bold; color:#1e3a8a;">{{perihal}}</td></tr>
-      </table>
-    </div>
-
+    ${bodyParagraph}
     <p style="margin:0 0 8px 0;">Demikian surat permohonan ini kami sampaikan, atas perhatian dan kehadirannya kami haturkan terima kasih.</p>
     <p style="margin:0 0 4px 0;"><i><b>Wallahul Muwaffiq Ila Aqwamith Thariq</b></i></p>
     <p style="margin:0 0 16px 0;"><i><b>Wassalamu'alaikum Warahmatullahi Wabarakatuh</b></i></p>
@@ -1256,21 +1597,20 @@ export default function LetterGeneratorDialog({
   <!-- TANDA TANGAN PIMPINAN -->
   <div style="margin-top:24px; font-size:13px;">
     <div style="text-align:center; font-weight:bold; margin-bottom:50px;">
-      PENGURUS KOMISARIAT<br/>
-      PERGERAKAN MAHASISWA ISLAM INDONESIA<br/>
-      KI AGENG GETAS PENDAWA GROBOGAN
+      ${escapeHtml(createKopSubtitle || (isCabangScope ? "PENGURUS CABANG" : "PENGURUS KOMISARIAT"))}<br/>
+      ${escapeHtml(createKopTitle)}
     </div>
     <table style="width:100%; text-align:center; font-size:13px;">
       <tr>
         <td style="width:50%;">
-          <b>Ketua Komisariat</b><br/><br/><br/><br/>
-          <u><b>Sahabat Ahmad Fauzi</b></u><br/>
-          NIA. 010.01.001
+          <b>${escapeHtml(activeSenderTitle)}</b><br/><br/><br/><br/>
+          <u><b>( ........................... )</b></u><br/>
+          NIA. ...........................
         </td>
         <td style="width:50%;">
           <b>Sekretaris</b><br/><br/><br/><br/>
-          <u><b>Sahabat Ridwan Kamil</b></u><br/>
-          NIA. 010.01.002
+          <u><b>( ........................... )</b></u><br/>
+          NIA. ...........................
         </td>
       </tr>
     </table>
@@ -1289,18 +1629,24 @@ export default function LetterGeneratorDialog({
     const set = (field: string, val: string, isHtml = false) => {
       const el = canvas.querySelector(`[data-field="${field}"]`) as HTMLElement | null;
       if (!el) return;
-      if (isHtml) el.innerHTML = val;
-      else el.textContent = val;
+      if (isHtml) {
+        el.innerHTML = sanitizeLetterHtml(val, {
+          preservePlaceholders: true,
+          preserveDocxLayout: true,
+        });
+      } else {
+        el.textContent = val;
+      }
     };
 
     set("nomor-value", currentPreviewNomor);
     if (currentPreviewSubject) set("perihal-value", currentPreviewSubject);
-    set("location-date", `${currentPreviewLocation || "Purwodadi"}, ${today}`);
+    set("location-date", `${currentPreviewLocation || "Purwodadi"}, ${letterDate || today}`);
     if (currentPreviewRecipient) set("recipient-name", currentPreviewRecipient);
     if (currentPreviewFooterLeft) set("footer-text", currentPreviewFooterLeft);
 
     // Ambil data baris saat ini (dari Excel atau form isian variabel)
-    const currentRowData = getRowDataForIndex(previewBulkIndex);
+    const currentRowData = getRowDataForIndex(letterMode === "bulk" ? previewBulkIndex : 0);
 
     // Update semua elemen [data-placeholder] yang sudah terpasang di canvas
     const placeholderEls = canvas.querySelectorAll<HTMLElement>("[data-placeholder]");
@@ -1308,16 +1654,13 @@ export default function LetterGeneratorDialog({
       const key = el.getAttribute("data-placeholder") || "";
       const cleanKey = key.toLowerCase();
       const val =
-        currentRowData[cleanKey] ||
-        currentRowData[key] ||
-        docxValues[cleanKey] ||
-        docxValues[key] ||
-        excelColumns.find((c) => c.key === cleanKey)?.sampleValue ||
+        currentRowData[key] ??
+        currentRowData[cleanKey] ??
+        docxValues[key] ??
+        docxValues[cleanKey] ??
         "";
 
-      if (val) {
-        el.textContent = val;
-      }
+      el.textContent = val || `{{${key}}}`;
     });
 
     // Pindai teks mentah {{key}} yang mungkin baru diketik pengguna dan konversikan ke live span
@@ -1336,61 +1679,75 @@ export default function LetterGeneratorDialog({
     const updatedHtml = inner.replace(/\{\{\s*([\w-]+)\s*\}\}/g, (match, rawKey) => {
       const cleanKey = rawKey.toLowerCase();
       const val =
-        rowData[cleanKey] ||
-        rowData[rawKey] ||
-        docxValues[cleanKey] ||
-        docxValues[rawKey] ||
-        excelColumns.find((c) => c.key === cleanKey)?.sampleValue ||
+        rowData[rawKey] ??
+        rowData[cleanKey] ??
+        docxValues[rawKey] ??
+        docxValues[cleanKey] ??
         "";
 
       hasChange = true;
       setActivePlaceholders((prev) => (prev.includes(cleanKey) ? prev : [...prev, cleanKey]));
 
-      const displayContent = val || `{{${rawKey}}}`;
-      return `<span data-placeholder="${cleanKey}" style="color:#1d4ed8; font-weight:600; text-decoration:underline decoration-dotted; text-underline-offset:3px;" title="Variabel: {{${cleanKey}}}">${displayContent}</span>`;
+      const displayContent = escapeHtml(val || `{{${rawKey}}}`);
+      const safeKey = escapeHtml(cleanKey);
+      return `<span data-placeholder="${safeKey}" style="color:#1d4ed8; font-weight:600; text-decoration:underline decoration-dotted; text-underline-offset:3px;" title="Variabel: {{${safeKey}}}">${displayContent}</span>`;
     });
 
     if (hasChange) {
-      canvas.innerHTML = updatedHtml;
-      setCreateContent(updatedHtml);
+      const safeUpdated = sanitizeLetterHtml(updatedHtml, {
+        preservePlaceholders: true,
+        preserveDocxLayout: true,
+      });
+      canvas.innerHTML = safeUpdated;
+      setCreateContent(safeUpdated);
     }
   };
 
-  // Canvas initialization: Untuk custom/blank (non-DOCX)
+  // Canvas initialization: Untuk direct-edit dokumen & template HTML tersimpan (non-DOCX live)
   useEffect(() => {
-    if (!activeFileBase64 && isOpen) {
+    if (!activeFileBase64 && dialogOpen) {
       const el = canvasTextareaRef.current;
       if (!el) return;
 
+      // Jangan tampilkan template kosong bawaan jika pengguna belum memiliki / memilih template surat
+      if (!isEditMode && !createTemplate && !createContent) {
+        el.innerHTML = "";
+        return;
+      }
+
       if (letterMode === "bulk" && htmlCanvasMode === "preview") {
-        const rowData = getRowDataForIndex(previewBulkIndex);
-        const fullData: Record<string, string> = {
-          ...docxValues,
-          ...rowData,
-          nomor: currentPreviewNomor,
-          no: currentPreviewNomor,
-          penerima: currentPreviewRecipient,
-          kepada: currentPreviewRecipient,
-          perihal: currentPreviewSubject,
-          hal: currentPreviewSubject,
-          lokasi: currentPreviewLocation,
-          kota: currentPreviewLocation,
-          tanggal: letterDate,
-          hari_tanggal: letterDate
-        };
-        el.innerHTML = replacePlaceholdersInHtml(createContent || buildCanvasHtml(), fullData);
+        const fullData = getRowDataForIndex(previewBulkIndex, "bulk");
+        let previewHtml = replacePlaceholdersInHtml(createContent || buildCanvasHtml(), fullData);
+        if (activeQrMeta && activeQrMeta.letterId === activePreviewLetterId) {
+          const footerHtml = buildHtmlQrFooter({
+            letterId: activePreviewLetterId,
+            nomor: currentPreviewNomor,
+            qrDataUrl: activeQrMeta.qrDataUrl,
+            verificationUrl: activeQrMeta.verificationUrl,
+            orgLabel: activeOrgLabel,
+          });
+          previewHtml = upsertHtmlQrFooter(previewHtml, footerHtml);
+        }
+        el.innerHTML = sanitizeLetterHtml(previewHtml, { preserveDocxLayout: true });
       } else {
         if (createContent) {
-          el.innerHTML = createContent;
-        } else {
-          el.innerHTML = buildCanvasHtml();
+          el.innerHTML = sanitizeLetterHtml(createContent, {
+            preservePlaceholders: true,
+            preserveDocxLayout: true,
+          });
+        } else if (isEditMode) {
+          el.innerHTML = sanitizeLetterHtml(buildCanvasHtml(), {
+            preservePlaceholders: true,
+            preserveDocxLayout: true,
+          });
         }
         updateCanvasFields();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    isOpen,
+    dialogOpen,
+    editingMail?.id,
     createTemplate,
     activeFileBase64,
     letterMode,
@@ -1404,18 +1761,24 @@ export default function LetterGeneratorDialog({
     excelRowsData,
     docxValues,
     activePlaceholders,
-    bulkRecipientsText
+    bulkRecipientsText,
+    activeQrMeta,
+    activePreviewLetterId,
+    activeOrgLabel
   ]);
 
   // Jika template DOCX aktif dan dialog dibuka, render preview Word asli
   useEffect(() => {
-    if (isOpen && activeFileBase64) {
+    if (dialogOpen && activeFileBase64) {
       const timer = setTimeout(() => {
-        renderFilledDocxPreview(activeFileBase64, docxValues);
+        void templateSyncRef.current.renderFilledDocxPreview(
+          activeFileBase64,
+          templateSyncRef.current.previewMergedData
+        );
       }, 60);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, activeFileBase64]);
+  }, [dialogOpen, activeFileBase64]);
 
   useEffect(() => {
     if (!activeFileBase64 && (letterMode !== "bulk" || htmlCanvasMode === "edit")) {
@@ -1433,409 +1796,424 @@ export default function LetterGeneratorDialog({
     letterMode
   ]);
 
-  const handlePrintLetter = () => {
-    const printContent = document.getElementById("custom-letter-print-area");
-    if (!printContent) return;
+  const handlePrintLetter = (overrideHtml?: string) => {
+    const htmlToPrint =
+      overrideHtml ?? document.getElementById("custom-letter-print-area")?.innerHTML;
+    if (!htmlToPrint) return;
+    openLetterPrintWindow(
+      currentPreviewNomor || "Surat_PMII",
+      htmlToPrint,
+      () => toast.error("Gagal membuka jendela cetak. Pastikan izin pop-up browser aktif.")
+    );
+  };
+
+  // Render seluruh halaman surat massal menjadi 1 dokumen arsip terpadu dengan 1 UUID QR verifikasi
+  const buildBulkRenderedOutputs = async (): Promise<{
+    combinedPrintHtml: string;
+    unifiedLetterId: string;
+  }> => {
+    const unifiedLetterId = editingMail?.id || singleLetterId;
+    const qrMeta = await getOrCreateQrMeta(unifiedLetterId);
+    const rawPagesHtml: string[] = [];
+
+    if (activeFileBase64) {
+      const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
+
+      for (let i = 0; i < parsedBulkRecipients.length; i++) {
+        const data = getRowDataForIndex(i, "bulk");
+        const nomor = getNomorForIndex(i);
+
+        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data, undefined, {
+          qrDataUrl: qrMeta.qrDataUrl,
+          letterId: unifiedLetterId,
+          nomor,
+          verificationUrl: qrMeta.verificationUrl,
+          orgLabel: activeOrgLabel,
+        });
+        const pageEl = document.createElement("div");
+        await renderDocxToElement(filledBuffer, pageEl);
+        rawPagesHtml.push(pageEl.innerHTML);
+      }
+    } else {
+      const baseHtml = stripLetterEditMetadata(
+        createContent || (canvasTextareaRef.current?.innerHTML ?? buildCanvasHtml())
+      );
+      if (baseHtml.includes("bulk-letter-page")) {
+        return {
+          combinedPrintHtml: sanitizeLetterHtml(baseHtml, { preserveDocxLayout: true }),
+          unifiedLetterId,
+        };
+      }
+      for (let i = 0; i < parsedBulkRecipients.length; i++) {
+        const fullData = getRowDataForIndex(i, "bulk");
+        const nomor = getNomorForIndex(i);
+
+        const footerHtml = buildHtmlQrFooter({
+          letterId: unifiedLetterId,
+          nomor,
+          qrDataUrl: qrMeta.qrDataUrl,
+          verificationUrl: qrMeta.verificationUrl,
+          orgLabel: activeOrgLabel,
+        });
+        const mergedWithFooter = upsertHtmlQrFooter(
+          replacePlaceholdersInHtml(baseHtml, fullData),
+          footerHtml
+        );
+        const renderedHtml = sanitizeLetterHtml(mergedWithFooter, {
+          preserveDocxLayout: true,
+        });
+        rawPagesHtml.push(renderedHtml);
+      }
+    }
+
+    return {
+      combinedPrintHtml: deduplicateBulkPagesHtml(rawPagesHtml),
+      unifiedLetterId,
+    };
+  };
+
+  const openBulkPrintWindow = (combinedPrintHtml: string) => {
+    const allStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
+      .map((el) => el.outerHTML)
+      .join("\n");
+
+    const printTitle = `Surat_Massal_PMII_${parsedBulkRecipients.length}_Penerima`;
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       toast.error("Gagal membuka jendela cetak. Pastikan izin pop-up browser aktif.");
       return;
     }
 
-    // Ambil seluruh style asli (termasuk CSS yang digenerate oleh docx-preview)
-    const allStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
-      .map((el) => el.outerHTML)
-      .join("\n");
-
-    const printTitle = (currentPreviewNomor || "Surat_PMII").replace(/\s+/g, "_");
+    const cleanBulkHtml = stripLetterEditMetadata(combinedPrintHtml);
+    const { htmlClassAttr, fontVarsCss, baseHref } = buildPrintFontContext();
+    const printStyles = buildDocxPrintStyleBlock(cleanBulkHtml, {
+      fontVarsCss,
+      isBulk: true,
+    });
 
     printWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="id">
-        <head>
-          <meta charset="utf-8">
-          <title>${printTitle}</title>
-          ${allStyles}
-          <style>
-            @page {
-              size: auto;
-              margin: 0mm;
-            }
-            *, *::before, *::after {
-              box-sizing: border-box !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            html, body {
-              margin: 0 !important;
-              padding: 0 !important;
-              background: #ffffff !important;
-              color: #000000 !important;
-              width: 100% !important;
-              min-height: auto !important;
-              visibility: visible !important;
-            }
-            body, body * {
-              visibility: visible !important;
-            }
-            #custom-letter-print-area,
-            #custom-letter-print-area * {
-              visibility: visible !important;
-            }
-            .print-label {
-              display: none !important;
-            }
-            .docx-wrapper {
-              padding: 0 !important;
-              margin: 0 auto !important;
-              background: transparent !important;
-              box-shadow: none !important;
-              display: block !important;
-              width: 100% !important;
-            }
-            .docx-wrapper > section.docx {
-              margin: 0 auto !important;
-              margin-bottom: 0 !important;
-              box-shadow: none !important;
-              border: none !important;
-              box-sizing: border-box !important;
-            }
-            .docx-wrapper > section.docx:not(:last-child) {
-              page-break-after: always !important;
-              break-after: page !important;
-            }
-            @media print {
-              html, body {
-                background: #ffffff !important;
-              }
-              body, body * {
-                visibility: visible !important;
-              }
-              #custom-letter-print-area,
-              #custom-letter-print-area * {
-                visibility: visible !important;
-              }
-              .docx-wrapper {
-                padding: 0 !important;
-                margin: 0 !important;
-                background: transparent !important;
-              }
-              .docx-wrapper > section.docx {
-                box-shadow: none !important;
-                margin: 0 auto !important;
-                margin-bottom: 0 !important;
-              }
-              .print-label {
-                display: none !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div id="custom-letter-print-area">${printContent.innerHTML}</div>
-          <script>
-            window.addEventListener('load', function() {
-              setTimeout(function() {
-                window.focus();
-                window.print();
-              }, 250);
-            });
-            window.addEventListener('afterprint', function() {
-              window.close();
-            });
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
-  const handlePrintBulkLetters = async () => {
-    if (parsedBulkRecipients.length === 0) return;
-    setIsBatchPrinting(true);
-    try {
-      const allStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
-        .map((el) => el.outerHTML)
-        .join("\n");
-
-      const printTitle = `Surat_Massal_PMII_${parsedBulkRecipients.length}_Penerima`;
-      const batchContainer = document.createElement("div");
-
-      if (activeFileBase64) {
-        const docx = await import("docx-preview");
-        const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
-
-        for (let i = 0; i < parsedBulkRecipients.length; i++) {
-          const rec = parsedBulkRecipients[i];
-          const nomor = getNomorForIndex(i);
-          const rowData = getRowDataForIndex(i);
-
-          const data: Record<string, string> = { ...docxValues, ...rowData };
-          activePlaceholders.forEach((k) => {
-            const lk = k.toLowerCase();
-            if (lk === "nomor" || lk === "no") data[k] = nomor;
-            else if (lk === "penerima" || lk === "kepada") data[k] = rec;
-            else if (lk === "perihal" || lk === "hal") data[k] = currentPreviewSubject;
-            else if (lk === "lokasi" || lk === "kota") data[k] = currentPreviewLocation;
-            else if (lk === "tanggal" || lk === "hari_tanggal") data[k] = letterDate;
-            else if (rowData[k] !== undefined) data[k] = rowData[k];
-            else if (rowData[lk] !== undefined) data[k] = rowData[lk];
-          });
-          Object.entries(rowData).forEach(([k, v]) => {
-            data[k] = v;
-          });
-
-          const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data);
-          const pageEl = document.createElement("div");
-          pageEl.className = "bulk-letter-page";
-
-          await docx.renderAsync(filledBuffer, pageEl, undefined, {
-            className: "docx",
-            inWrapper: true,
-            ignoreWidth: false,
-            ignoreHeight: false,
-            ignoreFonts: false,
-            breakPages: true,
-            useBase64URL: true,
-            renderHeaders: true,
-            renderFooters: true,
-            renderAltChunks: true
-          });
-
-          batchContainer.appendChild(pageEl);
-        }
-      } else {
-        const baseHtml = createContent || (canvasTextareaRef.current?.innerHTML ?? "");
-        for (let i = 0; i < parsedBulkRecipients.length; i++) {
-          const rec = parsedBulkRecipients[i];
-          const nomor = getNomorForIndex(i);
-          const rowData = getRowDataForIndex(i);
-
-          const pageEl = document.createElement("div");
-          pageEl.className = "bulk-letter-page";
-
-          const fullData: Record<string, string> = {
-            ...docxValues,
-            ...rowData,
-            nomor,
-            no: nomor,
-            penerima: rec,
-            kepada: rec,
-            perihal: currentPreviewSubject,
-            hal: currentPreviewSubject,
-            lokasi: currentPreviewLocation,
-            kota: currentPreviewLocation,
-            tanggal: letterDate,
-            hari_tanggal: letterDate
-          };
-
-          const renderedHtml = replacePlaceholdersInHtml(baseHtml, fullData);
-          pageEl.innerHTML = renderedHtml;
-          batchContainer.appendChild(pageEl);
-        }
-      }
-
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) {
-        toast.error("Gagal membuka jendela cetak. Pastikan izin pop-up browser aktif.");
-        return;
-      }
-
-      printWindow.document.write(`
         <!DOCTYPE html>
-        <html lang="id">
+        <html lang="id" class="${escapeHtml(htmlClassAttr)}">
           <head>
             <meta charset="utf-8">
-            <title>${printTitle}</title>
+            ${baseHref ? `<base href="${escapeHtml(baseHref)}">` : ""}
+            <title>${escapeHtml(printTitle)}</title>
             ${allStyles}
-            <style>
-              @page {
-                size: auto;
-                margin: 0mm;
-              }
-              *, *::before, *::after {
-                box-sizing: border-box !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              html, body {
-                margin: 0 !important;
-                padding: 0 !important;
-                background: #ffffff !important;
-                color: #000000 !important;
-                width: 100% !important;
-                min-height: auto !important;
-                visibility: visible !important;
-              }
-              body, body * {
-                visibility: visible !important;
-              }
-              #custom-letter-print-area,
-              #custom-letter-print-area * {
-                visibility: visible !important;
-              }
-              .bulk-letter-page {
-                page-break-after: always !important;
-                break-after: page !important;
-                width: 100% !important;
-                margin: 0 auto !important;
-                padding: 0 !important;
-                box-shadow: none !important;
-                display: block !important;
-              }
-              .bulk-letter-page:last-child {
-                page-break-after: auto !important;
-                break-after: auto !important;
-              }
-              .docx-wrapper {
-                padding: 0 !important;
-                margin: 0 auto !important;
-                background: transparent !important;
-                box-shadow: none !important;
-                display: block !important;
-                width: 100% !important;
-              }
-              .docx-wrapper > section.docx {
-                margin: 0 auto !important;
-                margin-bottom: 0 !important;
-                box-shadow: none !important;
-                border: none !important;
-                box-sizing: border-box !important;
-              }
-              .docx-wrapper > section.docx:not(:last-child) {
-                page-break-after: always !important;
-                break-after: page !important;
-              }
-              @media print {
-                html, body {
-                  background: #ffffff !important;
-                }
-                body, body * {
-                  visibility: visible !important;
-                }
-                #custom-letter-print-area,
-                #custom-letter-print-area * {
-                  visibility: visible !important;
-                }
-                .bulk-letter-page {
-                  page-break-after: always !important;
-                  break-after: page !important;
-                }
-                .bulk-letter-page:last-child {
-                  page-break-after: auto !important;
-                  break-after: auto !important;
-                }
-                .docx-wrapper {
-                  padding: 0 !important;
-                  margin: 0 !important;
-                  background: transparent !important;
-                }
-                .docx-wrapper > section.docx {
-                  box-shadow: none !important;
-                  margin: 0 auto !important;
-                  margin-bottom: 0 !important;
-                }
-              }
-            </style>
+            <style>${printStyles}</style>
           </head>
           <body>
             <div id="custom-letter-print-area">
-              ${batchContainer.innerHTML}
+              ${cleanBulkHtml}
             </div>
-            <script>
-              window.addEventListener('load', function() {
-                setTimeout(function() {
-                  window.focus();
-                  window.print();
-                }, 350);
-              });
-              window.addEventListener('afterprint', function() {
-                window.close();
-              });
-            </script>
+            ${buildPrintAutoTriggerScript(280)}
           </body>
         </html>
       `);
-      printWindow.document.close();
+    printWindow.document.close();
+  };
+
+  const handleCloseGenerator = React.useCallback(() => {
+    setIsOpen(false);
+    onCloseEdit?.();
+    setHasAutoFilled(false);
+    setDuplicateConfirmMode(null);
+    setPendingEditTemplateMeta(null);
+    setUseCustomNomor(false);
+    setCustomNomorInput("");
+    setSavedExistingHtml("");
+    setPlainTextFallbackNote("");
+    setCreateContent("");
+    setActiveFileBase64("");
+    setActivePlaceholders([]);
+    setDocxValues({});
+    setCreateTemplate("");
+    setCreateRecipient("");
+    setCreateSubject("");
+    setBulkRecipientsText("");
+    setIsSequentialNumbering(true);
+    setExcelColumns([]);
+    setExcelRowsData([]);
+    setPreviewBulkIndex(0);
+    setLetterMode("single");
+    printAfterSaveRef.current = false;
+    resetDraftLetterIds();
+  }, [onCloseEdit, resetDraftLetterIds]);
+
+  const executePublish = async (mode: "single" | "bulk") => {
+    setDuplicateConfirmMode(null);
+
+    if (mode === "bulk") {
+      setIsBatchPrinting(true);
+      if (isEditMode) {
+        setSavingEditAction(printAfterSaveRef.current ? "save_print" : "save");
+      }
+      try {
+        const { combinedPrintHtml, unifiedLetterId } = await buildBulkRenderedOutputs();
+        const firstNomor = getNomorForIndex(0);
+        const lastNomor = getNomorForIndex(Math.max(0, parsedBulkRecipients.length - 1));
+        const bulkNomorSummary = formatBulkNomorSummary(
+          firstNomor,
+          lastNomor,
+          parsedBulkRecipients.length,
+          isSequentialNumbering
+        );
+        const bulkRecipientSummary = formatBulkRecipientSummary(parsedBulkRecipients);
+        const finalBulkContent = embedLetterEditMetadata(combinedPrintHtml, {
+          v: 1,
+          templateId:
+            createTemplate && createTemplate !== EXISTING_DOCUMENT_TEMPLATE_ID
+              ? createTemplate
+              : "",
+          docxValues,
+          mode: "bulk",
+          bulk: {
+            recipients: parsedBulkRecipients,
+            isSequentialNumbering,
+            startNomor: firstNomor,
+            excelColumns,
+            excelRowsData,
+          },
+        });
+
+        if (isEditMode && editingMail && onUpdateMail) {
+          const trimmedDateIndo = letterDate.trim() || editingMail.dateIndo || "";
+          const resolvedIsoDate =
+            trimmedDateIndo && trimmedDateIndo !== editingMail.dateIndo
+              ? parseMailDateToIso("", trimmedDateIndo)
+              : parseMailDateToIso(editingMail.date, trimmedDateIndo);
+
+          const updatedBulkMail: MailItem = enforceTenantWrite<MailItem>(
+            currentUser,
+            {
+              ...editingMail,
+              id: editingMail.id,
+              nomor: bulkNomorSummary,
+              type: "KELUAR",
+              senderOrRecipient: bulkRecipientSummary,
+              subject: currentPreviewSubject.trim(),
+              classification: createClassification,
+              status: normalizeMailStatusForType(editStatus, "KELUAR"),
+              content: finalBulkContent,
+              senderTitle: activeSenderTitle,
+              senderLocation: currentPreviewLocation.trim() || "Purwodadi",
+              date: resolvedIsoDate,
+              dateIndo: trimmedDateIndo || formatDateToIndo(resolvedIsoDate),
+            },
+            targetTenantInfo.tenantOverrideForWrite
+          );
+
+          await onUpdateMail(updatedBulkMail);
+          if (printAfterSaveRef.current) {
+            openBulkPrintWindow(combinedPrintHtml);
+          }
+          handleCloseGenerator();
+          return;
+        }
+
+        // Simpan seluruh surat massal sebagai 1 arsip terpadu agar mudah direvisi & diperbarui
+        await onPublish({
+          id: unifiedLetterId,
+          nomor: bulkNomorSummary,
+          recipient: bulkRecipientSummary,
+          subject: currentPreviewSubject.trim(),
+          classification: createClassification,
+          content: finalBulkContent,
+          senderTitle: activeSenderTitle,
+          senderLocation: currentPreviewLocation,
+          dateIndo: letterDate,
+          bulkCount: parsedBulkRecipients.length,
+        });
+        openBulkPrintWindow(combinedPrintHtml);
+        handleCloseGenerator();
+      } catch (e: any) {
+        console.error(
+          isEditMode ? "Gagal memperbarui surat massal:" : "Gagal menerbitkan surat massal:",
+          e
+        );
+        toast.error(
+          (isEditMode ? "Gagal memperbarui surat massal: " : "Gagal menerbitkan surat massal: ") +
+            (e?.message || "Kesalahan tidak diketahui")
+        );
+      } finally {
+        setIsBatchPrinting(false);
+        setSavingEditAction(null);
+        printAfterSaveRef.current = false;
+      }
+      return;
+    }
+
+    if (isEditMode) {
+      setSavingEditAction(printAfterSaveRef.current ? "save_print" : "save");
+    }
+
+    try {
+      const letterId = getLetterIdForIndex();
+      const qrMeta = await getOrCreateQrMeta(letterId);
+      const singleData = getRowDataForIndex(0, "single");
+
+      let finalSingleContent = "";
+      let printableSingleContent = "";
+      if (activeFileBase64) {
+        const arrayBuffer = base64ToArrayBuffer(activeFileBase64);
+        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, singleData, undefined, {
+          qrDataUrl: qrMeta.qrDataUrl,
+          letterId,
+          nomor: currentPreviewNomor,
+          verificationUrl: qrMeta.verificationUrl,
+          orgLabel: activeOrgLabel,
+        });
+        const renderTarget = document.createElement("div");
+        await renderDocxToElement(filledBuffer, renderTarget);
+        printableSingleContent = renderTarget.innerHTML;
+        finalSingleContent =
+          createTemplate &&
+          createTemplate !== EXISTING_DOCUMENT_TEMPLATE_ID
+            ? embedLetterEditMetadata(renderTarget.innerHTML, {
+                v: 1,
+                templateId: createTemplate,
+                docxValues,
+              })
+            : renderTarget.innerHTML;
+      } else {
+        const rawSingleHtml = stripLetterEditMetadata(
+          (canvasTextareaRef.current?.innerHTML || createContent || buildCanvasHtml()).trim()
+        );
+        const alreadyHasDocxEmbeddedQr =
+          rawSingleHtml.includes("docx-wrapper") && /<footer\b[\s\S]*?<img\b/i.test(rawSingleHtml);
+
+        if (alreadyHasDocxEmbeddedQr) {
+          finalSingleContent = sanitizeLetterHtml(rawSingleHtml, {
+            preserveDocxLayout: true,
+          });
+        } else {
+          const footerHtml = buildHtmlQrFooter({
+            letterId,
+            nomor: currentPreviewNomor,
+            qrDataUrl: qrMeta.qrDataUrl,
+            verificationUrl: qrMeta.verificationUrl,
+            orgLabel: activeOrgLabel,
+          });
+          finalSingleContent = sanitizeLetterHtml(
+            upsertHtmlQrFooter(replacePlaceholdersInHtml(rawSingleHtml, singleData), footerHtml),
+            { preserveDocxLayout: true }
+          );
+        }
+        printableSingleContent = finalSingleContent;
+      }
+
+      if (isEditMode && editingMail && onUpdateMail) {
+        const trimmedDateIndo = letterDate.trim() || editingMail.dateIndo || "";
+        const resolvedIsoDate =
+          trimmedDateIndo && trimmedDateIndo !== editingMail.dateIndo
+            ? parseMailDateToIso("", trimmedDateIndo)
+            : parseMailDateToIso(editingMail.date, trimmedDateIndo);
+
+        const updatedMail: MailItem = enforceTenantWrite<MailItem>(
+          currentUser,
+          {
+            ...editingMail,
+            id: editingMail.id,
+            nomor: currentPreviewNomor,
+            type: "KELUAR",
+            senderOrRecipient: currentPreviewRecipient.trim(),
+            subject: currentPreviewSubject.trim(),
+            classification: createClassification,
+            status: normalizeMailStatusForType(editStatus, "KELUAR"),
+            content: finalSingleContent,
+            senderTitle: activeSenderTitle,
+            senderLocation: currentPreviewLocation.trim() || "Purwodadi",
+            date: resolvedIsoDate,
+            dateIndo: trimmedDateIndo || formatDateToIndo(resolvedIsoDate),
+          },
+          targetTenantInfo.tenantOverrideForWrite
+        );
+
+        await onUpdateMail(updatedMail);
+        if (printAfterSaveRef.current) {
+          handlePrintLetter(printableSingleContent);
+        }
+        handleCloseGenerator();
+        return;
+      }
+
+      await onPublish({
+        id: letterId,
+        nomor: currentPreviewNomor,
+        recipient: currentPreviewRecipient,
+        subject: currentPreviewSubject,
+        classification: createClassification,
+        content: finalSingleContent,
+        senderTitle: activeSenderTitle,
+        senderLocation: currentPreviewLocation,
+        dateIndo: letterDate
+      });
+      handlePrintLetter(printableSingleContent);
+      handleCloseGenerator();
     } catch (e: any) {
-      console.error("Gagal cetak surat massal:", e);
-      toast.error("Gagal mencetak surat massal: " + e.message);
+      console.error(isEditMode ? "Gagal memperbarui surat:" : "Gagal menerbitkan surat:", e);
+      toast.error(
+        (isEditMode ? "Gagal memperbarui surat: " : "Gagal menerbitkan surat: ") +
+          (e?.message || "Periksa koneksi atau hak akses Anda.")
+      );
     } finally {
-      setIsBatchPrinting(false);
+      setSavingEditAction(null);
+      printAfterSaveRef.current = false;
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingEdit || isBatchPrinting) return;
+
+    if (!isEditMode && !createTemplate && !activeFileBase64 && !createContent.trim()) {
+      toast.error("Silakan pilih atau unggah template surat Word (.docx) terlebih dahulu.");
+      return;
+    }
 
     if (letterMode === "bulk") {
+      if (!createSubject.trim()) {
+        toast.error("Perihal surat tidak boleh kosong.");
+        return;
+      }
       if (parsedBulkRecipients.length === 0) {
         toast.error("Silakan masukkan minimal 1 nama penerima surat massal.");
         return;
       }
       if (bulkDuplicateEntries.length > 0) {
-        const confirmUse = window.confirm(
-          `PERINGATAN: Terdapat ${bulkDuplicateEntries.length} nomor surat yang sudah pernah digunakan:\n${bulkDuplicateEntries.slice(0, 3).map(d => `• ${d.nomor} (${d.recipient})`).join("\n")}${bulkDuplicateEntries.length > 3 ? "\n...dan lainnya" : ""}\n\nTetap lanjutkan menerbitkan dengan nomor duplikat ini?`
-        );
-        if (!confirmUse) return;
+        setDuplicateConfirmMode("bulk");
+        return;
       }
-
-      const massMails = parsedBulkRecipients.map((rec, idx) => {
-        const rowData = getRowDataForIndex(idx);
-        const fullData: Record<string, string> = {
-          ...docxValues,
-          ...rowData,
-          nomor: getNomorForIndex(idx),
-          penerima: rec,
-          perihal: currentPreviewSubject,
-          lokasi: currentPreviewLocation,
-          tanggal: letterDate
-        };
-        const mailContent = !activeFileBase64
-          ? replacePlaceholdersInHtml(createContent, fullData)
-          : createContent;
-
-        return {
-          nomor: getNomorForIndex(idx),
-          recipient: rec,
-          subject: currentPreviewSubject,
-          classification: createClassification,
-          content: mailContent,
-          senderTitle: activeSenderTitle,
-          senderLocation: currentPreviewLocation,
-          customData: rowData
-        };
-      });
-
-      onPublish(massMails);
-      await handlePrintBulkLetters();
-      setIsOpen(false);
+      await executePublish("bulk");
     } else {
-      if (duplicateEntry) {
-        const confirmUse = window.confirm(
-          `PERINGATAN: Nomor surat "${currentPreviewNomor}" sudah pernah digunakan pada surat "${duplicateEntry.subject || 'Surat Keluar'}".\n\nTetap lanjutkan menerbitkan dengan nomor duplikat ini?`
-        );
-        if (!confirmUse) return;
+      if (!currentPreviewNomor.trim()) {
+        toast.error("Nomor surat tidak boleh kosong.");
+        return;
       }
-      onPublish({
-        nomor: currentPreviewNomor,
-        recipient: currentPreviewRecipient,
-        subject: currentPreviewSubject,
-        classification: createClassification,
-        content: createContent,
-        senderTitle: activeSenderTitle,
-        senderLocation: currentPreviewLocation
-      });
-      handlePrintLetter();
-      setIsOpen(false);
+      if (!createSubject.trim()) {
+        toast.error("Perihal surat tidak boleh kosong.");
+        return;
+      }
+      if (!createRecipient.trim()) {
+        toast.error("Tujuan / penerima surat tidak boleh kosong.");
+        return;
+      }
+      if (duplicateEntry) {
+        setDuplicateConfirmMode("single");
+        return;
+      }
+      await executePublish("single");
     }
   };
+
+  const isDocxStyledCanvas =
+    Boolean(activeFileBase64) || createContent.includes("docx-wrapper");
 
   return (
     <>
       <button
         type="button"
         onClick={() => {
+          onCloseEdit?.();
           setLetterMode("single");
           setIsOpen(true);
         }}
@@ -1845,7 +2223,16 @@ export default function LetterGeneratorDialog({
         <span>Buat Surat Resmi</span>
       </button>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseGenerator();
+          } else {
+            setIsOpen(true);
+          }
+        }}
+      >
       <DialogContent
         showCloseButton={false}
         className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none bg-white dark:bg-zinc-900 border-none rounded-none ring-0 shadow-none p-0 gap-0 flex flex-col overflow-hidden z-50"
@@ -1854,25 +2241,74 @@ export default function LetterGeneratorDialog({
         {/* Header Modul (Mengikuti Standar Verifikasi) */}
         <DialogHeader className="p-4 sm:p-5 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                <FileText className="w-5 h-5" />
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                  isEditMode
+                    ? "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
+                    : "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400"
+                }`}
+              >
+                {isEditMode ? <Edit3 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
               </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                  Pembuat Surat Resmi
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Formulir pembuatan surat resmi PMII
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                    {isEditMode
+                      ? letterMode === "bulk"
+                        ? "Edit Surat Massal"
+                        : "Edit Surat Keluar"
+                      : "Pembuat Surat Resmi"}
+                  </DialogTitle>
+                  {isEditMode && editingMail && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-mono font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                    >
+                      {editingMail.nomor}
+                    </Badge>
+                  )}
+                  {letterMode === "bulk" && parsedBulkRecipients.length > 0 && (
+                    <Badge className="text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-none">
+                      1 Arsip · {parsedBulkRecipients.length} Penerima
+                    </Badge>
+                  )}
+                </div>
+                <DialogDescription className={isEditMode ? "text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate" : "sr-only"}>
+                  {isEditMode
+                    ? letterMode === "bulk"
+                      ? "Revisi isi surat, template, atau daftar penerima sekaligus dalam 1 arsip surat massal terpadu"
+                      : "Sunting isi surat, template Word, atau metadata — QR Code verifikasi tetap terhubung dengan surat ini"
+                    : "Formulir pembuatan surat resmi PMII"}
                 </DialogDescription>
               </div>
             </div>
 
-            <DialogClose render={
-              <button className="w-8 h-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors cursor-pointer border-none">
-                <X className="w-4 h-4" />
-              </button>
-            } />
+            <div className="flex items-center gap-2 shrink-0">
+              {isEditMode && editingMail && onOpenArchiveEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const target = editingMail;
+                    handleCloseGenerator();
+                    onOpenArchiveEdit(target);
+                  }}
+                  className="h-8 px-2.5 text-[11px] font-medium border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                  title="Kelola berkas lampiran PDF/scan atau ubah jenis arsip surat"
+                >
+                  <Paperclip className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span className="hidden sm:inline">Lampiran &amp; Arsip</span>
+                </Button>
+              )}
+
+              <DialogClose render={
+                <button className="w-8 h-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors cursor-pointer border-none">
+                  <X className="w-4 h-4" />
+                </button>
+              } />
+            </div>
           </div>
         </DialogHeader>
 
@@ -1918,16 +2354,29 @@ export default function LetterGeneratorDialog({
                     <Select value={createTemplate} onValueChange={handleTemplateChange}>
                       <SelectTrigger className="w-full text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
                         <SelectValue placeholder="Pilih Template Surat">
-                          {createTemplate === "custom_blank"
-                            ? "Lembar Kosong (Mulai dari Nol)"
-                            : selectedTemplateObj?.name || "Pilih Template Surat"}
+                          {createTemplate === EXISTING_DOCUMENT_TEMPLATE_ID
+                            ? "Dokumen Surat Saat Ini (Edit Langsung)"
+                            : selectedTemplateObj?.name ||
+                              (customTemplates.length === 0
+                                ? "Belum ada template tersimpan"
+                                : "Pilih Template Surat")}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent className="border-zinc-200 dark:border-zinc-800 max-h-64">
-                        <SelectItem value="custom_blank">Lembar Kosong (Mulai dari Nol)</SelectItem>
-                        {customTemplates.length > 0 && (
+                        {isEditMode && savedExistingHtml && (
+                          <SelectItem value={EXISTING_DOCUMENT_TEMPLATE_ID}>
+                            Dokumen Surat Saat Ini (Edit Langsung)
+                          </SelectItem>
+                        )}
+                        {customTemplates.length > 0 ? (
                           <>
-                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 border-t border-zinc-100 dark:border-zinc-800 mt-1 pt-1">
+                            <div
+                              className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 ${
+                                isEditMode && savedExistingHtml
+                                  ? "border-t border-zinc-100 dark:border-zinc-800 mt-1 pt-1"
+                                  : ""
+                              }`}
+                            >
                               Template Tersimpan ({customTemplates.length})
                             </div>
                             {customTemplates.map((t) => (
@@ -1938,9 +2387,33 @@ export default function LetterGeneratorDialog({
                               </SelectItem>
                             ))}
                           </>
+                        ) : (
+                          <div className="px-3 py-3 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
+                            Belum ada template Word (.docx) tersimpan.
+                          </div>
                         )}
                       </SelectContent>
                     </Select>
+                    {!isEditMode && customTemplates.length === 0 && (
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/50 rounded-lg px-2.5 py-2 leading-relaxed">
+                        Unggah minimal 1 template Word (<code>.docx</code>) di menu{" "}
+                        {onOpenTemplateManager ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsOpen(false);
+                              onOpenTemplateManager();
+                            }}
+                            className="font-bold underline cursor-pointer bg-transparent border-none p-0 text-amber-800 dark:text-amber-200"
+                          >
+                            Kelola Template
+                          </button>
+                        ) : (
+                          <strong>Kelola Template</strong>
+                        )}{" "}
+                        untuk mulai membuat surat resmi.
+                      </p>
+                    )}
                   </div>
 
                   {/* CARD 2: INFORMASI SURAT */}
@@ -1962,32 +2435,66 @@ export default function LetterGeneratorDialog({
                         title="Ambil nomor urut berikutnya"
                       >
                         <Sparkles className="w-3 h-3 text-blue-500" />
-                        <span>No. Otomatis (#{getNextSeqNumber(mailHistory)})</span>
+                        <span>No. Otomatis (#{getNextSeqNumber(scopedMailHistory)})</span>
                       </Button>
                     </div>
 
-                    {/* 9 Segmen Nomor Surat */}
-                    <LetterNumberingBoxes
-                      boxes={[numBox1, numBox2, numBox3, numBox4, numBox5, numBox6, numBox7, numBox8, numBox9]}
-                      onBoxChange={(index, val) => {
-                        const setters = [
-                          setNumBox1, setNumBox2, setNumBox3, setNumBox4, setNumBox5,
-                          setNumBox6, setNumBox7, setNumBox8, setNumBox9
-                        ];
-                        setters[index](val);
-                      }}
-                      letterMode={letterMode}
-                      isSequentialNumbering={isSequentialNumbering}
-                      onToggleSequential={setIsSequentialNumbering}
-                      bulkDuplicateEntries={bulkDuplicateEntries}
-                      duplicateEntry={duplicateEntry}
-                      duplicateSeqEntry={duplicateSeqEntry}
-                      onAutoAssignNextNumber={handleAutoAssignNextNumber}
-                      nextSeqNumber={getNextSeqNumber(mailHistory)}
-                      parsedBulkRecipientsLength={parsedBulkRecipients.length}
-                      firstNomor={getNomorForIndex(0)}
-                      lastNomor={getNomorForIndex(Math.max(0, parsedBulkRecipients.length - 1))}
-                    />
+                    {/* Nomor Surat (9 Segmen PMII atau Format Kustom saat Edit) */}
+                    {isEditMode && useCustomNomor ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                            Nomor Surat (Format Kustom) *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setUseCustomNomor(false)}
+                            className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-transparent border-none"
+                          >
+                            Pakai 9 Segmen PMII
+                          </button>
+                        </div>
+                        <Input
+                          required
+                          value={customNomorInput}
+                          onChange={(e) => setCustomNomorInput(e.target.value)}
+                          placeholder="Nomor surat resmi..."
+                          className={`h-9 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg ${
+                            duplicateEntry
+                              ? "border-rose-400 dark:border-rose-700"
+                              : "border-zinc-200 dark:border-zinc-800"
+                          }`}
+                        />
+                        {duplicateEntry && (
+                          <p className="text-[10px] text-rose-600 dark:text-rose-400 flex items-center gap-1 font-medium">
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            <span>Nomor ini sudah digunakan pada &ldquo;{duplicateEntry.subject}&rdquo;.</span>
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <LetterNumberingBoxes
+                        boxes={[numBox1, numBox2, numBox3, numBox4, numBox5, numBox6, numBox7, numBox8, numBox9]}
+                        onBoxChange={(index, val) => {
+                          const setters = [
+                            setNumBox1, setNumBox2, setNumBox3, setNumBox4, setNumBox5,
+                            setNumBox6, setNumBox7, setNumBox8, setNumBox9
+                          ];
+                          setters[index](val);
+                        }}
+                        letterMode={letterMode}
+                        isSequentialNumbering={isSequentialNumbering}
+                        onToggleSequential={setIsSequentialNumbering}
+                        bulkDuplicateEntries={bulkDuplicateEntries}
+                        duplicateEntry={duplicateEntry}
+                        duplicateSeqEntry={duplicateSeqEntry}
+                        onAutoAssignNextNumber={handleAutoAssignNextNumber}
+                        nextSeqNumber={getNextSeqNumber(scopedMailHistory)}
+                        parsedBulkRecipientsLength={parsedBulkRecipients.length}
+                        firstNomor={getNomorForIndex(0)}
+                        lastNomor={getNomorForIndex(Math.max(0, parsedBulkRecipients.length - 1))}
+                      />
+                    )}
 
                     {/* Perihal Surat */}
                     <div className="space-y-1">
@@ -2010,11 +2517,16 @@ export default function LetterGeneratorDialog({
                           <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                           <span>Tujuan / Penerima *</span>
                         </label>
-                        {/* Selector Mode Penerima (Tunggal vs Massal) */}
+                        {/* Selector Mode Penerima (Tunggal vs Massal 1-Arsip) */}
                         <div className="inline-flex items-center p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg border border-zinc-200/80 dark:border-zinc-700/80 text-[10px]">
                           <button
                             type="button"
-                            onClick={() => setLetterMode("single")}
+                            onClick={() => {
+                              if (!createRecipient.trim() && parsedBulkRecipients[0]) {
+                                setCreateRecipient(parsedBulkRecipients[0]);
+                              }
+                              setLetterMode("single");
+                            }}
                             className={`px-2 py-0.5 rounded-md transition-all cursor-pointer border-none ${
                               letterMode === "single"
                                 ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
@@ -2025,7 +2537,12 @@ export default function LetterGeneratorDialog({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setLetterMode("bulk")}
+                            onClick={() => {
+                              if (!bulkRecipientsText.trim() && createRecipient.trim()) {
+                                setBulkRecipientsText(createRecipient.trim());
+                              }
+                              setLetterMode("bulk");
+                            }}
                             className={`px-2 py-0.5 rounded-md transition-all cursor-pointer border-none flex items-center gap-1 ${
                               letterMode === "bulk"
                                 ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
@@ -2106,20 +2623,113 @@ export default function LetterGeneratorDialog({
                         />
                       </div>
                     </div>
+
+                    {/* Klasifikasi & Penandatangan */}
+                    <div className="grid grid-cols-2 gap-2 pt-0.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          Klasifikasi
+                        </label>
+                        <Select
+                          value={createClassification}
+                          onValueChange={(val) => {
+                            if (val) {
+                              setCreateClassification(val as typeof createClassification);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                            <SelectValue placeholder="Pilih Klasifikasi" />
+                          </SelectTrigger>
+                          <SelectContent className="border-zinc-200 dark:border-zinc-800">
+                            <SelectItem value="Permohonan" className="text-xs">Permohonan</SelectItem>
+                            <SelectItem value="Undangan" className="text-xs">Undangan</SelectItem>
+                            <SelectItem value="Instruksi" className="text-xs">Instruksi</SelectItem>
+                            <SelectItem value="Keputusan" className="text-xs">Keputusan</SelectItem>
+                            <SelectItem value="Rekomendasi" className="text-xs">Rekomendasi</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          Penandatangan
+                        </label>
+                        <Input
+                          value={createSenderTitle}
+                          onChange={(e) => setCreateSenderTitle(e.target.value)}
+                          placeholder={isCabangScope ? "Ketua Cabang" : "Ketua Komisariat"}
+                          className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Status Surat Keluar (khusus Mode Edit) */}
+                    {isEditMode && (
+                      <div className="space-y-1 pt-0.5">
+                        <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          Status Arsip Surat Keluar
+                        </label>
+                        <Select
+                          value={normalizeMailStatusForType(editStatus, "KELUAR")}
+                          onValueChange={(val) => {
+                            if (val) setEditStatus(val as MailItem["status"]);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-lg">
+                            <SelectValue placeholder="Pilih Status" />
+                          </SelectTrigger>
+                          <SelectContent className="border-zinc-200 dark:border-zinc-800">
+                            <SelectItem value="Terkirim" className="text-xs">Terkirim</SelectItem>
+                            <SelectItem value="Diproses" className="text-xs">Diproses</SelectItem>
+                            <SelectItem value="Selesai" className="text-xs">Selesai</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   {/* CARD 3: ISIAN VARIABEL TEMPLATE & PLACEHOLDER KUSTOM */}
                   <LetterDocxPlaceholders
                     detailPlaceholders={detailPlaceholders}
                     docxValues={docxValues}
-                    onDocxValueChange={(key, val) =>
+                    onDocxValueChange={(key, val) => {
+                      const lowerKey = key.toLowerCase();
+                      const matchedExcelCol = excelColumns.find(
+                        (c) => c.key === lowerKey || c.originalHeader?.toLowerCase() === lowerKey
+                      );
+                      if (
+                        letterMode === "bulk" &&
+                        excelRowsData[previewBulkIndex] &&
+                        (matchedExcelCol ||
+                          Object.prototype.hasOwnProperty.call(excelRowsData[previewBulkIndex].data, key) ||
+                          Object.prototype.hasOwnProperty.call(excelRowsData[previewBulkIndex].data, lowerKey))
+                      ) {
+                        setExcelRowsData((prev) =>
+                          prev.map((row, rowIdx) => {
+                            if (rowIdx !== previewBulkIndex) return row;
+                            const nextData = {
+                              ...row.data,
+                              [key]: val,
+                              [lowerKey]: val,
+                            };
+                            if (matchedExcelCol) {
+                              nextData[matchedExcelCol.key] = val;
+                              nextData[matchedExcelCol.originalHeader] = val;
+                              nextData[matchedExcelCol.originalHeader.toLowerCase()] = val;
+                            }
+                            return { ...row, data: nextData };
+                          })
+                        );
+                        return;
+                      }
+
                       setDocxValues((prev) => ({
                         ...prev,
                         [key]: val,
-                      }))
-                    }
+                      }));
+                    }}
                     excelColumns={excelColumns}
-                    currentRowData={excelRowsData[previewBulkIndex]?.data || {}}
+                    currentRowData={letterMode === "bulk" ? (excelRowsData[previewBulkIndex]?.data || {}) : {}}
                     humanizePlaceholderKey={humanizePlaceholderKey}
                     isMultilineField={isMultilineField}
                   />
@@ -2127,33 +2737,105 @@ export default function LetterGeneratorDialog({
 
                 {/* Footer Form Kiri */}
                 <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end bg-zinc-50/50 dark:bg-zinc-950/50 px-5 py-3.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
                     <DialogClose render={
-                      <Button type="button" variant="outline" className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isBatchPrinting || isSavingEdit}
+                        className="h-9 text-xs border-zinc-200 dark:border-zinc-800 rounded-lg cursor-pointer"
+                      >
                         Batal
                       </Button>
                     } />
-                    <Button
-                      type="submit"
-                      disabled={isBatchPrinting || (letterMode === "bulk" && parsedBulkRecipients.length === 0)}
-                      className="h-9 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 cursor-pointer flex items-center gap-1.5"
-                    >
-                      {isBatchPrinting ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Menyiapkan {parsedBulkRecipients.length} Dokumen...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>
-                            {letterMode === "bulk"
-                              ? `Terbitkan & Cetak ${parsedBulkRecipients.length} Surat Massal`
-                              : "Terbitkan & Cetak PDF"}
-                          </span>
-                        </>
-                      )}
-                    </Button>
+                    {isEditMode ? (
+                      <>
+                        <Button
+                          type="submit"
+                          disabled={
+                            isSavingEdit ||
+                            isBatchPrinting ||
+                            (letterMode === "bulk" && parsedBulkRecipients.length === 0)
+                          }
+                          onClick={() => {
+                            printAfterSaveRef.current = false;
+                          }}
+                          className="h-9 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 cursor-pointer flex items-center gap-1.5"
+                        >
+                          {savingEditAction === "save" ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>
+                                {letterMode === "bulk"
+                                  ? `Menyimpan ${parsedBulkRecipients.length} Surat...`
+                                  : "Menyimpan..."}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-3.5 h-3.5" />
+                              <span>
+                                {letterMode === "bulk"
+                                  ? `Simpan Revisi (${parsedBulkRecipients.length} Surat)`
+                                  : "Simpan Perubahan"}
+                              </span>
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          disabled={
+                            isSavingEdit ||
+                            isBatchPrinting ||
+                            (letterMode === "bulk" && parsedBulkRecipients.length === 0)
+                          }
+                          onClick={() => {
+                            printAfterSaveRef.current = true;
+                          }}
+                          className="h-9 text-xs font-medium rounded-lg border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-white dark:bg-zinc-900 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer flex items-center gap-1.5"
+                          title="Simpan perubahan dan langsung cetak PDF"
+                        >
+                          {savingEditAction === "save_print" ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Menyiapkan...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>
+                                {letterMode === "bulk"
+                                  ? `Simpan & Cetak (${parsedBulkRecipients.length})`
+                                  : "Simpan & Cetak"}
+                              </span>
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="submit"
+                        disabled={isBatchPrinting || (letterMode === "bulk" && parsedBulkRecipients.length === 0)}
+                        className="h-9 text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 cursor-pointer flex items-center gap-1.5"
+                      >
+                        {isBatchPrinting ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyiapkan {parsedBulkRecipients.length} Dokumen...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>
+                              {letterMode === "bulk"
+                                ? `Terbitkan & Cetak ${parsedBulkRecipients.length} Surat Massal`
+                                : "Terbitkan & Cetak PDF"}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </form>
@@ -2255,8 +2937,73 @@ export default function LetterGeneratorDialog({
               )}
 
 
-              {/* CANVAS KERTAS SURAT (Word Asli / Plain Paper) */}
+              {/* Toolbar Mode Edit Langsung di Kanvas */}
+              {isEditMode && !activeFileBase64 && (
+                <div className="w-full flex items-center justify-between gap-2 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 px-3.5 py-2 rounded-xl shadow-xs shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Edit3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200">
+                      <strong>Mode Edit Langsung:</strong> Klik teks pada lembar surat di bawah
+                      untuk mengubah isi surat secara langsung, atau pilih Template Word di panel
+                      kiri.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Toolbar Cepat Unduh .docx untuk Mode 1 Penerima */}
+              {letterMode === "single" && activeFileBase64 && (
+                <div className="w-full flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3.5 py-2 rounded-xl shadow-xs shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 truncate">
+                      Mode Template Word (.docx) — Nomor {currentPreviewNomor}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadDocxResult}
+                    className="h-7 text-[10px] font-medium text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 flex items-center gap-1 cursor-pointer shrink-0"
+                    title="Unduh surat terisi dalam format Microsoft Word (.docx)"
+                  >
+                    <Download className="w-3 h-3 text-blue-600" />
+                    <span>Unduh .docx</span>
+                  </Button>
+                </div>
+              )}
+
+              {/* CANVAS KERTAS SURAT (Word Asli / Empty State bila belum ada template) */}
               <div className="w-full relative min-h-[600px] flex flex-col items-center justify-start">
+                {!isEditMode && !createTemplate && !activeFileBase64 && !createContent.trim() ? (
+                  <div className="w-full max-w-md my-auto bg-white dark:bg-zinc-900 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-2xl p-8 text-center space-y-3 shadow-2xs">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      Belum Ada Template Surat Dipilih
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      Unggah template Word (<code>.docx</code>) terlebih dahulu untuk menampilkan
+                      lembar surat resmi beserta kop surat dan footer organisasi.
+                    </p>
+                    {onOpenTemplateManager && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(false);
+                          onOpenTemplateManager();
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-9 px-4 rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Bookmark className="w-3.5 h-3.5" />
+                        <span>Kelola Template Word</span>
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+
                 {isRenderingDocx && (
                   <div className="absolute inset-0 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl">
                     <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-xl shadow-lg">
@@ -2271,7 +3018,7 @@ export default function LetterGeneratorDialog({
                 <div
                   id="custom-letter-print-area"
                   ref={canvasTextareaRef}
-                  contentEditable={htmlCanvasMode === "edit"}
+                  contentEditable={!activeFileBase64 && htmlCanvasMode === "edit"}
                   suppressContentEditableWarning
                   onInput={() => {
                     if (canvasTextareaRef.current && htmlCanvasMode === "edit") {
@@ -2293,12 +3040,30 @@ export default function LetterGeneratorDialog({
                     }
                   }}
                   className={
-                    activeFileBase64
+                    !isEditMode && !createTemplate && !activeFileBase64 && !createContent.trim()
+                      ? "hidden"
+                      : isDocxStyledCanvas
                       ? "w-full min-h-[600px] flex flex-col items-center justify-start p-2 sm:p-4 overflow-auto outline-none"
                       : "w-full aspect-[215/330] bg-white text-zinc-900 p-8 sm:p-10 rounded-xl border border-zinc-300 shadow-xl flex flex-col outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 cursor-text overflow-auto"
                   }
-                  style={activeFileBase64 ? undefined : { fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.35" }}
+                  style={isDocxStyledCanvas ? undefined : { fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.35" }}
                 />
+
+                {/* Pratinjau Footer QR Verifikasi Otomatis (Mode Kanvas HTML Edit) */}
+                {!isDocxStyledCanvas &&
+                  (isEditMode || Boolean(createTemplate) || Boolean(createContent.trim())) &&
+                  !(letterMode === "bulk" && htmlCanvasMode === "preview") &&
+                  activeQrMeta && (
+                    <div className="w-full mt-3 bg-white px-5 py-3 rounded-xl border border-zinc-200 shadow-xs flex items-center justify-start">
+                      <SmartImage
+                        src={activeQrMeta.qrDataUrl}
+                        alt="Pratinjau QR Verifikasi Surat"
+                        width={60}
+                        height={60}
+                        className="w-15 h-15 bg-white shrink-0"
+                      />
+                    </div>
+                  )}
               </div>
             </div>
           </div>
@@ -2371,6 +3136,94 @@ export default function LetterGeneratorDialog({
                 className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white font-medium"
               >
                 Simpan &amp; Sisipkan ke Surat
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* DIALOG MODAL: KONFIRMASI NOMOR SURAT DUPLIKAT */}
+        <Dialog
+          open={!!duplicateConfirmMode}
+          onOpenChange={(open) => {
+            if (!open) setDuplicateConfirmMode(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>Peringatan Nomor Surat Duplikat</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400">
+                Nomor surat berikut sudah tercatat di arsip surat keluar tenant ini.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">
+              {duplicateConfirmMode === "bulk" ? (
+                <>
+                  <p>
+                    Ditemukan <b>{bulkDuplicateEntries.length}</b> nomor surat yang sudah digunakan:
+                  </p>
+                  <ul className="space-y-1 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/60 rounded-lg p-2.5 text-[11px] font-mono">
+                    {bulkDuplicateEntries.slice(0, 4).map((d) => (
+                      <li key={d.index} className="truncate">
+                        • {d.nomor} ({d.recipient})
+                      </li>
+                    ))}
+                    {bulkDuplicateEntries.length > 4 && (
+                      <li className="text-zinc-500 font-sans">
+                        ...dan {bulkDuplicateEntries.length - 4} nomor lainnya
+                      </li>
+                    )}
+                  </ul>
+                </>
+              ) : (
+                <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/60 rounded-lg p-2.5 space-y-1">
+                  <p className="font-mono font-bold text-amber-900 dark:text-amber-200">
+                    {currentPreviewNomor}
+                  </p>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                    Sudah digunakan pada surat &ldquo;{duplicateEntry?.subject || "Surat Keluar"}&rdquo;.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-2 flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDuplicateConfirmMode(null)}
+                className="text-xs h-8 cursor-pointer"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleAutoAssignNextNumber();
+                  setDuplicateConfirmMode(null);
+                  toast.success(`Nomor urut diperbarui ke #${getNextSeqNumber(scopedMailHistory)}`);
+                }}
+                className="text-xs h-8 border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 cursor-pointer flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Pakai No. #{getNextSeqNumber(scopedMailHistory)}</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  if (duplicateConfirmMode) {
+                    void executePublish(duplicateConfirmMode);
+                  }
+                }}
+                className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-medium cursor-pointer"
+              >
+                {isEditMode ? "Tetap Simpan" : "Tetap Terbitkan"}
               </Button>
             </DialogFooter>
           </DialogContent>

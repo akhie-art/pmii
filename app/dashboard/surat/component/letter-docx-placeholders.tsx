@@ -47,9 +47,16 @@ export function LetterDocxPlaceholders({
           const colDef = excelColumns.find(
             (c) => c.key === key.toLowerCase() || c.originalHeader?.toLowerCase() === key.toLowerCase()
           );
-          const currentExcelVal = currentRowData[key] || currentRowData[key.toLowerCase()];
+          const hasExcelKey =
+            Object.prototype.hasOwnProperty.call(currentRowData, key) ||
+            Object.prototype.hasOwnProperty.call(currentRowData, key.toLowerCase());
+          const currentExcelVal = currentRowData[key] ?? currentRowData[key.toLowerCase()];
           const sampleVal = colDef?.sampleValue || "";
-          const currentVal = docxValues[key] !== undefined ? docxValues[key] : currentExcelVal || "";
+          const currentVal = hasExcelKey
+            ? currentExcelVal ?? ""
+            : docxValues[key] !== undefined
+            ? docxValues[key]
+            : "";
 
           return (
             <div key={key} className="space-y-1">

@@ -1,4 +1,5 @@
 import React from "react";
+import { SmartImage } from "@/components/ui/smart-image";
 import { Save, Brain, RotateCcw, HelpCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,9 +68,11 @@ export const ScoringModal: React.FC<ScoringModalProps> = ({
                 {selectedEval?.participantName?.substring(0, 2).toUpperCase()}
               </span>
               {selectedEval && getParticipantAvatar(selectedEval) && (
-                <img
+                <SmartImage
                   src={getParticipantAvatar(selectedEval)}
                   alt={selectedEval.participantName}
+                  width={48}
+                  height={48}
                   className="absolute inset-0 w-full h-full object-cover rounded-full"
                   onError={(e) => {
                     (e.currentTarget as HTMLElement).style.display = "none";

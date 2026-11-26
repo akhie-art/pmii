@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { isPrivateStorageRef, resolveStorageUrl } from "@/lib/storage";
 
 export interface DocumentAttachmentProps {
   label: string;
@@ -50,21 +51,38 @@ export function DocumentAttachment({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [hasImgError, setHasImgError] = useState(false);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const [signedUrlMap, setSignedUrlMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    setHasImgError(false);
+    if (!fileUrl || !isPrivateStorageRef(fileUrl)) return;
+    let active = true;
+    resolveStorageUrl(fileUrl).then((resolved) => {
+      if (active && resolved) {
+        setSignedUrlMap((prev) => ({ ...prev, [fileUrl]: resolved }));
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, [fileUrl]);
 
+  const effectiveUrl = fileUrl
+    ? isPrivateStorageRef(fileUrl)
+      ? signedUrlMap[fileUrl] || ""
+      : fileUrl
+    : "";
+  const hasImgError = Boolean(effectiveUrl && failedUrl === effectiveUrl);
+
   const isImage =
-    fileUrl?.startsWith("data:image/") ||
+    effectiveUrl.startsWith("data:image/") ||
     Boolean(fileName?.match(/\.(jpg|jpeg|png|webp)$/i)) ||
     Boolean(fileUrl?.match(/\.(jpg|jpeg|png|webp)(\?.*)?$/i));
 
   const isPdf =
     Boolean(fileName?.match(/\.pdf$/i)) ||
     Boolean(fileUrl?.match(/\.pdf(\?.*)?$/i)) ||
-    fileUrl?.startsWith("data:application/pdf");
+    effectiveUrl.startsWith("data:application/pdf");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,7 +154,7 @@ export function DocumentAttachment({
       />
 
       {hasFile ? (
-        fileUrl && isImage && !hasImgError ? (
+        effectiveUrl && isImage && !hasImgError ? (
           /* HANYA TAMPIL GAMBAR LANGSUNG */
           <div className="space-y-2">
             <div
@@ -151,10 +169,10 @@ export function DocumentAttachment({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={fileUrl}
+                src={effectiveUrl}
                 alt={fileName || "Kartu Tanda Mahasiswa (KTM)"}
                 className="w-full h-auto max-h-56 object-contain mx-auto transition-transform duration-200 group-hover:scale-[1.01]"
-                onError={() => setHasImgError(true)}
+                onError={() => setFailedUrl(effectiveUrl)}
               />
               <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-medium gap-1.5 backdrop-blur-[1px]">
                 <ZoomIn className="w-4 h-4" />
@@ -289,16 +307,16 @@ export function DocumentAttachment({
 
           {/* Modal Preview Body */}
           <div className="my-1 max-h-[75vh] overflow-auto flex items-center justify-center rounded-md bg-zinc-50 dark:bg-zinc-950 p-1.5 sm:p-2">
-            {isImage && fileUrl ? (
+            {isImage && effectiveUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={fileUrl}
+                src={effectiveUrl}
                 alt={fileName || "Pratinjau Dokumen"}
                 className="max-h-[70vh] max-w-full object-contain rounded-md"
               />
-            ) : isPdf && fileUrl ? (
+            ) : isPdf && effectiveUrl ? (
               <iframe
-                src={fileUrl}
+                src={effectiveUrl}
                 title={fileName || "PDF Preview"}
                 className="w-full h-[60vh] rounded border-0"
               />

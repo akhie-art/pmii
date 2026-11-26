@@ -70,8 +70,8 @@ export default function PenilaianPesertaPage() {
 
   // Load Data and Auto-Sync Participants from Registrations
   useEffect(() => {
-    setMounted(true);
     const loadData = async () => {
+      setMounted(true);
       try {
         const [eventsData, regsData, evalsData, cadresData] = await Promise.all([
           db.getEvents([]),
@@ -138,18 +138,20 @@ export default function PenilaianPesertaPage() {
     };
 
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      let uObj: any = null;
-      if (stored) {
-        try {
-          uObj = JSON.parse(stored);
-          setCurrentUser(uObj);
-        } catch (e) {
-          console.error("User parse error:", e);
+      queueMicrotask(() => {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        let uObj: any = null;
+        if (stored) {
+          try {
+            uObj = JSON.parse(stored);
+            setCurrentUser(uObj);
+          } catch (e) {
+            console.error("User parse error:", e);
+          }
         }
-      }
-      const curTenant = getActiveTenant(uObj) || "ALL";
-      setActiveTenant(curTenant);
+        const curTenant = getActiveTenant(uObj) || "ALL";
+        setActiveTenant(curTenant);
+      });
 
       const handleTenant = (e: any) => {
         setActiveTenant(e.detail?.activeTenant || "ALL");

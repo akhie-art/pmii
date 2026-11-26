@@ -1,22 +1,50 @@
 import type { Metadata } from "next";
-import { db } from "@/lib/db";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { isValidUUID } from "@/lib/utils";
 import { BacaArtikelContent } from "./_components/BacaArtikelContent";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+interface ArticleMetadataRow {
+  id: string;
+  slug?: string;
+  title: string;
+  excerpt?: string;
+  image?: string;
+  thumbnail?: string;
+  author?: string;
+  authorName?: string;
+  created_at?: string;
+  createdAt?: string;
+}
+
+async function fetchArticleMetadataBySlug(slug: string): Promise<ArticleMetadataRow | null> {
+  try {
+    const serverClient = await createSupabaseServerClient();
+    if (!serverClient) return null;
+
+    const column = isValidUUID(slug) ? "id" : "slug";
+    const { data, error } = await serverClient
+      .from("articles")
+      .select("id, slug, title, excerpt, image, author, created_at")
+      .eq(column, slug)
+      .eq("status", "DITAMPILKAN")
+      .maybeSingle();
+
+    if (!error && data) {
+      return data as ArticleMetadataRow;
+    }
+  } catch {
+    // Graceful fallback when Supabase is not configured in build/preview environments
+  }
+  return null;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  let article: any = null;
-
-  try {
-    const remoteArticles = await db.getArticles();
-    const found = remoteArticles.find(
-      (a) => a.slug === slug || a.id === slug
-    );
-    if (found) article = found;
-  } catch {}
+  const article = await fetchArticleMetadataBySlug(slug);
 
   if (!article) {
     return {
@@ -42,7 +70,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           alt: article.title,
         },
       ],
-      publishedTime: article.createdAt,
+      publishedTime: article.created_at || article.createdAt,
       authors: [article.authorName || article.author || "Sahabat PMII"],
     },
     twitter: {

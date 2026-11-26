@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   GraduationCap,
   Download,
@@ -45,6 +46,7 @@ import { QuizModal } from "./_components/QuizModal";
 import { DeleteConfirmationModal } from "./_components/DeleteConfirmationModal";
 
 export default function KaderisasiPage() {
+  const router = useRouter();
   const { showSuccess, showError, FeedbackModalComponent } = useFeedbackModal();
   const toast = {
     success: (msg: string) => showSuccess("Berhasil Disimpan", msg),
@@ -136,17 +138,6 @@ export default function KaderisasiPage() {
   // Load from Supabase on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      if (stored) {
-        try {
-          const u = JSON.parse(stored);
-          setCurrentUser(u);
-          setActiveTenant(getActiveTenant(u) || "ALL");
-        } catch (e) {
-          console.error("Error reading user session:", e);
-        }
-      }
-
       const handleTenant = (e: any) => {
         setActiveTenant(e.detail?.activeTenant || "ALL");
       };
@@ -157,6 +148,18 @@ export default function KaderisasiPage() {
 
   useEffect(() => {
     const loadData = async () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (stored) {
+          try {
+            const u = JSON.parse(stored);
+            setCurrentUser(u);
+            setActiveTenant(getActiveTenant(u) || "ALL");
+          } catch (e) {
+            console.error("Error reading user session:", e);
+          }
+        }
+      }
       try {
         const [kadList, kurMap] = await Promise.all([
           db.getKaderisasi(),
@@ -742,7 +745,7 @@ export default function KaderisasiPage() {
             Belum ada agenda kaderisasi di tabel kaderisasi. Silakan buat agenda kaderisasi terlebih dahulu di menu Sistem Kaderisasi.
           </p>
           <Button
-            onClick={() => window.location.href = "/dashboard/kaderisasi"}
+            onClick={() => router.push("/dashboard/kaderisasi")}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg h-9 px-4 cursor-pointer shadow-none"
           >
             Buka Sistem Kaderisasi

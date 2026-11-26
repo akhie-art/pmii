@@ -75,11 +75,12 @@ export function RepeatableOrgSection({
   const [items, setItems] = useState<OrgItem[]>(() => parseOrgItems(rawString));
 
   // Sinkronisasi state lokal hanya saat tidak sedang mengedit (misal switch data atau batal edit)
-  useEffect(() => {
-    if (!isEditing) {
-      setItems(parseOrgItems(rawString));
-    }
-  }, [rawString, isEditing]);
+  const syncKey = !isEditing ? rawString : null;
+  const [prevSyncKey, setPrevSyncKey] = useState<string | null>(syncKey);
+  if (syncKey !== null && syncKey !== prevSyncKey) {
+    setPrevSyncKey(syncKey);
+    setItems(parseOrgItems(rawString));
+  }
 
   const handleUpdateItem = (index: number, field: keyof OrgItem, val: string) => {
     const updated = items.map((item, idx) =>

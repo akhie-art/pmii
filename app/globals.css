@@ -130,6 +130,9 @@ html {
   * {
     @apply border-border outline-ring/50;
   }
+  .docx-wrapper * {
+    border-color: #000000;
+  }
   body {
     @apply bg-background text-foreground font-sans;
   }
@@ -167,7 +170,7 @@ html {
   }
 }
 
-/* Styling DOCX Preview agar persis tampilan Word asli */
+/* Styling DOCX Preview agar persis tampilan Microsoft Word / Google Docs asli (1:1) */
 .docx-wrapper {
   background: transparent !important;
   padding: 0 !important;
@@ -178,12 +181,50 @@ html {
 }
 
 .docx-wrapper > section.docx {
-  background: white !important;
-  color: #111 !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08) !important;
-  margin-bottom: 24px !important;
-  border-radius: 2px !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #d2d6dc !important;
+  box-shadow: 0 1px 3px 1px rgba(60, 64, 67, 0.15) !important;
+  margin-bottom: 20px !important;
+  border-radius: 1px !important;
   box-sizing: border-box !important;
+  /* Pulihkan kerapatan baris & perilaku teks standar Word/Google Docs dari reset Tailwind Preflight (1.5) */
+  line-height: 1.08;
+  font-family: "Calibri", var(--font-calibri, "Carlito"), Arial, sans-serif;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+.docx-wrapper .docx {
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+}
+
+.docx-wrapper img {
+  display: inline-block;
+  max-width: none;
+}
+
+.docx-wrapper svg {
+  overflow: visible !important;
+}
+
+.docx-wrapper svg:has(line) {
+  min-height: 4px !important;
+}
+
+.docx-wrapper p:empty[style*="border-top"][style*="border-bottom"] {
+  min-height: 2px !important;
+  height: 2px !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+}
+
+.docx-wrapper p:empty[style*="border-bottom"]:not([style*="border-top"]) {
+  min-height: 0px !important;
+  height: 0px !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
 }
 
 /* Styling fallback hanya untuk Canvas manual tanpa docx */

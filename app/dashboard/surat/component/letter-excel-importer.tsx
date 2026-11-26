@@ -52,7 +52,24 @@ export function LetterExcelImporter({
       ...excelColumns.map((c) => c.key),
       ...activePlaceholders
     ])
-  ).filter((k) => !["no", "hal", "kota", "hari_tanggal"].includes(k.toLowerCase()));
+  ).filter(
+    (k) =>
+      ![
+        "no",
+        "no_surat",
+        "nomor_surat",
+        "hal",
+        "perihal_surat",
+        "kota",
+        "kota_surat",
+        "hari_tanggal",
+        "tanggal_surat",
+        "tujuan",
+        "tujuan_surat",
+        "nama_penerima",
+        "kepada",
+      ].includes(k.toLowerCase())
+  );
 
   return (
     <div className="space-y-2">

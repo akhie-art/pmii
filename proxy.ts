@@ -4,6 +4,7 @@ import {
   isUserAdmin,
   isUserInstruktur,
   isUserPengurus,
+  isUserSuperAdmin,
   getTargetStaffPrefix,
 } from "@/lib/auth-helpers";
 
@@ -18,17 +19,56 @@ const STAFF_PREFIXES = [
   "/super_admin",
 ];
 
+const CABANG_ONLY_PREFIXES = ["/admin", "/cabang", "/pc", "/superadmin", "/super_admin"];
+const SUPERADMIN_ONLY_PREFIXES = ["/superadmin", "/super_admin"];
+
 const MEMBER_PREFIXES = ["/anggota", "/kader", "/peserta", "/onboarding"];
 
-function matchesPrefix(pathname: string, prefixes: string[]): boolean {
+export function matchesPrefix(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-function applySecurityHeaders(response: NextResponse): NextResponse {
+export function buildContentSecurityPolicy(supabaseUrl?: string): string {
+  const isDev = process.env.NODE_ENV === "development";
+  let supabaseOrigin = "";
+  try {
+    if (supabaseUrl) {
+      supabaseOrigin = new URL(supabaseUrl).origin;
+    }
+  } catch {
+    supabaseOrigin = "";
+  }
+
+  const supabaseHttps = supabaseOrigin || "https://*.supabase.co";
+  const supabaseWs = supabaseOrigin ? supabaseOrigin.replace(/^http/, "ws") : "wss://*.supabase.co";
+
+  const directives = [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `img-src 'self' data: blob: https://*.supabase.co ${supabaseOrigin} https://lh3.googleusercontent.com`.trim(),
+    "font-src 'self' data: https://fonts.gstatic.com",
+    `connect-src 'self' ${supabaseHttps} ${supabaseWs} https://*.supabase.co wss://*.supabase.co`,
+    `frame-src 'self' blob: data: ${supabaseHttps} https://*.supabase.co`,
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+  ];
+
+  return directives.join("; ");
+}
+
+export function applySecurityHeaders(response: NextResponse, supabaseUrl?: string): NextResponse {
   response.headers.set("X-Frame-Options", "SAMEORIGIN");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  response.headers.set("Content-Security-Policy", buildContentSecurityPolicy(supabaseUrl));
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   return response;
 }
 
@@ -48,7 +88,7 @@ export async function proxy(request: NextRequest) {
   const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 
   if (!supabaseUrl || !supabaseAnonKey || (!isStaffRoute && !isMemberRoute)) {
-    return applySecurityHeaders(response);
+    return applySecurityHeaders(response, supabaseUrl);
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -78,16 +118,15 @@ export async function proxy(request: NextRequest) {
   if (!user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", `${pathname}${search}`);
-    return applySecurityHeaders(NextResponse.redirect(loginUrl));
+    return applySecurityHeaders(NextResponse.redirect(loginUrl), supabaseUrl);
   }
 
-  // Baca peran otoritatif dari app_metadata (tidak bisa dimodifikasi user dari klien)
-  const rawRole = String(
-    user.app_metadata?.role || user.user_metadata?.role || "anggota"
-  )
+  // Baca peran HANYA dari app_metadata yang tamper-proof (TIDAK pernah fallback ke user_metadata!)
+  const rawRole = String(user.app_metadata?.role || "anggota")
     .toLowerCase()
     .trim();
 
+  const isSuperAdmin = isUserSuperAdmin(rawRole);
   const isAdmin = isUserAdmin(rawRole);
   const isPengurus = isUserPengurus(rawRole);
   const isInstruktur = isUserInstruktur(rawRole);
@@ -96,27 +135,50 @@ export async function proxy(request: NextRequest) {
   if (isStaffRoute) {
     if (!isStaff) {
       const target = rawRole === "peserta" ? "/peserta" : "/anggota";
-      return applySecurityHeaders(NextResponse.redirect(new URL(target, request.url)));
+      return applySecurityHeaders(NextResponse.redirect(new URL(target, request.url)), supabaseUrl);
     }
 
     const staffPrefix = getTargetStaffPrefix(rawRole);
 
-    if (isInstruktur && (pathname.startsWith("/admin") || pathname.startsWith("/pengurus"))) {
-      const rewritten = pathname.replace(/^\/(admin|pengurus)/, "/instruktur");
-      return applySecurityHeaders(NextResponse.redirect(new URL(`${rewritten}${search}`, request.url)));
+    // Blokir prefix khusus superadmin bagi non-superadmin
+    if (!isSuperAdmin && matchesPrefix(pathname, SUPERADMIN_ONLY_PREFIXES)) {
+      const rewritten = pathname.replace(/^\/(superadmin|super_admin)/, staffPrefix);
+      return applySecurityHeaders(
+        NextResponse.redirect(new URL(`${rewritten}${search}`, request.url)),
+        supabaseUrl
+      );
     }
 
-    if (isPengurus && (pathname.startsWith("/admin") || pathname.startsWith("/instruktur"))) {
-      const rewritten = pathname.replace(/^\/(admin|instruktur)/, "/pengurus");
-      return applySecurityHeaders(NextResponse.redirect(new URL(`${rewritten}${search}`, request.url)));
+    // Instruktur tidak boleh mengakses prefix cabang/admin/pengurus
+    if (isInstruktur && (matchesPrefix(pathname, CABANG_ONLY_PREFIXES) || matchesPrefix(pathname, ["/pengurus"]))) {
+      const rewritten = pathname.replace(
+        /^\/(admin|cabang|pc|superadmin|super_admin|pengurus)/,
+        "/instruktur"
+      );
+      return applySecurityHeaders(
+        NextResponse.redirect(new URL(`${rewritten}${search}`, request.url)),
+        supabaseUrl
+      );
+    }
+
+    // Pengurus komisariat tidak boleh mengakses prefix cabang/admin/instruktur
+    if (isPengurus && (matchesPrefix(pathname, CABANG_ONLY_PREFIXES) || matchesPrefix(pathname, ["/instruktur"]))) {
+      const rewritten = pathname.replace(
+        /^\/(admin|cabang|pc|superadmin|super_admin|instruktur)/,
+        "/pengurus"
+      );
+      return applySecurityHeaders(
+        NextResponse.redirect(new URL(`${rewritten}${search}`, request.url)),
+        supabaseUrl
+      );
     }
 
     if (pathname === "/dashboard" || pathname === "/dashboard/") {
-      return applySecurityHeaders(NextResponse.redirect(new URL(staffPrefix, request.url)));
+      return applySecurityHeaders(NextResponse.redirect(new URL(staffPrefix, request.url)), supabaseUrl);
     }
   }
 
-  return applySecurityHeaders(response);
+  return applySecurityHeaders(response, supabaseUrl);
 }
 
 export const config = {

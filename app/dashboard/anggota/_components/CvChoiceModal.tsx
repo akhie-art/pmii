@@ -33,7 +33,8 @@ export default function CvChoiceModal({
 
   useEffect(() => {
     if (isOpen && typeof window !== "undefined") {
-      setHasCustomTemplate(Boolean(localStorage.getItem(CV_TEMPLATE_STORAGE_KEY)));
+      const exists = Boolean(localStorage.getItem(CV_TEMPLATE_STORAGE_KEY));
+      queueMicrotask(() => setHasCustomTemplate(exists));
     }
   }, [isOpen]);
 

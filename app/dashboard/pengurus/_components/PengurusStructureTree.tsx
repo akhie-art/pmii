@@ -1,4 +1,5 @@
 import React from "react";
+import { SmartImage } from "@/components/ui/smart-image";
 import {
   GitFork,
   Plus,
@@ -187,9 +188,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 {ketua && getMemberAvatar(ketua) ? (
-                  <img
+                  <SmartImage
                     src={getMemberAvatar(ketua)}
                     alt={ketua.name}
+                    width={44}
+                    height={44}
                     className="w-11 h-11 rounded-full object-cover border border-amber-500/30 shrink-0 shadow-xs"
                   />
                 ) : (
@@ -256,9 +259,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2.5 min-w-0">
                           {getMemberAvatar(s) ? (
-                            <img
+                            <SmartImage
                               src={getMemberAvatar(s)}
                               alt={s.name}
+                              width={36}
+                              height={36}
                               className="w-9 h-9 rounded-full object-cover border border-blue-500/30 shrink-0"
                             />
                           ) : (
@@ -352,9 +357,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2.5 min-w-0">
                           {getMemberAvatar(b) ? (
-                            <img
+                            <SmartImage
                               src={getMemberAvatar(b)}
                               alt={b.name}
+                              width={36}
+                              height={36}
                               className="w-9 h-9 rounded-full object-cover border border-emerald-500/30 shrink-0"
                             />
                           ) : (
@@ -520,9 +527,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                   <div className="flex items-center justify-between font-semibold text-zinc-800 dark:text-zinc-200">
                     <div className="flex items-center gap-2 min-w-0">
                       {headOfDiv && getMemberAvatar(headOfDiv) ? (
-                        <img
+                        <SmartImage
                           src={getMemberAvatar(headOfDiv)}
                           alt={headOfDiv.name}
+                          width={28}
+                          height={28}
                           className="w-7 h-7 rounded-full object-cover border border-zinc-300 dark:border-zinc-700 shrink-0"
                         />
                       ) : headOfDiv ? (
@@ -578,9 +587,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                             className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] group/item"
                           >
                             {staffAvatar ? (
-                              <img
+                              <SmartImage
                                 src={staffAvatar}
                                 alt={staff.name}
+                                width={16}
+                                height={16}
                                 className="w-4 h-4 rounded-full object-cover"
                               />
                             ) : (
@@ -772,9 +783,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                 <div className="bg-white dark:bg-zinc-900 px-6 py-4 rounded-[10px] text-center w-64 space-y-2 flex flex-col items-center">
                   <div className="relative">
                     {getMemberAvatar(ketua) ? (
-                      <img
+                      <SmartImage
                         src={getMemberAvatar(ketua)}
                         alt={ketua.name}
+                        width={56}
+                        height={56}
                         className="w-14 h-14 rounded-full object-cover border-2 border-amber-500 shadow-sm"
                       />
                     ) : (
@@ -881,9 +894,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     >
                       <div className="bg-white dark:bg-zinc-900 px-5 py-3.5 rounded-[10px] text-center w-56 space-y-1.5 flex flex-col items-center">
                         {getMemberAvatar(s) ? (
-                          <img
+                          <SmartImage
                             src={getMemberAvatar(s)}
                             alt={s.name}
+                            width={44}
+                            height={44}
                             className="w-11 h-11 rounded-full object-cover border-2 border-blue-500/40 shadow-xs"
                           />
                         ) : (
@@ -996,9 +1011,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                     >
                       <div className="bg-white dark:bg-zinc-900 px-5 py-3.5 rounded-[10px] text-center w-56 space-y-1.5 flex flex-col items-center">
                         {getMemberAvatar(b) ? (
-                          <img
+                          <SmartImage
                             src={getMemberAvatar(b)}
                             alt={b.name}
+                            width={44}
+                            height={44}
                             className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500/40 shadow-xs"
                           />
                         ) : (
@@ -1176,9 +1193,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                         {headOfDiv ? (
                           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 rounded-lg text-center space-y-1.5 shadow-none transition-colors hover:border-blue-500/40 flex flex-col items-center">
                             {getMemberAvatar(headOfDiv) ? (
-                              <img
+                              <SmartImage
                                 src={getMemberAvatar(headOfDiv)}
                                 alt={headOfDiv.name}
+                                width={40}
+                                height={40}
                                 className="w-10 h-10 rounded-full object-cover border border-zinc-300 dark:border-zinc-700 shadow-2xs"
                               />
                             ) : (
@@ -1274,9 +1293,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                                 >
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
                                     {staffAvatar ? (
-                                      <img
+                                      <SmartImage
                                         src={staffAvatar}
                                         alt={staff.name}
+                                        width={24}
+                                        height={24}
                                         className="w-6 h-6 rounded-full object-cover border border-zinc-300 dark:border-zinc-700 shrink-0"
                                       />
                                     ) : (
@@ -1402,9 +1423,11 @@ export const PengurusStructureTree: React.FC<PengurusStructureTreeProps> = ({
                                       <div className="bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/40 rounded p-1.5 flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                           {getMemberAvatar(kabiro) ? (
-                                            <img
+                                            <SmartImage
                                               src={getMemberAvatar(kabiro)}
                                               alt={kabiro.name}
+                                              width={20}
+                                              height={20}
                                               className="w-5 h-5 rounded-full object-cover shrink-0"
                                             />
                                           ) : (

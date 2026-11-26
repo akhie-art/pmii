@@ -12,7 +12,10 @@ export interface MailItem {
   senderLocation: string;
   dateIndo: string;
   commissariat?: string;
-  fileUrl?: string;
-  fileName?: string;
-  fileSize?: string;
+  tenant_id?: string | null;
+  komisariat_id?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: string | null;
+  created_at?: string;
 }

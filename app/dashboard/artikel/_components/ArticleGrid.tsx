@@ -24,12 +24,9 @@ export const ArticleGrid: React.FC<ArticleGridProps> = ({
   const [currentPage, setCurrentPage] = React.useState(1);
   const pageSize = 9;
   const totalPages = Math.ceil(articles.length / pageSize) || 1;
-
-  React.useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(1);
-    }
-  }, [articles.length, totalPages, currentPage]);
+  if (currentPage > totalPages) {
+    setCurrentPage(1);
+  }
 
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedArticles = articles.slice(startIndex, startIndex + pageSize);

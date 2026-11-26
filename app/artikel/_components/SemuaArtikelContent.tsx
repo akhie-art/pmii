@@ -33,8 +33,10 @@ export function SemuaArtikelContent() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setMounted(true);
-    setDarkMode(document.documentElement.classList.contains("dark"));
+    queueMicrotask(() => {
+      setMounted(true);
+      setDarkMode(document.documentElement.classList.contains("dark"));
+    });
 
     db.getArticles()
       .then((data) => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -82,10 +84,8 @@ export default function OnboardingPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("PMII_THEME") || "dark";
-      setDarkMode(savedTheme === "dark");
       if (savedTheme === "dark") {
         document.documentElement.classList.add("dark");
       } else {
@@ -101,8 +101,12 @@ export default function OnboardingPage() {
 
       try {
         const user = JSON.parse(savedUserStr);
-        setCurrentUser(user);
-        if (user.komisariat_id) setSelectedKomisariatId(user.komisariat_id);
+        queueMicrotask(() => {
+          setMounted(true);
+          setDarkMode(savedTheme === "dark");
+          setCurrentUser(user);
+          if (user.komisariat_id) setSelectedKomisariatId(user.komisariat_id);
+        });
       } catch {
         router.replace("/login");
         return;
@@ -338,9 +342,11 @@ export default function OnboardingPage() {
               <div className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 shrink-0">
                 <div className="w-10 h-10 rounded-full bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm shrink-0 border border-blue-500/20 overflow-hidden">
                   {currentUser?.avatar ? (
-                    <img
+                    <SmartImage
                       src={currentUser.avatar}
                       alt={currentUser.name}
+                      width={40}
+                      height={40}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -424,9 +430,11 @@ export default function OnboardingPage() {
                                 }`}
                               >
                                 {k.logo ? (
-                                  <img
+                                  <SmartImage
                                     src={k.logo}
                                     alt={k.name}
+                                    width={36}
+                                    height={36}
                                     className="w-full h-full object-contain p-1 rounded-xl"
                                   />
                                 ) : (

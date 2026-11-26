@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -7,6 +9,7 @@ import QRCode from "qrcode";
 import { db, type Anggota, type CadreFollowUp } from "@/lib/db";
 import { exportCardAsImage } from "@/lib/cardExporter";
 import { supabase, isSupabaseConfigured, deleteStorageFile } from "@/lib/supabase";
+import { uploadPrivateDocument } from "@/lib/storage";
 import {
   User,
   GraduationCap,
@@ -662,16 +665,15 @@ export default function ProfilPage() {
 
     try {
       if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop() || "pdf";
         const cadreId = currentCadre?.id || "cadre";
-        const filePath = `ktm/${cadreId}-${Date.now()}.${fileExt}`;
+        const tenantId = currentCadre?.tenant_id || currentCadre?.komisariat_id || null;
+        const uploaded = await uploadPrivateDocument(file, {
+          category: "ktm",
+          tenantId,
+          prefix: cadreId,
+        });
 
-        const { error: uploadError } = await supabase.storage
-          .from("materials")
-          .upload(filePath, file, { cacheControl: "3600", upsert: true });
-
-        if (uploadError) {
-          console.error("Supabase upload error for KTM:", uploadError);
+        if (!uploaded) {
           // Fallback to base64
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -685,16 +687,14 @@ export default function ProfilPage() {
           return;
         }
 
-        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
-
         // Hapus file KTM lama di storage jika ada penggantian berkas
-        if (ktmFileUrl && ktmFileUrl !== data.publicUrl) {
+        if (ktmFileUrl && ktmFileUrl !== uploaded.storageRef) {
           deleteStorageFile(ktmFileUrl).catch(() => {});
         }
 
         setKtmName(file.name);
-        setKtmFileUrl(data.publicUrl);
-        toast.success(`Berkas KTM (${file.name}) berhasil diunggah ke storage cloud.`, { id: toastId });
+        setKtmFileUrl(uploaded.storageRef);
+        toast.success(`Berkas KTM (${file.name}) berhasil diunggah secara privat & aman.`, { id: toastId });
       } else {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -1316,9 +1316,11 @@ export default function ProfilPage() {
 
               <div className="relative z-10 flex items-center gap-3">
                 {avatar ? (
-                  <img
+                  <SmartImage
                     src={avatar}
                     alt="Foto Profil"
+                    width={44}
+                    height={44}
                     className="w-11 h-11 rounded-md object-cover border border-zinc-700 shrink-0"
                   />
                 ) : (

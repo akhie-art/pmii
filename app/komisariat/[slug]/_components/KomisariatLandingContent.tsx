@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -49,6 +51,9 @@ import type { Article, EventActivity } from "@/lib/db";
 import { getKomisariatSlug, normalizeTenantName } from "@/lib/tenancy";
 import { DEFAULT_COMMISSARIATS } from "@/lib/services/defaults";
 import { CommissariatList, getKomisariatBph, KomisariatBphData, KomisariatGalleryItem } from "@/app/dashboard/komisariat/_components/types";
+import { KomisariatEventsSection } from "./KomisariatEventsSection";
+import { KomisariatGallerySection } from "./KomisariatGallerySection";
+import { KomisariatArticlesSection, KomisariatFooter } from "./KomisariatArticlesAndFooter";
 
 interface Props {
   slug: string;
@@ -99,8 +104,10 @@ export function KomisariatLandingContent({ slug }: Props) {
   }, []);
 
   useEffect(() => {
-    setMounted(true);
-    setDarkMode(document.documentElement.classList.contains("dark"));
+    queueMicrotask(() => {
+      setMounted(true);
+      setDarkMode(document.documentElement.classList.contains("dark"));
+    });
 
     const loadData = async () => {
       try {
@@ -222,7 +229,7 @@ export function KomisariatLandingContent({ slug }: Props) {
   }, [gallery, selectedGalleryCategory]);
 
   // Helper avatar resolution
-  const getAvatar = (name?: string, anggota_id?: string | null, directAvatar?: string) => {
+  const getAvatar = React.useCallback((name?: string, anggota_id?: string | null, directAvatar?: string) => {
     if (directAvatar) return directAvatar;
     if (!name && !anggota_id) return "";
     if (anggota_id) {
@@ -236,14 +243,14 @@ export function KomisariatLandingContent({ slug }: Props) {
       return cClean === cleanName || (cleanName && cClean.includes(cleanName)) || (cleanName && cleanName.includes(cClean));
     });
     return byName?.avatar || (byName as any)?.foto || (byName as any)?.photo || (byName as any)?.image || "";
-  };
+  }, [cadres]);
 
-  const getGender = (name?: string, anggota_id?: string | null): "Sahabat" | "Sahabati" => {
+  const getGender = React.useCallback((name?: string, anggota_id?: string | null): "Sahabat" | "Sahabati" => {
     if (!name && !anggota_id) return "Sahabat";
     const matched = cadres.find((c) => (anggota_id && c.id === anggota_id) || c.name?.toLowerCase().trim() === name?.toLowerCase().trim());
     const g = matched?.gender || "Sahabat";
     return g === "Perempuan" || g === "Sahabati" ? "Sahabati" : "Sahabat";
-  };
+  }, [cadres]);
 
   const getInitials = (name?: string) => {
     if (!name) return "PK";
@@ -588,7 +595,8 @@ export function KomisariatLandingContent({ slug }: Props) {
     bidangGroups,
     biroGroups,
     boardMembers,
-    cadres,
+    getAvatar,
+    getGender,
   ]);
 
   const filteredDirectoryMembers = useMemo(() => {
@@ -746,9 +754,12 @@ export function KomisariatLandingContent({ slug }: Props) {
 
               <a href="#top" className="flex items-center gap-2.5 min-w-0" aria-label={`${komisariat.name} - Beranda`}>
                 {komisariat.logo && !logoBroken ? (
-                  <img
+                  <SmartImage
                     src={komisariat.logo}
                     alt={komisariat.name}
+                    width={36}
+                    height={36}
+                    preload
                     onError={() => setLogoBroken(true)}
                     className="w-9 h-9 object-contain shrink-0"
                   />
@@ -945,9 +956,11 @@ export function KomisariatLandingContent({ slug }: Props) {
               <div className="rounded-2xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur border border-zinc-200/80 dark:border-zinc-800 shadow-lg shadow-zinc-900/5 p-3.5">
                 <div className="flex items-center gap-3">
                   {heroChairmanAvatar ? (
-                    <img
+                    <SmartImage
                       src={heroChairmanAvatar}
                       alt={chairmanName}
+                      width={40}
+                      height={40}
                       className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
                     />
                   ) : (
@@ -1261,9 +1274,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                       {/* Avatar */}
                       <div className="relative w-16 h-16 mx-auto mb-2.5">
                         {getAvatar(chairmanName, chairmanMember?.anggota_id) ? (
-                          <img
+                          <SmartImage
                             src={getAvatar(chairmanName, chairmanMember?.anggota_id)}
                             alt={chairmanName}
+                            width={64}
+                            height={64}
                             className="w-16 h-16 rounded-full object-cover ring-2 ring-blue-500/40 shadow-xs"
                           />
                         ) : (
@@ -1320,9 +1335,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                             <Card className="w-full p-3.5 bg-white dark:bg-zinc-900 border border-blue-200/80 dark:border-blue-900/50 rounded-xl shadow-none text-center hover:border-blue-500/40 transition-colors">
                               <div className="relative w-11 h-11 mx-auto mb-2">
                                 {av ? (
-                                  <img
+                                  <SmartImage
                                     src={av}
                                     alt={wk.name}
+                                    width={44}
+                                    height={44}
                                     className="w-11 h-11 rounded-full object-cover ring-2 ring-blue-500/20"
                                   />
                                 ) : (
@@ -1382,9 +1399,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                     <div>
                       <div className="relative w-13 h-13 mx-auto mb-2.5">
                         {getAvatar(secretaryName, secretaryMember?.anggota_id) ? (
-                          <img
+                          <SmartImage
                             src={getAvatar(secretaryName, secretaryMember?.anggota_id)}
                             alt={secretaryName}
+                            width={52}
+                            height={52}
                             className="w-13 h-13 rounded-full object-cover ring-2 ring-indigo-500/20"
                           />
                         ) : (
@@ -1422,9 +1441,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                                 className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-200/50 dark:border-indigo-900/40"
                               >
                                 {avatar ? (
-                                  <img
+                                  <SmartImage
                                     src={avatar}
                                     alt={ws.name}
+                                    width={20}
+                                    height={20}
                                     className="w-5 h-5 rounded-full object-cover ring-1 ring-indigo-500/30 shrink-0"
                                   />
                                 ) : (
@@ -1448,9 +1469,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                     <div>
                       <div className="relative w-13 h-13 mx-auto mb-2.5">
                         {getAvatar(treasurerName, treasurerMember?.anggota_id) ? (
-                          <img
+                          <SmartImage
                             src={getAvatar(treasurerName, treasurerMember?.anggota_id)}
                             alt={treasurerName}
+                            width={52}
+                            height={52}
                             className="w-13 h-13 rounded-full object-cover ring-2 ring-emerald-500/20"
                           />
                         ) : (
@@ -1488,9 +1511,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                                 className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200/50 dark:border-emerald-900/40"
                               >
                                 {avatar ? (
-                                  <img
+                                  <SmartImage
                                     src={avatar}
                                     alt={wb.name}
+                                    width={20}
+                                    height={20}
                                     className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-500/30 shrink-0"
                                   />
                                 ) : (
@@ -1545,9 +1570,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                             return (
                               <div key={mIdx} className="flex items-center gap-2.5">
                                 {avatar ? (
-                                  <img
+                                  <SmartImage
                                     src={avatar}
                                     alt={m.name}
+                                    width={28}
+                                    height={28}
                                     className="w-7 h-7 rounded-full object-cover ring-1 ring-blue-500/30 shrink-0"
                                   />
                                 ) : (
@@ -1614,9 +1641,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                             return (
                               <div key={mIdx} className="flex items-center gap-2.5">
                                 {avatar ? (
-                                  <img
+                                  <SmartImage
                                     src={avatar}
                                     alt={m.name}
+                                    width={28}
+                                    height={28}
                                     className="w-7 h-7 rounded-full object-cover ring-1 ring-indigo-500/30 shrink-0"
                                   />
                                 ) : (
@@ -1741,9 +1770,11 @@ export function KomisariatLandingContent({ slug }: Props) {
                   >
                     <div className="relative w-12 h-12 shrink-0">
                       {member.avatar ? (
-                        <img
+                        <SmartImage
                           src={member.avatar}
                           alt={member.name}
+                          width={48}
+                          height={48}
                           className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500/20 group-hover:ring-blue-500/50 transition-all"
                         />
                       ) : (
@@ -1810,489 +1841,42 @@ export function KomisariatLandingContent({ slug }: Props) {
       </section>
 
       {/* 5. AGENDA KADERISASI & EVENT TERBUKA */}
-      <section id="kaderisasi" className="py-16 sm:py-24 bg-white dark:bg-zinc-900/40 border-y border-zinc-200/80 dark:border-zinc-800/80 scroll-mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center space-y-2 mb-10 sm:mb-12">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
-              <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              Agenda & Kaderisasi
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Agenda Kegiatan Terbuka
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
-              Pelatihan formal penerimaan anggota baru (MAPABA), kaderisasi lanjutan, dan agenda pengembangan kapasitas diri bersama {komisariat.name}.
-            </p>
-          </div>
+      <KomisariatEventsSection
+        komisariatName={komisariat.name}
+        campusName={campusName}
+        events={events}
+        formatIndonesianDate={formatIndonesianDate}
+      />
 
-          {events.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-              {events.map((ev) => {
-                const isClosed = ev.status === "CLOSED";
-                const poster = (ev as any).image || (ev as any).imageUrl || (ev as any).poster;
-                const level = (ev.level || "Kaderisasi").toUpperCase();
-                const levelBadgeClass = level.includes("MAPABA")
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200/60 dark:border-blue-900/60"
-                  : level.includes("PKD")
-                  ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200/60 dark:border-indigo-900/60"
-                  : level.includes("PKL")
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-900/60"
-                  : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200/60 dark:border-amber-900/60";
-
-                return (
-                  <Card
-                    key={ev.id}
-                    className="group bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-none hover:shadow-md hover:border-blue-500/40 transition-all duration-200 flex flex-col justify-between"
-                  >
-                    {poster && (
-                      <div className="relative aspect-[16/8] overflow-hidden bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800">
-                        <img
-                          src={poster}
-                          alt={ev.title || ev.name}
-                          className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
-                        />
-                      </div>
-                    )}
-
-                    <div className="p-5 sm:p-6 space-y-4 flex-1 flex flex-col justify-between">
-                      <div className="space-y-3">
-                        {/* Top Badges */}
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <Badge className={`${levelBadgeClass} border text-[10px] font-semibold uppercase py-0.5 px-2.5`}>
-                            {ev.level || "Kaderisasi"}
-                          </Badge>
-
-                          {isClosed ? (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-                              Pendaftaran Ditutup
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                              Pendaftaran Dibuka
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Title */}
-                        <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
-                          {ev.title || ev.name}
-                        </h3>
-
-                        {/* Description */}
-                        <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-3 leading-relaxed">
-                          {ev.description || "Mari berproses dan ikuti pelatihan kaderisasi resmi untuk mengasah kapasitas intelektual dan kepemimpinan transformatif."}
-                        </p>
-
-                        {/* Metadata Pills */}
-                        <div className="pt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                          {ev.date && (
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                              <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                              <span>{formatIndonesianDate(ev.date)}</span>
-                            </div>
-                          )}
-
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                            <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                            <span className="truncate max-w-[180px]">{ev.location || campusName}</span>
-                          </div>
-
-                          {ev.quota ? (
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                              <Users className="w-3.5 h-3.5 text-indigo-500" />
-                              <span>{ev.quota} Kuota Peserta</span>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* Card Action Button */}
-                      <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800">
-                        {isClosed ? (
-                          <div className="w-full py-2.5 px-4 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 font-semibold text-xs text-center cursor-not-allowed">
-                            Pendaftaran Telah Berakhir
-                          </div>
-                        ) : (
-                          <Link
-                            href={`/register?event=${ev.id}&commissariat=${encodeURIComponent(komisariat.name)}`}
-                            className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs hover:shadow transition-all"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            <span>Daftar Sekarang</span>
-                            <ArrowRight className="w-3.5 h-3.5 ml-0.5 group-hover:translate-x-0.5 transition-transform" />
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-none">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60">
-                <Calendar className="w-6 h-6" />
-              </div>
-              <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                Belum Ada Agenda Terbuka yang Dijadwalkan
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-                Agenda Masa Penerimaan Anggota Baru (MAPABA) dan pelatihan terbuka di {campusName} akan segera diperbarui di sini.
-              </p>
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-                <a
-                  href="#kontak"
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium transition-colors"
-                >
-                  <Mail className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>Hubungi Fungsionaris</span>
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* 6. GALERI DOKUMENTASI KEGIATAN KOMISARIAT */}
-      <section id="galeri" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 sm:mb-10 gap-4">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
-              <Camera className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              Dokumentasi & Galeri
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Galeri Jejak Pergerakan
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl">
-              Dokumentasi aktivitas, kaderisasi, aksi sosial, dan dinamika kebersamaan sahabat-sahabati di {komisariat.name}.
-            </p>
-          </div>
-
-          {/* Filter kategori jika foto memiliki lebih dari 1 kategori */}
-          {galleryCategories.length > 2 && (
-            <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
-              {galleryCategories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedGalleryCategory(cat)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                    selectedGalleryCategory === cat
-                      ? "bg-blue-600 text-white shadow-2xs"
-                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {filteredGallery.length > 0 ? (
-          <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-            {filteredGallery.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => setActiveLightboxPhoto(item)}
-                className="break-inside-avoid inline-block w-full mb-4 group cursor-pointer"
-              >
-                {/* Pinterest Pin Card */}
-                <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-2xs hover:shadow-xl transition-all duration-300">
-                  <img
-                    src={item.imageUrl}
-                    alt={item.title || "Dokumentasi Kegiatan"}
-                    className="w-full h-auto object-cover transform transition-transform duration-500 group-hover:scale-[1.03]"
-                    loading="lazy"
-                  />
-                  {/* Category badge */}
-                  {item.category && (
-                    <span className="absolute top-2.5 left-2.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-zinc-200/60 dark:border-zinc-800 shadow-xs">
-                      {item.category}
-                    </span>
-                  )}
-                  {/* Pinterest hover overlay */}
-                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <span className="p-3 rounded-full bg-white/90 text-zinc-900 shadow-md transform group-hover:scale-105 transition-transform">
-                      <ZoomIn className="w-4 h-4" />
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content jika ada */}
-                {(item.title || item.caption || item.date) ? (
-                  <div className="p-2 space-y-1">
-                    {item.date && (
-                      <span className="text-[10px] text-zinc-400 flex items-center gap-1 font-medium">
-                        <Calendar className="w-3 h-3 text-emerald-500" />
-                        {formatIndonesianDate(item.date)}
-                      </span>
-                    )}
-                    {item.title && (
-                      <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">
-                        {item.title}
-                      </h3>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-none">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200/60 dark:border-emerald-900/60">
-              <Camera className="w-6 h-6" />
-            </div>
-            <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-              Galeri Dokumentasi Belum Diunggah
-            </h3>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-              Pengurus komisariat dapat mengunggah foto kegiatan, MAPABA, dan momentum pergerakan melalui menu Manajemen Komisariat di Dashboard Portal Pengurus.
-            </p>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Portal Pengurus Komisariat</span>
-              </Link>
-            </div>
-          </div>
-        )}
-      </section>
+      {/* 6. GALERI DOKUMENTASI KEGIATAN KOMISARIAT + LIGHTBOX */}
+      <KomisariatGallerySection
+        komisariatName={komisariat.name}
+        galleryCategories={galleryCategories}
+        selectedGalleryCategory={selectedGalleryCategory}
+        onSelectCategory={setSelectedGalleryCategory}
+        filteredGallery={filteredGallery}
+        activeLightboxPhoto={activeLightboxPhoto}
+        onSelectPhoto={setActiveLightboxPhoto}
+        formatIndonesianDate={formatIndonesianDate}
+      />
 
       {/* 7. ARTIKEL & WARTA KADER KOMISARIAT */}
-      <section id="artikel" className="py-16 sm:py-24 bg-white dark:bg-zinc-900/40 border-t border-zinc-200/80 dark:border-zinc-800/80 scroll-mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 sm:mb-10 gap-4">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-600 dark:text-blue-400">
-              <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              Warta & Opini Kader
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Artikel & Pemikiran Kader
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-xl">
-              Karya tulis ilmiah, gagasan wacana pergerakan, dan pemikiran intelektual kader {komisariat.name}.
-            </p>
-          </div>
-
-          <Link
-            href="/artikel"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-          >
-            <span>Portal Artikel Cabang</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        {articles.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {articles.map((art) => (
-              <Link
-                key={art.id}
-                href={`/artikel/${art.slug || art.id}`}
-                className="group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:border-blue-500/40 hover:shadow-lg dark:hover:shadow-zinc-950/50 transition-all duration-300 flex flex-col justify-between cursor-pointer"
-              >
-                <div>
-                  <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-                    <img
-                      src={art.image || "/image/landing_page.png"}
-                      alt={art.title}
-                      className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <span className="absolute top-2.5 left-2.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md text-[10px] font-semibold text-blue-600 dark:text-blue-400 px-2.5 py-0.5 rounded-md border border-zinc-200/60 dark:border-zinc-800 shadow-xs">
-                      {art.category}
-                    </span>
-                  </div>
-
-                  <div className="p-4 space-y-2">
-                    <span className="text-[10px] text-zinc-400 flex items-center gap-1 font-medium">
-                      <Calendar className="w-3 h-3 text-blue-500" />
-                      {formatIndonesianDate(art.createdAt || (art as any).created_at || art.date)}
-                    </span>
-                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug">
-                      {art.title}
-                    </h3>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                      {art.excerpt}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="px-4 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500">
-                  <span className="text-[11px] font-medium truncate max-w-[140px] text-zinc-700 dark:text-zinc-300">
-                    {art.authorName || "Kader PMII"}
-                  </span>
-                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                    Baca Selengkapnya
-                    <ArrowRight className="w-3 h-3" />
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-none">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-              Belum Ada Publikasi Artikel dari {komisariat.name}
-            </h3>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-              Kader dan pengurus {komisariat.name} belum menerbitkan artikel khusus di portal ini. Seluruh karya tulis yang diterbitkan oleh fungsionaris komisariat ini akan otomatis tampil di sini.
-            </p>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-              <Link
-                href="/artikel"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Kunjungi Portal Artikel Cabang</span>
-              </Link>
-            </div>
-          </div>
-        )}
-        </div>
-      </section>
+      <KomisariatArticlesSection
+        komisariatName={komisariat.name}
+        articles={articles}
+        formatIndonesianDate={formatIndonesianDate}
+      />
 
       </main>
 
       {/* 8. FOOTER */}
-      <footer className="w-full border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-zinc-100 dark:border-zinc-800/80">
-            <div className="md:col-span-5 space-y-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-1 flex items-center justify-center overflow-hidden">
-                  {komisariat.logo && !logoBroken ? (
-                    <img
-                      src={komisariat.logo}
-                      alt={komisariat.name}
-                      onError={() => setLogoBroken(true)}
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center">
-                      {komisariat.logoInitial || "PK"}
-                    </div>
-                  )}
-                </div>
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{komisariat.name}</span>
-              </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm leading-relaxed">
-                Pangkalan resmi Pergerakan Mahasiswa Islam Indonesia di lingkungan {campusName}, bernaung di bawah Pengurus Cabang PMII Grobogan.
-              </p>
-              <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                Dzikir, Fikir, dan Amal Shaleh
-              </p>
-            </div>
-
-            <div className="md:col-span-3 space-y-2.5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
-                Navigasi Halaman
-              </h4>
-              <ul className="space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
-                {KOM_NAV_ITEMS.map((item) => (
-                  <li key={item.id}>
-                    <a href={item.href} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="md:col-span-4 space-y-2.5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
-                Layanan & Akses
-              </h4>
-              <ul className="space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
-                <li>
-                  <Link href="/login" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    Portal Pengurus & Anggota
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    Portal PC PMII Grobogan
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>© {new Date().getFullYear()} {komisariat.name}. Hak cipta dilindungi.</span>
-            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Terdaftar Resmi PC PMII Grobogan</span>
-            </div>
-          </div>
-        </div>
-      </footer>
-
-      {/* LIGHTBOX MODAL */}
-      {activeLightboxPhoto && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6"
-          onClick={() => setActiveLightboxPhoto(null)}
-        >
-          <div
-            className="relative max-w-3xl w-full bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setActiveLightboxPhoto(null)}
-              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors cursor-pointer"
-              aria-label="Tutup foto"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="relative aspect-[16/10] sm:aspect-[16/9] w-full bg-zinc-950 flex items-center justify-center overflow-hidden">
-              <img
-                src={activeLightboxPhoto.imageUrl}
-                alt={activeLightboxPhoto.title}
-                className="max-h-full max-w-full object-contain"
-              />
-            </div>
-            {(activeLightboxPhoto.title || activeLightboxPhoto.caption || activeLightboxPhoto.category || activeLightboxPhoto.date) && (
-              <div className="p-5 sm:p-6 space-y-2">
-                <div className="flex items-center gap-2 text-xs">
-                  {activeLightboxPhoto.category && (
-                    <span className="bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded font-medium">
-                      {activeLightboxPhoto.category}
-                    </span>
-                  )}
-                  {activeLightboxPhoto.date && (
-                    <span className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                      {formatIndonesianDate(activeLightboxPhoto.date, true)}
-                    </span>
-                  )}
-                </div>
-                {activeLightboxPhoto.title && (
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                    {activeLightboxPhoto.title}
-                  </h3>
-                )}
-                {activeLightboxPhoto.caption && (
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    {activeLightboxPhoto.caption}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <KomisariatFooter
+        komisariat={komisariat}
+        campusName={campusName}
+        logoBroken={logoBroken}
+        onLogoError={() => setLogoBroken(true)}
+        navItems={KOM_NAV_ITEMS}
+      />
     </div>
   );
 }

@@ -63,11 +63,12 @@ export default function AttendanceTab({
   const lastScannedTimeRef = useRef<number>(0);
   const lastScannedCodeRef = useRef<string>("");
 
-  useEffect(() => {
-    if (!availableSessions.includes(selectedSession)) {
-      setSelectedSession(availableSessions[0] || "Sesi Registrasi Awal");
+  if (!availableSessions.includes(selectedSession)) {
+    const fallbackSession = availableSessions[0] || "Sesi Registrasi Awal";
+    if (selectedSession !== fallbackSession) {
+      setSelectedSession(fallbackSession);
     }
-  }, [availableSessions, selectedSession]);
+  }
 
   const playBeep = useCallback(() => {
     if (isSoundMuted) return;

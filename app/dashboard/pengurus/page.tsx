@@ -232,34 +232,36 @@ export default function KomisariatPengurusPage() {
   const { showToast, showError, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
-    const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
-    let uObj: any = null;
-    if (storedUser) {
-      try {
-        uObj = JSON.parse(storedUser);
-        setCurrentUser(uObj);
-      } catch {}
-    }
-    const currentTenant = getActiveTenant(uObj) || "ALL";
-    setActiveTenant(currentTenant);
-    if (currentTenant !== "ALL") {
-      setActiveCampus(currentTenant);
-    } else if (uObj?.commissariat) {
-      setActiveCampus(uObj.commissariat);
-    } else if (uObj?.campus) {
-      setActiveCampus(uObj.campus);
-    }
-
-    if (uObj && !isCabangOrAdmin(uObj)) {
-      const userComm =
-        uObj.commissariat ||
-        uObj.komisariat ||
-        uObj.campus ||
-        (currentTenant !== "ALL" ? currentTenant : "");
-      if (userComm) {
-        setStructureTenant(userComm);
+    queueMicrotask(() => {
+      const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
+      let uObj: any = null;
+      if (storedUser) {
+        try {
+          uObj = JSON.parse(storedUser);
+          setCurrentUser(uObj);
+        } catch {}
       }
-    }
+      const currentTenant = getActiveTenant(uObj) || "ALL";
+      setActiveTenant(currentTenant);
+      if (currentTenant !== "ALL") {
+        setActiveCampus(currentTenant);
+      } else if (uObj?.commissariat) {
+        setActiveCampus(uObj.commissariat);
+      } else if (uObj?.campus) {
+        setActiveCampus(uObj.campus);
+      }
+
+      if (uObj && !isCabangOrAdmin(uObj)) {
+        const userComm =
+          uObj.commissariat ||
+          uObj.komisariat ||
+          uObj.campus ||
+          (currentTenant !== "ALL" ? currentTenant : "");
+        if (userComm) {
+          setStructureTenant(userComm);
+        }
+      }
+    });
 
     const handleTenant = (e: any) => {
       const nextTenant = e.detail?.activeTenant || "ALL";
@@ -311,29 +313,31 @@ export default function KomisariatPengurusPage() {
         );
     }
 
-    const savedDivs = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_DIVISIONS") : null;
-    if (savedDivs) {
-      try {
-        const parsed = JSON.parse(savedDivs);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setDivisions(parsed);
+    queueMicrotask(() => {
+      const savedDivs = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_DIVISIONS") : null;
+      if (savedDivs) {
+        try {
+          const parsed = JSON.parse(savedDivs);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDivisions(parsed);
+          }
+        } catch (e) {
+          console.error("Failed to parse saved divisions", e);
         }
-      } catch (e) {
-        console.error("Failed to parse saved divisions", e);
       }
-    }
 
-    const savedBiros = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_BIROS") : null;
-    if (savedBiros) {
-      try {
-        const parsed = JSON.parse(savedBiros);
-        if (parsed && typeof parsed === "object") {
-          setBiros(parsed);
+      const savedBiros = typeof window !== "undefined" ? localStorage.getItem("PMII_ORGANIZATION_BIROS") : null;
+      if (savedBiros) {
+        try {
+          const parsed = JSON.parse(savedBiros);
+          if (parsed && typeof parsed === "object") {
+            setBiros(parsed);
+          }
+        } catch (e) {
+          console.error("Failed to parse saved biros", e);
         }
-      } catch (e) {
-        console.error("Failed to parse saved biros", e);
       }
-    }
+    });
 
     Promise.all([
       db.getBoards(),

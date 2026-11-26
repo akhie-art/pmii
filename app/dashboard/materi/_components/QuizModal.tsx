@@ -94,7 +94,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const openSyncKey = isOpen
+    ? `${editingSubject || ""}:${editingQuiz?.id || ""}:${editingQuizzes?.length || 0}:${defaultSubject}`
+    : "";
+  const [prevOpenSyncKey, setPrevOpenSyncKey] = useState("");
+  if (openSyncKey !== prevOpenSyncKey) {
+    setPrevOpenSyncKey(openSyncKey);
     if (isOpen) {
       setErrorMsg(null);
       setImportInfo(null);
@@ -138,7 +143,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       } else {
         setDrafts([
           {
-            tempId: `draft-${Date.now()}-0`,
+            tempId: "draft-initial-0",
             subjectName: defaultSubject,
             question: "",
             optionA: "",
@@ -152,7 +157,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         setGlobalSubject(defaultSubject);
       }
     }
-  }, [isOpen, editingQuiz, editingQuizzes, editingSubject, defaultSubject]);
+  }
 
   const updateDraft = (index: number, field: keyof QuestionDraft, value: any) => {
     setDrafts((prev) =>

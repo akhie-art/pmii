@@ -1,7 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import { SmartImage } from "@/components/ui/smart-image";
+
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useMounted } from "@/hooks/use-mounted";
 import {
   Image as ImageIcon,
   Plus,
@@ -58,7 +61,7 @@ interface GalleryItemWithCommissariat extends KomisariatGalleryItem {
 }
 
 export default function GaleriPage() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [commissariats, setCommissariats] = useState<CommissariatList[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,22 +89,26 @@ export default function GaleriPage() {
   const [formError, setFormError] = useState("");
 
   const { showSuccess, showError, FeedbackModalComponent } = useFeedbackModal();
+  const showErrorRef = useRef(showError);
+  useEffect(() => {
+    showErrorRef.current = showError;
+  });
 
   // Load User & Tenant from LocalStorage
   useEffect(() => {
-    setMounted(true);
-    setActiveTenant(getActiveTenant() || "ALL");
-
-    try {
-      const stored =
-        localStorage.getItem("PMII_LOGGED_IN_USER") ||
-        localStorage.getItem("PMII_USER_SESSION");
-      if (stored) {
-        setCurrentUser(JSON.parse(stored));
+    queueMicrotask(() => {
+      setActiveTenant(getActiveTenant() || "ALL");
+      try {
+        const stored =
+          localStorage.getItem("PMII_LOGGED_IN_USER") ||
+          localStorage.getItem("PMII_USER_SESSION");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error("Gagal membaca sesi pengguna:", e);
       }
-    } catch (e) {
-      console.error("Gagal membaca sesi pengguna:", e);
-    }
+    });
 
     const handleTenantChange = (e: any) => {
       setActiveTenant(e.detail?.activeTenant || "ALL");
@@ -111,25 +118,27 @@ export default function GaleriPage() {
   }, []);
 
   // Fetch Commissariats & Gallery
-  const loadCommissariats = async () => {
+  const loadCommissariats = useCallback(async () => {
     setLoading(true);
     try {
       const list = await db.getCommissariats(DEFAULT_COMMISSARIATS);
       setCommissariats(list);
     } catch (err) {
       console.error("Gagal memuat data komisariat:", err);
-      showError(
+      showErrorRef.current(
         "Gagal Memuat Data",
         "Terjadi kesalahan saat memuat data galeri foto."
       );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadCommissariats();
-  }, []);
+    queueMicrotask(() => {
+      void loadCommissariats();
+    });
+  }, [loadCommissariats]);
 
   // User scope check
   const isSuperOrCabang = isCabangOrAdmin(currentUser);
@@ -212,7 +221,8 @@ export default function GaleriPage() {
   // Keep formCommissariatId synchronized with user's tenant
   useEffect(() => {
     if (!formCommissariatId && userCommissariat?.id) {
-      setFormCommissariatId(userCommissariat.id);
+      const nextId = userCommissariat.id;
+      queueMicrotask(() => setFormCommissariatId(nextId));
     }
   }, [userCommissariat, formCommissariatId]);
 
@@ -326,14 +336,27 @@ export default function GaleriPage() {
       if (isSupabaseConfigured && supabase) {
         const fileExt = file.name.split(".").pop() || "jpg";
         const cleanComm = formCommissariatId.slice(0, 8);
-        const filePath = `gallery/${cleanComm}-${Date.now()}.${fileExt}`;
+        const filePath = `${formCommissariatId || "general"}/${cleanComm}-${Date.now()}.${fileExt}`;
 
         const { error: uploadErr } = await supabase.storage
-          .from("materials")
+          .from("galeri")
           .upload(filePath, file, { cacheControl: "3600", upsert: true });
 
         if (!uploadErr) {
-          const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+          const { data } = supabase.storage.from("galeri").getPublicUrl(filePath);
+          setFormImageUrl(data.publicUrl);
+          setIsUploadingPhoto(false);
+          return;
+        }
+
+        // Fallback ke bucket materials jika bucket galeri belum tersedia
+        const fallbackPath = `gallery/${cleanComm}-${Date.now()}.${fileExt}`;
+        const { error: fallbackErr } = await supabase.storage
+          .from("materials")
+          .upload(fallbackPath, file, { cacheControl: "3600", upsert: true });
+
+        if (!fallbackErr) {
+          const { data } = supabase.storage.from("materials").getPublicUrl(fallbackPath);
           setFormImageUrl(data.publicUrl);
           setIsUploadingPhoto(false);
           return;
@@ -621,11 +644,11 @@ export default function GaleriPage() {
               >
                 {/* Pin Image Container */}
                 <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-2xs hover:shadow-xl transition-all duration-300">
-                  <img
+                  <SmartImage
                     src={item.imageUrl}
                     alt={item.commissariatName}
+                    preserveAspect
                     className="w-full h-auto object-cover transform transition-transform duration-500 group-hover:scale-[1.03]"
-                    loading="lazy"
                   />
 
                   {/* Pinterest Dark Overlay on Hover */}
@@ -801,7 +824,7 @@ export default function GaleriPage() {
                 <div className="flex flex-col sm:flex-row gap-3 items-center">
                   {formImageUrl ? (
                     <div className="relative w-full sm:w-40 aspect-[4/3] rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 shrink-0">
-                      <img src={formImageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      <SmartImage src={formImageUrl} alt="Preview" width={200} height={200} className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => setFormImageUrl("")}
@@ -880,9 +903,10 @@ export default function GaleriPage() {
 
             {/* Left: Full Photo View */}
             <div className="md:w-3/5 bg-zinc-950 flex items-center justify-center p-2 sm:p-4">
-              <img
+              <SmartImage
                 src={lightboxPhoto.imageUrl}
                 alt={lightboxPhoto.commissariatName}
+                preserveAspect
                 className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl"
               />
             </div>

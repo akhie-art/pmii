@@ -89,7 +89,12 @@ export default function KomisariatPage() {
     );
   };
 
-  const loadData = async (isSilent = false) => {
+  const showErrorRef = React.useRef(showError);
+  useEffect(() => {
+    showErrorRef.current = showError;
+  });
+
+  const loadData = React.useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
 
@@ -107,41 +112,42 @@ export default function KomisariatPage() {
       setBoardMembers(boardList || []);
     } catch (err) {
       console.error("Gagal memuat data komisariat:", err);
-      showError("Gagal Memuat Data", "Terjadi gangguan saat mengambil data dari database.");
+      showErrorRef.current("Gagal Memuat Data", "Terjadi gangguan saat mengambil data dari database.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    setMounted(true);
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      if (stored) {
-        try {
-          const user = JSON.parse(stored);
-          setCurrentUser(user);
-          const isSuper = isUserSuperAdmin(user.role, user.email);
-          // Untuk Superadmin atau halaman Tenant, default selalu "ALL" agar seluruh data tenant tampil
-          if (isSuper || (pathname && pathname.includes("/tenant"))) {
-            setActiveTenant("ALL");
-          } else {
-            setActiveTenant(getActiveTenant(user) || "ALL");
-          }
-        } catch {}
-      }
+      queueMicrotask(() => {
+        setMounted(true);
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (stored) {
+          try {
+            const user = JSON.parse(stored);
+            setCurrentUser(user);
+            const isSuper = isUserSuperAdmin(user.role, user.email);
+            // Untuk Superadmin atau halaman Tenant, default selalu "ALL" agar seluruh data tenant tampil
+            if (isSuper || (pathname && pathname.includes("/tenant"))) {
+              setActiveTenant("ALL");
+            } else {
+              setActiveTenant(getActiveTenant(user) || "ALL");
+            }
+          } catch {}
+        }
+        void loadData();
+      });
 
       const handleTenant = (e: any) => {
         setActiveTenant(e.detail?.activeTenant || "ALL");
       };
       window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
-      loadData();
-
       return () => window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
     }
-  }, [pathname]);
+  }, [pathname, loadData]);
 
   // Sync URL dynamically based on Superadmin role
   useEffect(() => {

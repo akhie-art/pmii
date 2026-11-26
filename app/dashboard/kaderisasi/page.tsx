@@ -151,16 +151,18 @@ export default function SistemKaderisasiPage() {
   const { showToast, FeedbackModalComponent } = useFeedbackModal();
 
   useEffect(() => {
-    const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
-    let uObj: any = null;
-    if (storedUser) {
-      try {
-        uObj = JSON.parse(storedUser);
-        setCurrentUser(uObj);
-      } catch {}
-    }
-    const currentTenant = getActiveTenant(uObj) || "ALL";
-    setActiveTenant(currentTenant);
+    queueMicrotask(() => {
+      const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
+      let uObj: any = null;
+      if (storedUser) {
+        try {
+          uObj = JSON.parse(storedUser);
+          setCurrentUser(uObj);
+        } catch {}
+      }
+      const currentTenant = getActiveTenant(uObj) || "ALL";
+      setActiveTenant(currentTenant);
+    });
 
     const handleTenant = (e: any) => {
       setActiveTenant(e.detail?.activeTenant || "ALL");

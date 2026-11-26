@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { sanitizeHtml } from "@/lib/sanitize";
 import {
   Bold,
   Italic,
@@ -44,23 +45,29 @@ export function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState("");
   const savedSelectionRef = useRef<Range | null>(null);
 
-  // Sync external value changes into editor
-  useEffect(() => {
-    if (editorRef.current && !isEditingRef.current) {
-      if (editorRef.current.innerHTML !== value) {
-        editorRef.current.innerHTML = value || "";
-        updateStats();
-      }
-    }
-  }, [value]);
-
-  const updateStats = () => {
+  const updateStats = useCallback(() => {
     if (!editorRef.current) return;
     const text = editorRef.current.innerText || "";
     const words = text.trim().split(/\s+/).filter(Boolean).length;
     setWordCount(words);
     setCharCount(text.length);
-  };
+  }, []);
+
+  // Sync external value changes into editor (sanitized against DOM XSS)
+  useEffect(() => {
+    if (editorRef.current && !isEditingRef.current) {
+      const safeValue = sanitizeHtml(value || "");
+      if (editorRef.current.innerHTML !== safeValue) {
+        editorRef.current.innerHTML = safeValue;
+        const text = editorRef.current.innerText || "";
+        const words = text.trim().split(/\s+/).filter(Boolean).length;
+        queueMicrotask(() => {
+          setWordCount(words);
+          setCharCount(text.length);
+        });
+      }
+    }
+  }, [value]);
 
   const handleInput = () => {
     if (!editorRef.current) return;
@@ -76,7 +83,6 @@ export function RichTextEditor({
   const executeCommand = (command: string, arg?: string) => {
     if (!editorRef.current) return;
     editorRef.current.focus();
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     document.execCommand(command, false, arg);
     handleInput();
   };

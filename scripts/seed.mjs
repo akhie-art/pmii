@@ -1,28 +1,46 @@
 /**
- * SEEDER SCRIPT: Akun Pengurus Cabang Grobogan (Admin)
+ * SEEDER SCRIPT: Akun Super Administrator PMII (Aman, berbasis Environment Variables)
  * File: scripts/seed.mjs
- * 
- * Menjalankan seeder akun Pengurus Cabang Grobogan via Supabase JS SDK.
- * Penggunaan: node scripts/seed.mjs
+ *
+ * Penggunaan (Node 20.6+ tanpa dependensi dotenv eksternal):
+ *   SUPABASE_SERVICE_ROLE_KEY=... SEED_ADMIN_EMAIL=... SEED_ADMIN_PASSWORD=... node --env-file=.env.local scripts/seed.mjs
  */
 
 import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
+import { existsSync } from "node:fs";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (typeof process.loadEnvFile === "function" && existsSync(".env.local")) {
+  try {
+    process.loadEnvFile(".env.local");
+  } catch {
+    // Abaikan jika env sudah dimuat lewat CLI
+  }
+}
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("❌ NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY harus ada di .env.local!");
+const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+const adminEmail = (process.env.SEED_ADMIN_EMAIL || "").trim().toLowerCase();
+const adminPassword = (process.env.SEED_ADMIN_PASSWORD || "").trim();
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error(
+    "❌ NEXT_PUBLIC_SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY wajib disetel (jangan gunakan anon key untuk seeding admin)."
+  );
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+if (!adminEmail || !adminEmail.includes("@") || adminPassword.length < 8) {
+  console.error(
+    "❌ SEED_ADMIN_EMAIL (valid email) dan SEED_ADMIN_PASSWORD (min. 8 karakter) wajib disetel via environment variable."
+  );
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
     persistSession: false,
-    autoRefreshToken: false
-  }
+    autoRefreshToken: false,
+  },
 });
 
 async function runSeed() {
@@ -30,81 +48,32 @@ async function runSeed() {
   console.log("🌱 MENJALANKAN SEEDER: AKUN SUPER ADMINISTRATOR PMII");
   console.log("========================================================\n");
 
-  // 1. Verifikasi / Sign-In akun Super Administrator
-  console.log("1️⃣ Memverifikasi akun Super Administrator (admin@pmii.org)...");
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email: "admin@pmii.org",
-    password: "admin123"
+  const { data: rpcData, error: rpcError } = await supabase.rpc("create_auth_user", {
+    p_email: adminEmail,
+    p_password: adminPassword,
+    p_name: process.env.SEED_ADMIN_NAME || "Super Administrator PMII",
+    p_role: "superadmin",
+    p_commissariat: "Pusat / Super Administrator",
+    p_status: "AKTIF",
+    p_allowed_menus: [],
+    p_komisariat_id: null,
   });
 
-  if (authError) {
-    console.warn("⚠️ Login gagal atau akun belum dibuat:", authError.message);
-    console.log("Mencoba mendaftarkan akun Super Administrator via RPC create_auth_user...");
-    const { data: rpcData, error: rpcError } = await supabase.rpc("create_auth_user", {
-      p_email: "admin@pmii.org",
-      p_password: "admin123",
-      p_name: "Super Administrator PMII",
-      p_role: "superadmin",
-      p_commissariat: "Pusat / Super Administrator",
-      p_status: "AKTIF",
-      p_allowed_menus: []
-    });
-
-    if (rpcError) {
-      console.error("❌ Gagal membuat akun via RPC:", rpcError.message);
+  if (rpcError) {
+    if (rpcError.message?.toLowerCase().includes("sudah terdaftar")) {
+      console.log(`ℹ️ Akun ${adminEmail} sudah terdaftar. Tidak menimpa kata sandi secara otomatis.`);
     } else {
-      console.log("✅ Berhasil membuat akun Super Administrator via RPC!");
+      console.error("❌ Gagal membuat akun Super Administrator:", rpcError.message);
+      process.exit(1);
     }
   } else {
-    console.log("✅ Akun terverifikasi. Mengupdate metadata Super Administrator...");
-    const { error: updateAuthErr } = await supabase.auth.updateUser({
-      data: {
-        name: "Super Administrator PMII",
-        role: "superadmin",
-        commissariat: "Pusat / Super Administrator"
-      }
-    });
-
-    if (updateAuthErr) {
-      console.warn("Notice updating user metadata:", updateAuthErr.message);
-    } else {
-      console.log("✅ Metadata akun berhasil diperbarui ke Super Administrator!");
-    }
+    console.log(`✅ Akun Super Administrator (${adminEmail}) berhasil dibuat (ID: ${rpcData?.id || "-"})`);
   }
 
-  // 2. Update / Upsert di public.anggota
-  console.log("\n2️⃣ Menyinkronkan profil ke tabel public.anggota...");
-  const adminId = authData?.user?.id || "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-  const { error: anggotaErr } = await supabase.from("anggota").upsert({
-    id: adminId,
-    user_id: adminId,
-    name: "Super Administrator PMII",
-    email: "admin@pmii.org",
-    role: "superadmin",
-    role_id: "b0000000-0000-0000-0000-000000000001",
-    tenant_id: null,
-    status: "AKTIF",
-    level: "SUPERADMIN"
-  }, { onConflict: "id" });
-
-  if (anggotaErr) {
-    console.warn("Notice tabel anggota:", anggotaErr.message);
-  } else {
-    console.log("✅ Profil public.anggota berhasil diperbarui!");
-  }
-
-  console.log("\n========================================================");
-  console.log("🎉 SEEDER BERHASIL DIJALANKAN DARI TERMINAL!");
-  console.log("========================================================");
-  console.log("🔑 Kredensial Login Super Administrator:");
-  console.log("   Email    : admin@pmii.org");
-  console.log("   Password : admin123");
-  console.log("   Nama     : Super Administrator PMII");
-  console.log("   Role     : superadmin (Global Multi-Tenancy)");
-  console.log("========================================================\n");
+  console.log("\n✅ Proses seeder selesai.");
 }
 
 runSeed().catch((err) => {
-  console.error("❌ Error running seed:", err);
+  console.error("❌ Seeder gagal:", err);
   process.exit(1);
 });

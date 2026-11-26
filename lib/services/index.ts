@@ -7,7 +7,19 @@ import { getCommissariats, saveCommissariats, upsertCommissariat, deleteCommissa
 import { getUsers, getUsersPaginated, saveUsers } from "./users";
 import { getKaderisasi, saveKaderisasi } from "./kaderisasi";
 import { getKurikulum, saveKurikulum } from "./kurikulum";
-import { getSurat, saveSurat, deleteSurat, getSuratTemplates, saveSuratTemplates, deleteSuratTemplate } from "./letters";
+import {
+  getSurat,
+  getSuratPaginated,
+  saveSurat,
+  upsertSurat,
+  upsertSuratBatch,
+  updateSurat,
+  deleteSurat,
+  getSuratTemplates,
+  saveSuratTemplates,
+  upsertSuratTemplate,
+  deleteSuratTemplate
+} from "./letters";
 import { getArsip, saveArsip, deleteArsip } from "./archive";
 import {
   getEvaluations,
@@ -103,10 +115,15 @@ export const db = {
 
   // Surat & Template
   getSurat,
+  getSuratPaginated,
   saveSurat,
+  upsertSurat,
+  upsertSuratBatch,
+  updateSurat,
   deleteSurat,
   getSuratTemplates,
   saveSuratTemplates,
+  upsertSuratTemplate,
   deleteSuratTemplate,
 
   // Pengajuan SK

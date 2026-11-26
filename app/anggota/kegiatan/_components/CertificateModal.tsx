@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState } from "react";
 import { Award, Download } from "lucide-react";
 import jsPDF from "jspdf";
@@ -327,9 +329,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 className="relative w-full max-w-[620px] mx-auto bg-white rounded-xl shadow-xl overflow-hidden border border-zinc-200"
                 style={{ containerType: "inline-size" }}
               >
-                <img
+                <SmartImage
                   src={templateImage}
                   alt="Template Piagam Resmi PMII"
+                  preserveAspect
                   className="w-full h-auto block select-none pointer-events-none"
                 />
 

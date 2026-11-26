@@ -57,8 +57,8 @@ export function normalizeDateString(dateStr: string | undefined): string | null 
 
   // Indonesian / English month mappings
   const monthMap: Record<string, string> = {
-    jan: "01", feb: "02", mar: "03", apr: "04", mei: "05", may: "05", jun: "06", 
-    jul: "07", ags: "08", aug: "08", sep: "09", okt: "10", oct: "10", nov: "11", des: "12", dec: "12"
+    jan: "01", feb: "02", mar: "03", apr: "04", mei: "05", may: "05", jun: "06",
+    jul: "07", agu: "08", ags: "08", aug: "08", sep: "09", okt: "10", oct: "10", nov: "11", des: "12", dec: "12"
   };
 
   const match = trimmed.match(/^([a-zA-Z]+)\s+(\d{4})$/);
@@ -81,6 +81,15 @@ export function normalizeDateString(dateStr: string | undefined): string | null 
   }
 
   return null;
+}
+
+export function safeLocalStorageSet(key: string, value: string): void {
+  if (typeof window === "undefined" || !key) return;
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`[LocalStorage Quota Notice] Gagal menyimpan cache untuk ${key}:`, err);
+  }
 }
 
 export function broadcastTableSync(tableName: string, localStorageKey?: string) {
@@ -127,7 +136,8 @@ const missingColumnsCache: Record<string, Set<string>> = {
   arsip: new Set(["komisariat", "commissariat", "komisariat_id"]),
   pengurus: new Set(["rayon", "order", "phoneNumber", "phone", "email", "gender", "user_id", "role"]),
   anggota: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"]),
-  kader: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"])
+  kader: new Set(["provinsi", "kabupaten", "kecamatan", "organisasiSD"]),
+  surat_templates: new Set(["subject", "classification", "senderTitle", "senderLocation", "fileName", "fileSize", "fileBase64"])
 };
 
 export const TABLES_WITHOUT_COMMISSARIAT = [
@@ -198,7 +208,7 @@ export async function getTableData<T>(
             // Database Supabase adalah sumber data tunggal yang otoritatif.
             // Jangan hidupkan kembali sisa cache lokal (phantom/ghost local items).
             mergedData = data;
-            localStorage.setItem(localStorageKey, JSON.stringify(data));
+            safeLocalStorageSet(localStorageKey, JSON.stringify(data));
           } else {
             const stored = localStorage.getItem(localStorageKey) || (localStorageKey === "PMII_ANGGOTA_DATA" ? localStorage.getItem("PMII_FOLLOWUP_CADRES") : null);
             if (stored) {
@@ -222,7 +232,7 @@ export async function getTableData<T>(
                 console.warn(`[Data Merge Warning] Gagal menggabungkan cache lokal untuk ${tableName}:`, e);
               }
             }
-            localStorage.setItem(localStorageKey, JSON.stringify(mergedData));
+            safeLocalStorageSet(localStorageKey, JSON.stringify(mergedData));
           }
         }
 
@@ -343,6 +353,7 @@ export interface SaveTableOptions {
   scopeCommissariat?: string;
   allowDeletion?: boolean;
   forceWipeAll?: boolean;
+  mergeLocalCache?: boolean;
 }
 
 export async function deleteTableRow(
@@ -359,20 +370,21 @@ export async function deleteTableRow(
 
   const effectiveTable = await getEffectiveTableName(tableName);
 
-  // Update local cache
-  if (localStorageKey && typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem(localStorageKey);
-      if (stored) {
-        const list = JSON.parse(stored) as any[];
-        const filtered = list.filter((item) => String(item.id) !== String(id));
-        localStorage.setItem(localStorageKey, JSON.stringify(filtered));
-        broadcastTableSync(effectiveTable, localStorageKey);
+  const syncLocalDelete = () => {
+    if (localStorageKey && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(localStorageKey);
+        if (stored) {
+          const list = JSON.parse(stored) as any[];
+          const filtered = list.filter((item) => String(item.id) !== String(id));
+          localStorage.setItem(localStorageKey, JSON.stringify(filtered));
+          broadcastTableSync(effectiveTable, localStorageKey);
+        }
+      } catch (e) {
+        console.error(`Error updating local cache for ${localStorageKey}:`, e);
       }
-    } catch (e) {
-      console.error(`Error updating local cache for ${localStorageKey}:`, e);
     }
-  }
+  };
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -433,11 +445,14 @@ export async function deleteTableRow(
           const { error } = await supabase.from(effectiveTable).delete().eq("id", id);
           if (error) {
             console.warn(`Non-UUID delete notice on ${effectiveTable} for id ${id}:`, error.message);
+            return false;
           }
         } catch (e) {
           console.warn(`Non-UUID delete exception on ${effectiveTable}:`, e);
+          return false;
         }
       }
+      syncLocalDelete();
       return true;
     } catch (err) {
       console.error(`Error deleting ${id} from ${effectiveTable}:`, err);
@@ -445,6 +460,7 @@ export async function deleteTableRow(
     }
   }
 
+  syncLocalDelete();
   return true;
 }
 
@@ -453,7 +469,10 @@ export async function upsertTableRow<T extends { id: string | number }>(
   localStorageKey: string,
   record: T
 ): Promise<boolean> {
-  return saveTableData(tableName, localStorageKey, [record], { allowDeletion: false });
+  return saveTableData(tableName, localStorageKey, [record], {
+    allowDeletion: false,
+    mergeLocalCache: true
+  });
 }
 
 /**
@@ -467,24 +486,25 @@ export async function updateTableRow(
 ): Promise<boolean> {
   const effectiveTable = await getEffectiveTableName(tableName);
 
-  // 1. Update local cache immediately
-  if (localStorageKey && typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem(localStorageKey);
-      if (stored) {
-        const list = JSON.parse(stored) as any[];
-        const updatedList = list.map((item) =>
-          String(item.id) === String(id) ? { ...item, ...updates } : item
-        );
-        localStorage.setItem(localStorageKey, JSON.stringify(updatedList));
-        broadcastTableSync(effectiveTable, localStorageKey);
+  const syncLocalUpdate = () => {
+    if (localStorageKey && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(localStorageKey);
+        if (stored) {
+          const list = JSON.parse(stored) as any[];
+          const updatedList = list.map((item) =>
+            String(item.id) === String(id) ? { ...item, ...updates } : item
+          );
+          localStorage.setItem(localStorageKey, JSON.stringify(updatedList));
+          broadcastTableSync(effectiveTable, localStorageKey);
+        }
+      } catch (e) {
+        console.warn(`Error updating local cache for ${localStorageKey}:`, e);
       }
-    } catch (e) {
-      console.warn(`Error updating local cache for ${localStorageKey}:`, e);
     }
-  }
+  };
 
-  // 2. Fast single-row update in Supabase
+  // Fast single-row update in Supabase
   if (isSupabaseConfigured && supabase) {
     try {
       const copy = { ...updates };
@@ -518,6 +538,7 @@ export async function updateTableRow(
         console.warn(`Supabase error updating ${id} in ${effectiveTable}:`, error);
         return false;
       }
+      syncLocalUpdate();
       return true;
     } catch (err) {
       console.error(`Error updating ${id} in ${effectiveTable}:`, err);
@@ -525,6 +546,7 @@ export async function updateTableRow(
     }
   }
 
+  syncLocalUpdate();
   return true;
 }
 
@@ -542,11 +564,29 @@ export async function saveTableData<T extends { id: string | number }>(
     id: isValidUUID(String(item.id)) ? String(item.id) : generateUUID()
   })) as T[];
 
-  // Always update local cache first
-  if (localStorageKey && typeof window !== "undefined") {
-    localStorage.setItem(localStorageKey, JSON.stringify(sanitizedList));
-    broadcastTableSync(effectiveTable, localStorageKey);
-  }
+  const syncLocalCache = () => {
+    if (localStorageKey && typeof window !== "undefined") {
+      if (options?.mergeLocalCache) {
+        try {
+          const stored = localStorage.getItem(localStorageKey);
+          const existing = stored ? (JSON.parse(stored) as T[]) : [];
+          const baseList = Array.isArray(existing) ? existing : [];
+          const incomingMap = new Map(sanitizedList.map((item) => [String(item.id), item]));
+          const updatedExisting = baseList.map((item) =>
+            incomingMap.has(String(item.id)) ? { ...item, ...incomingMap.get(String(item.id)) } : item
+          );
+          const existingIds = new Set(baseList.map((item) => String(item.id)));
+          const brandNew = sanitizedList.filter((item) => !existingIds.has(String(item.id)));
+          safeLocalStorageSet(localStorageKey, JSON.stringify([...brandNew, ...updatedExisting]));
+        } catch {
+          safeLocalStorageSet(localStorageKey, JSON.stringify(sanitizedList));
+        }
+      } else {
+        safeLocalStorageSet(localStorageKey, JSON.stringify(sanitizedList));
+      }
+      broadcastTableSync(effectiveTable, localStorageKey);
+    }
+  };
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -794,7 +834,7 @@ export async function saveTableData<T extends { id: string | number }>(
         });
 
         let attempts = 0;
-        const maxAttempts = 30;
+        const maxAttempts = 10;
 
         while (attempts < maxAttempts) {
           const { error: upsertError } = await supabase
@@ -802,6 +842,7 @@ export async function saveTableData<T extends { id: string | number }>(
             .upsert(currentList, { onConflict: "id" });
 
           if (!upsertError) {
+            syncLocalCache();
             return true;
           }
 
@@ -885,13 +926,16 @@ export async function saveTableData<T extends { id: string | number }>(
             }
           }
 
-          // Self-healing for foreign key constraint violations (e.g. invalid tenant_id / komisariat_id)
-          if (
-            upsertError.code === "23503" ||
-            upsertError.message.includes("violates foreign key constraint")
-          ) {
+          // Self-healing HANYA jika constraint FK yang dilanggar benar-benar terkait tenant_id / komisariat_id
+          // (mencegah pengosongan tenant_id saat error berasal dari FK lain seperti role_id atau anggota_id!)
+          const fkMsg = (upsertError.message || "").toLowerCase();
+          const isTenantFkViolation =
+            (upsertError.code === "23503" || fkMsg.includes("violates foreign key constraint")) &&
+            (fkMsg.includes("tenant") || fkMsg.includes("komisariat"));
+
+          if (isTenantFkViolation) {
             console.warn(
-              `[Foreign Key Healing] ${effectiveTable}: Pelanggaran foreign key terdeteksi (${upsertError.message}), mereset tenant_id menjadi null untuk mencoba ulang...`
+              `[Foreign Key Healing] ${effectiveTable}: Pelanggaran foreign key tenant terdeteksi (${upsertError.message}), mereset tenant_id menjadi null untuk mencoba ulang...`
             );
             currentList = currentList.map((item: any) => {
               const copy = { ...item };
@@ -904,15 +948,19 @@ export async function saveTableData<T extends { id: string | number }>(
           }
 
           console.error(`[Supabase Write Error] ${effectiveTable}:`, upsertError.message);
-          break;
+          return false;
         }
+        return false;
       } else {
+        syncLocalCache();
         return true;
       }
     } catch (err) {
       console.error(`Gagal melakukan upsert ke Supabase untuk ${effectiveTable}:`, err);
+      return false;
     }
   }
 
+  syncLocalCache();
   return true;
 }

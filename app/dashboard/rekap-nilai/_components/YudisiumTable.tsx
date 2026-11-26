@@ -1,4 +1,5 @@
 import React from "react";
+import { SmartImage } from "@/components/ui/smart-image";
 import {
   Users,
   CheckCircle2,
@@ -13,92 +14,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ParticipantEvaluation, EventActivity } from "@/lib/db";
+import { getParticipantAllSessions } from "./rekapExportHelpers";
 
 interface YudisiumTableProps {
   filteredList: ParticipantEvaluation[];
   currentActivity: EventActivity | null;
   getParticipantAvatar: (item: ParticipantEvaluation) => string | undefined;
   onOpenDetail: (item: ParticipantEvaluation) => void;
-}
-
-interface ParticipantSessionRow {
-  title: string;
-  preTest?: number;
-  postTest?: number;
-  kognitif?: number;
-  afektif?: number;
-  psikomotorik?: number;
-  score?: number;
-  isGraded: boolean;
-}
-
-function getParticipantAllSessions(
-  item: ParticipantEvaluation,
-  activitySessions?: string[]
-): ParticipantSessionRow[] {
-  const sessionMap = new Map<string, ParticipantSessionRow>();
-
-  // 1. Pre-populate from planned activity sessions in curriculum order
-  if (activitySessions && activitySessions.length > 0) {
-    activitySessions.forEach((s) => {
-      const clean = s.replace(/^\d+\.\s*/, "").trim();
-      sessionMap.set(clean, {
-        title: clean,
-        isGraded: false
-      });
-    });
-  }
-
-  // 2. Populate scores from item.sessionScores
-  if (item.sessionScores && typeof item.sessionScores === "object") {
-    Object.entries(item.sessionScores).forEach(([materi, s]: [string, any]) => {
-      if (materi.startsWith("__")) return;
-      const clean = (s?.materiTitle || materi).replace(/^\d+\.\s*/, "").trim();
-      const existing: ParticipantSessionRow = sessionMap.get(clean) || { title: clean, isGraded: false };
-
-      const hasKog = typeof s?.kognitif === "number" && !isNaN(s.kognitif);
-      const hasAfk = typeof s?.afektif === "number" && !isNaN(s.afektif);
-      const hasPsi = typeof s?.psikomotorik === "number" && !isNaN(s.psikomotorik);
-      const hasScore = typeof s?.score === "number" && !isNaN(s.score);
-
-      existing.kognitif = hasKog ? s.kognitif : existing.kognitif;
-      existing.afektif = hasAfk ? s.afektif : existing.afektif;
-      existing.psikomotorik = hasPsi ? s.psikomotorik : existing.psikomotorik;
-      existing.score = hasScore ? s.score : existing.score;
-      if (hasKog || hasAfk || hasPsi || hasScore) {
-        existing.isGraded = true;
-      }
-
-      if (typeof s?.preTestScore === "number" && !isNaN(s.preTestScore)) {
-        existing.preTest = s.preTestScore;
-      }
-      if (typeof s?.postTestScore === "number" && !isNaN(s.postTestScore)) {
-        existing.postTest = s.postTestScore;
-      }
-
-      sessionMap.set(clean, existing);
-    });
-  }
-
-  // 3. Populate quiz scores from item.quizResults
-  if (item.quizResults && typeof item.quizResults === "object") {
-    Object.entries(item.quizResults).forEach(([materi, q]: [string, any]) => {
-      if (materi.startsWith("__")) return;
-      const clean = materi.replace(/^\d+\.\s*/, "").trim();
-      const existing: ParticipantSessionRow = sessionMap.get(clean) || { title: clean, isGraded: false };
-
-      if (typeof q?.preTest === "number" && !isNaN(q.preTest)) {
-        existing.preTest = q.preTest;
-      }
-      if (typeof q?.postTest === "number" && !isNaN(q.postTest)) {
-        existing.postTest = q.postTest;
-      }
-
-      sessionMap.set(clean, existing);
-    });
-  }
-
-  return Array.from(sessionMap.values());
 }
 
 export const YudisiumTable: React.FC<YudisiumTableProps> = ({
@@ -186,9 +108,11 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
                                           {item.participantName.substring(0, 2).toUpperCase()}
                                         </span>
                                         {getParticipantAvatar(item) && (
-                                          <img
+                                          <SmartImage
                                             src={getParticipantAvatar(item)}
                                             alt={item.participantName}
+                                            width={40}
+                                            height={40}
                                             className="absolute inset-0 w-full h-full object-cover rounded-full"
                                             onError={(e) => {
                                               (e.currentTarget as HTMLElement).style.display = "none";

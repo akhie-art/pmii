@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -47,7 +49,12 @@ import {
   getTargetStaffPrefix,
   isMenuAllowed
 } from "@/lib/auth-helpers";
-import { getTenantNameById, TENANT_CHANGED_EVENT, normalizeTenantName } from "@/lib/tenancy";
+import {
+  getTenantNameById,
+  TENANT_CHANGED_EVENT,
+  TENANT_STORAGE_KEY,
+  normalizeTenantName,
+} from "@/lib/tenancy";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,10 +110,9 @@ export default function DashboardLayout({
         if (storedDel) deletedIds = JSON.parse(storedDel);
       } catch (e) {}
 
-      const [regs, events, cadres] = await Promise.all([
+      const [regs, events] = await Promise.all([
         db.getRegistrations([]),
         db.getEvents([]),
-        db.getCadres([])
       ]);
 
       const items: any[] = [];
@@ -209,7 +215,10 @@ export default function DashboardLayout({
 
         let targetTenant = forcedTenant;
         if (!targetTenant && typeof window !== "undefined") {
-          targetTenant = localStorage.getItem("PMII_ACTIVE_TENANT") || undefined;
+          targetTenant =
+            localStorage.getItem(TENANT_STORAGE_KEY) ||
+            localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") ||
+            undefined;
         }
 
         const isSuper = isUserSuperAdmin(currentUser?.role, currentUser?.email);
@@ -278,7 +287,7 @@ export default function DashboardLayout({
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("PMII_THEME");
       if (savedTheme) {
-        setDarkMode(savedTheme === "dark");
+        queueMicrotask(() => setDarkMode(savedTheme === "dark"));
       }
     }
   }, []);
@@ -303,7 +312,9 @@ export default function DashboardLayout({
   }, []);
 
   useEffect(() => {
-    fetchDashboardNotifications();
+    queueMicrotask(() => {
+      void fetchDashboardNotifications();
+    });
     window.addEventListener("PMII_TABLE_SYNC", fetchDashboardNotifications);
     window.addEventListener("storage", fetchDashboardNotifications);
     return () => {
@@ -312,6 +323,93 @@ export default function DashboardLayout({
     };
   }, []);
 
+  // 1. Verifikasi sesi otoritatif ke server Supabase CUKUP SEKALI saat mount (tidak mengulang setiap pindah menu)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let isMounted = true;
+
+    const verifyServerSession = async () => {
+      if (!isSupabaseConfigured || !supabase) return;
+      try {
+        const {
+          data: { user: authUser },
+          error: authErr,
+        } = await supabase.auth.getUser();
+
+        if (!isMounted) return;
+
+        if (authErr || !authUser) {
+          await safeSignOut();
+          router.replace("/login");
+          return;
+        }
+
+        const fresh = await db.getMyProfile();
+        if (!isMounted || !fresh) return;
+
+        if (fresh.status === "NONAKTIF") {
+          await safeSignOut();
+          router.replace("/login");
+          return;
+        }
+
+        const freshRole = String(fresh.role || "anggota").toLowerCase().trim();
+        const freshIsSuper = isUserSuperAdmin(freshRole);
+        const freshIsStaff =
+          isUserAdmin(freshRole) ||
+          isUserPengurus(freshRole) ||
+          isUserInstruktur(freshRole);
+
+        if (!freshIsStaff) {
+          localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(fresh));
+          router.replace(freshRole === "peserta" ? "/peserta" : "/anggota");
+          return;
+        }
+
+        if (!freshIsSuper && fresh.needsOnboarding) {
+          localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(fresh));
+          router.replace("/onboarding");
+          return;
+        }
+
+        const storedRaw = localStorage.getItem("PMII_LOGGED_IN_USER");
+        const prevUser = storedRaw ? JSON.parse(storedRaw) : {};
+        const freshAllowed = Array.isArray(fresh.allowedMenus) ? fresh.allowedMenus : [];
+        const freshStatus = fresh.status || "AKTIF";
+        const freshTid = fresh.tenant_id || fresh.komisariat_id || prevUser.tenant_id;
+        const freshComm =
+          fresh.commissariat ||
+          (freshTid ? getTenantNameById(freshTid) : null) ||
+          prevUser.commissariat;
+
+        const updatedSession = {
+          ...prevUser,
+          ...fresh,
+          role: freshRole,
+          allowedMenus: freshAllowed,
+          status: freshStatus,
+          commissariat: freshComm,
+          tenant_id: freshTid,
+          komisariat_id: freshTid,
+        };
+
+        if (JSON.stringify(updatedSession) !== storedRaw) {
+          localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
+          setCurrentUser(updatedSession);
+        }
+      } catch (syncErr) {
+        console.warn("Notice verifying authoritative user session in layout:", syncErr);
+      }
+    };
+
+    verifyServerSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  // 2. Route Guard ringan & sinkron saat perpindahan pathname
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
@@ -329,46 +427,9 @@ export default function DashboardLayout({
         const roleNormalized = (user.role || "pengurus").toLowerCase();
         const isSuperAdminUser = isUserSuperAdmin(roleNormalized);
 
-        // Jika akun butuh onboarding atau belum terdaftar di basis data keanggotaan (anggota/kader)
-        if (!isSuperAdminUser) {
-          if (user.needsOnboarding) {
-            router.replace("/onboarding");
-            return;
-          }
-
-          // Cek apakah akun terdaftar di data anggota
-          (async () => {
-            try {
-              const cadres = await db.getCadres();
-              const foundCadre: any = cadres.find(
-                (c: any) =>
-                  (c.email && user.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
-                  c.id === user.id ||
-                  (user.user_id && c.user_id === user.user_id)
-              );
-              if (!foundCadre) {
-                const updatedSession = { ...user, needsOnboarding: true };
-                localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
-                router.replace("/onboarding");
-                return;
-              }
-
-              // Sinkronkan informasi tenant jika belum lengkap di session
-              const resolvedTid = foundCadre.tenant_id || foundCadre.komisariat_id || user.tenant_id || user.komisariat_id;
-              const resolvedComm = user.commissariat || foundCadre.commissariat || (resolvedTid ? getTenantNameById(resolvedTid) : null);
-              if ((!user.tenant_id && resolvedTid) || (!user.commissariat && resolvedComm)) {
-                const updatedSession = {
-                  ...user,
-                  tenant_id: resolvedTid,
-                  komisariat_id: resolvedTid,
-                  commissariat: resolvedComm || user.commissariat
-                };
-                localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
-              }
-            } catch (err) {
-              console.warn("Notice verifying membership in layout:", err);
-            }
-          })();
+        if (!isSuperAdminUser && user.needsOnboarding) {
+          router.replace("/onboarding");
+          return;
         }
 
         // Jika akun anggota, peserta, atau kader, alihkan ke URL dinamis sesuai data role akunnya
@@ -383,102 +444,43 @@ export default function DashboardLayout({
         const isInstruktur = isUserInstruktur(roleNormalized);
         const targetStaffPrefix = getTargetStaffPrefix(roleNormalized);
 
-        // URL dynamic role routing: if user is at legacy /dashboard or /dashboard/*, redirect to /admin, /pengurus, or /instruktur
-        if (typeof window !== "undefined") {
-          const currentPath = window.location.pathname;
-          if (currentPath === "/dashboard" || currentPath === "/dashboard/") {
-            router.replace(targetStaffPrefix);
-            return;
-          } else if (currentPath.startsWith("/dashboard/")) {
-            router.replace(currentPath.replace(/^\/dashboard/, targetStaffPrefix) + window.location.search);
-            return;
-          }
-
-          // If role is instruktur but enters /admin or /pengurus, redirect to /instruktur
-          if (isInstruktur && (currentPath.startsWith("/admin") || currentPath.startsWith("/pengurus"))) {
-            router.replace(currentPath.replace(/^\/(admin|pengurus)/, "/instruktur") + window.location.search);
-            return;
-          }
-
-          // If pengurus enters /admin or /instruktur, redirect to /pengurus
-          if (isPengurus && (currentPath.startsWith("/admin") || currentPath.startsWith("/instruktur"))) {
-            router.replace(currentPath.replace(/^\/(admin|instruktur)/, "/pengurus") + window.location.search);
-            return;
-          }
-          // If admin enters /pengurus or /instruktur, redirect to /admin
-          if (isAdmin && (currentPath.startsWith("/pengurus") || currentPath.startsWith("/instruktur"))) {
-            router.replace(currentPath.replace(/^\/(pengurus|instruktur)/, "/admin") + window.location.search);
-            return;
-          }
+        const currentPath = window.location.pathname;
+        if (currentPath === "/dashboard" || currentPath === "/dashboard/") {
+          router.replace(targetStaffPrefix);
+          return;
+        } else if (currentPath.startsWith("/dashboard/")) {
+          router.replace(currentPath.replace(/^\/dashboard/, targetStaffPrefix) + window.location.search);
+          return;
         }
 
-        setCurrentUser(user);
-        setLoading(false);
-
-        // Verifikasi sesi & peran otoritatif langsung dari server Supabase (mencegah manipulasi localStorage/DevTools)
-        if (isSupabaseConfigured && supabase) {
-          (async () => {
-            try {
-              const {
-                data: { user: authUser },
-                error: authErr,
-              } = await supabase.auth.getUser();
-
-              if (authErr || !authUser) {
-                await safeSignOut();
-                router.replace("/login");
-                return;
-              }
-
-              const fresh = await db.getMyProfile();
-              if (fresh) {
-                if (fresh.status === "NONAKTIF") {
-                  await safeSignOut();
-                  router.replace("/login");
-                  return;
-                }
-
-                const freshRole = String(fresh.role || "anggota").toLowerCase().trim();
-                const freshIsStaff =
-                  isUserAdmin(freshRole) ||
-                  isUserPengurus(freshRole) ||
-                  isUserInstruktur(freshRole);
-
-                if (!freshIsStaff) {
-                  localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(fresh));
-                  router.replace(freshRole === "peserta" ? "/peserta" : "/anggota");
-                  return;
-                }
-
-                const freshAllowed = Array.isArray(fresh.allowedMenus) ? fresh.allowedMenus : [];
-                const freshStatus = fresh.status || "AKTIF";
-                const freshComm = fresh.commissariat || user.commissariat;
-                const freshTid = fresh.tenant_id || fresh.komisariat_id || user.tenant_id;
-
-                const roleChanged = freshRole !== String(user.role || "").toLowerCase();
-                const menusChanged = JSON.stringify(freshAllowed) !== JSON.stringify(user.allowedMenus);
-                const statusChanged = freshStatus !== user.status;
-                const tenantChanged = freshTid !== user.tenant_id;
-
-                if (roleChanged || menusChanged || statusChanged || tenantChanged) {
-                  const updatedSession = {
-                    ...user,
-                    role: freshRole,
-                    allowedMenus: freshAllowed,
-                    status: freshStatus,
-                    commissariat: freshComm,
-                    tenant_id: freshTid,
-                    komisariat_id: freshTid,
-                  };
-                  localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(updatedSession));
-                  setCurrentUser(updatedSession);
-                }
-              }
-            } catch (syncErr) {
-              console.warn("Notice verifying authoritative user session in layout:", syncErr);
-            }
-          })();
+        if (!isSuperAdminUser && /^\/(superadmin|super_admin)(\/|$)/.test(currentPath)) {
+          router.replace(currentPath.replace(/^\/(superadmin|super_admin)/, targetStaffPrefix) + window.location.search);
+          return;
         }
+
+        if (isInstruktur && /^\/(admin|cabang|pc|pengurus)(\/|$)/.test(currentPath)) {
+          router.replace(currentPath.replace(/^\/(admin|cabang|pc|pengurus)/, "/instruktur") + window.location.search);
+          return;
+        }
+
+        if (isPengurus && /^\/(admin|cabang|pc|instruktur)(\/|$)/.test(currentPath)) {
+          router.replace(currentPath.replace(/^\/(admin|cabang|pc|instruktur)/, "/pengurus") + window.location.search);
+          return;
+        }
+
+        if (isAdmin && /^\/(pengurus|instruktur)(\/|$)/.test(currentPath)) {
+          router.replace(currentPath.replace(/^\/(pengurus|instruktur)/, "/admin") + window.location.search);
+          return;
+        }
+
+        queueMicrotask(() => {
+          setCurrentUser((prev: any) =>
+            prev?.id === user.id && prev?.role === user.role && prev?.tenant_id === user.tenant_id
+              ? prev
+              : user
+          );
+          setLoading(false);
+        });
 
         // Route Guard for Instruktur
         const normalizedPath = pathname.replace(/\/$/, "");
@@ -509,8 +511,7 @@ export default function DashboardLayout({
         const isProfil = normalizedPath.endsWith("/profil");
 
         if (!isSuperAdminUser && !isRootHome && !isProfil) {
-          // If pengurus tries to access legacy /admin routes, redirect to targetStaffPrefix
-          if (isPengurus && (normalizedPath === "/admin" || normalizedPath.startsWith("/admin/"))) {
+          if (isPengurus && /^\/(admin|cabang|pc|superadmin|super_admin)(\/|$)/.test(normalizedPath)) {
             router.push(targetStaffPrefix);
             return;
           }
@@ -643,13 +644,13 @@ export default function DashboardLayout({
           <SidebarHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs overflow-hidden">
-                <img
+                <SmartImage
                   src={sidebarTenant.logo || "/image/logo_komsat.png"}
+                  fallbackSrc="/image/logo_komsat.png"
                   alt="Logo"
+                  width={32}
+                  height={32}
                   className="w-full h-full object-contain"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "/image/logo_komsat.png";
-                  }}
                 />
               </div>
               <div className="group-data-[collapsible=icon]:hidden overflow-hidden">

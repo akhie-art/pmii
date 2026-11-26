@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useMemo } from "react";
 import {
   Users,
@@ -225,9 +227,11 @@ export const PengurusGrid: React.FC<PengurusGridProps> = ({
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         {avatarUrl ? (
-                          <img
+                          <SmartImage
                             src={avatarUrl}
                             alt={member.name}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
                           />
                         ) : (
@@ -403,9 +407,11 @@ export const PengurusGrid: React.FC<PengurusGridProps> = ({
                   <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800/80 space-y-2">
                     <div className="flex items-center gap-2.5">
                       {ketuaAvatar ? (
-                        <img
+                        <SmartImage
                           src={ketuaAvatar}
                           alt={ketua?.name || "Ketua"}
+                          width={40}
+                          height={40}
                           className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
                         />
                       ) : (
@@ -466,10 +472,12 @@ export const PengurusGrid: React.FC<PengurusGridProps> = ({
                       {members.slice(0, 4).map((m, idx) => {
                         const av = getMemberAvatar(m);
                         return av ? (
-                          <img
+                          <SmartImage
                             key={m.id || idx}
                             src={av}
                             alt={m.name}
+                            width={24}
+                            height={24}
                             className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-zinc-900 object-cover"
                           />
                         ) : (

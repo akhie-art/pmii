@@ -53,17 +53,6 @@ export default function DashboardHome() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      if (stored) {
-        try {
-          const u = JSON.parse(stored);
-          setCurrentUser(u);
-          setActiveTenant(getActiveTenant(u) || "ALL");
-        } catch (e) {
-          console.error("Error reading user session:", e);
-        }
-      }
-
       const handleTenant = (e: any) => {
         setActiveTenant(e.detail?.activeTenant || "ALL");
       };
@@ -72,72 +61,31 @@ export default function DashboardHome() {
     }
   }, []);
 
-  // Fetch real-time dashboard data
+  // Fetch real-time dashboard data secara paralel (eliminasi sequential waterfall & double query)
   useEffect(() => {
+    let active = true;
     const fetchDashboardStats = async () => {
       try {
-        let cadresData: any[] = [];
-        let commData: any[] = [];
-        let eventsData: any[] = [];
-        let lettersData: any[] = [];
-
-        // 1. Fetch Cadres / Anggota
-        try {
-          cadresData = await db.getCadres([]);
-        } catch (e) {
-          console.warn("db.getCadres warning:", e);
+        if (typeof window !== "undefined") {
+          const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+          if (stored) {
+            try {
+              const u = JSON.parse(stored);
+              setCurrentUser(u);
+              setActiveTenant(getActiveTenant(u) || "ALL");
+            } catch (e) {
+              console.error("Error reading user session:", e);
+            }
+          }
         }
+        const [cadresData, commData, eventsData, lettersData] = await Promise.all([
+          db.getCadres([]).catch(() => []),
+          db.getCommissariats([]).catch(() => []),
+          db.getEvents([]).catch(() => []),
+          db.getSurat().catch(() => []),
+        ]);
 
-        // Direct fallback jika kosong
-        if ((!cadresData || cadresData.length === 0) && isSupabaseConfigured && supabase) {
-          try {
-            const { data } = await supabase.from("anggota").select("*");
-            if (data && data.length > 0) cadresData = data;
-          } catch {}
-        }
-
-        // 2. Fetch Commissariats
-        try {
-          commData = await db.getCommissariats([]);
-        } catch (e) {
-          console.warn("db.getCommissariats warning:", e);
-        }
-
-        if ((!commData || commData.length === 0) && isSupabaseConfigured && supabase) {
-          try {
-            const { data } = await supabase.from("tenant").select("*");
-            if (data && data.length > 0) commData = data;
-          } catch {}
-        }
-
-        // 3. Fetch Events
-        try {
-          eventsData = await db.getEvents([]);
-        } catch (e) {
-          console.warn("db.getEvents warning:", e);
-        }
-
-        if ((!eventsData || eventsData.length === 0) && isSupabaseConfigured && supabase) {
-          try {
-            const { data } = await supabase.from("kegiatan").select("*");
-            if (data && data.length > 0) eventsData = data;
-          } catch {}
-        }
-
-        // 4. Fetch Letters / Surat
-        try {
-          lettersData = await db.getSurat().catch(() => []);
-        } catch (e) {
-          console.warn("db.getSurat warning:", e);
-        }
-
-        if ((!lettersData || lettersData.length === 0) && isSupabaseConfigured && supabase) {
-          try {
-            const { data } = await supabase.from("surat").select("*");
-            if (data && data.length > 0) lettersData = data;
-          } catch {}
-        }
-
+        if (!active) return;
         setCadres(cadresData || []);
         setCommissariats(commData || []);
         setEvents(eventsData || []);
@@ -145,11 +93,14 @@ export default function DashboardHome() {
       } catch (err) {
         console.error("Dashboard stats fetch error:", err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     fetchDashboardStats();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const userRole = (currentUser?.role || "").toLowerCase().trim();
@@ -200,16 +151,14 @@ export default function DashboardHome() {
   const totalLetters = scopedLetters.length;
 
   // Sebaran Kader per Komisariat
-  const defaultCommissariatsList = [
-    { name: "Komisariat Ki Ageng Tarub", campus: "STAI Walisembilan Semarang" },
-    { name: "Komisariat Ajisaka", campus: "STAI Grobogan" },
-    { name: "Komisariat Joko Suro", campus: "STAI Walisembilan Semarang" },
-    { name: "Komisariat Ki Ageng Getas Pendawa", campus: "Universitas An Nuur" },
-  ];
-
   const relevantCommissariatsList = useMemo(() => {
+    const defaultCommissariatsList = [
+      { name: "Komisariat Ki Ageng Tarub", campus: "STAI Walisembilan Semarang" },
+      { name: "Komisariat Ajisaka", campus: "STAI Grobogan" },
+      { name: "Komisariat Joko Suro", campus: "STAI Walisembilan Semarang" },
+      { name: "Komisariat Ki Ageng Getas Pendawa", campus: "Universitas An Nuur" },
+    ];
     if (!isCabang) {
-      const userComm = currentUser?.commissariat || (currentUser?.tenant_id ? getTenantNameById(currentUser.tenant_id) : "");
       return defaultCommissariatsList.filter((c) =>
         isRecordInTenant(currentUser, { commissariat: c.name, campus: c.campus })
       );

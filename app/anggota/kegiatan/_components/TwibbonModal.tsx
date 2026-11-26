@@ -68,19 +68,18 @@ export const TwibbonModal: React.FC<TwibbonModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Ambil avatar kader sebagai default jika ada, atau default SVG avatar
-  useEffect(() => {
+  const twibbonSyncKey = isOpen ? `${activeCadre?.id || ""}:${activeCadre?.avatar || activeCadre?.pasFoto || ""}` : "";
+  const [prevTwibbonSyncKey, setPrevTwibbonSyncKey] = useState("");
+  if (twibbonSyncKey !== prevTwibbonSyncKey) {
+    setPrevTwibbonSyncKey(twibbonSyncKey);
     if (isOpen) {
       const defaultAvatar = activeCadre?.avatar || activeCadre?.pasFoto || "";
-      if (defaultAvatar) {
-        setUserPhoto(defaultAvatar);
-      } else {
-        setUserPhoto(DEFAULT_CADRE_AVATAR);
-      }
+      setUserPhoto(defaultAvatar || DEFAULT_CADRE_AVATAR);
       setZoom(1);
       setRotation(0);
       setPan({ x: 0, y: 0 });
     }
-  }, [isOpen, activeCadre]);
+  }
 
   // Format caption dengan nama kader jika ada
   const formattedCaption = React.useMemo(() => {

@@ -16,6 +16,7 @@ import {
 
 import { db } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { createUniqueFileName } from "@/lib/utils";
 import { isUserKomisariat } from "@/lib/auth-helpers";
 import {
   DEFAULT_SETTINGS,
@@ -231,7 +232,7 @@ export default function PengaturanPage() {
       if (isSupabaseConfigured && supabase) {
         const fileExt = file.name.split(".").pop() || "png";
         const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
-        const filePath = `logos/${Date.now()}_${cleanName}.${fileExt}`;
+        const filePath = `logos/${createUniqueFileName(cleanName, fileExt)}`;
 
         const { error: uploadError } = await supabase.storage
           .from("komisariat")

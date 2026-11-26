@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { DriveTab, DocumentItem, FolderItem } from "@/types/drive";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { uploadPrivateDocument } from "@/lib/storage";
 import { generateUUID } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -98,6 +99,7 @@ export default function DriveSidebar({
     try {
       let uploaderName = "Admin PK PMII";
       let uploaderAvatar = "";
+      let uploaderTenantId: string | null = null;
       if (typeof window !== "undefined") {
         try {
           const storedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
@@ -105,6 +107,7 @@ export default function DriveSidebar({
             const parsed = JSON.parse(storedUser);
             if (parsed?.name) uploaderName = parsed.name;
             if (parsed?.avatar) uploaderAvatar = parsed.avatar;
+            uploaderTenantId = parsed?.tenant_id || parsed?.komisariat_id || null;
           }
         } catch {}
       }
@@ -114,17 +117,27 @@ export default function DriveSidebar({
       for (const file of fileList) {
         let fileUrl = "";
         if (isSupabaseConfigured && supabase) {
-          const fileExt = file.name.split(".").pop();
-          const filePath = `drive/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage
-            .from("materials")
-            .upload(filePath, file, { cacheControl: "3600", upsert: true });
-
-          if (!uploadError) {
-            const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
-            fileUrl = data.publicUrl;
+          if (activeTab !== "PUBLIC") {
+            const uploaded = await uploadPrivateDocument(file, {
+              category: "drive",
+              tenantId: uploaderTenantId,
+            });
+            if (uploaded) {
+              fileUrl = uploaded.storageRef;
+            }
           } else {
-            console.error("Supabase storage upload error:", uploadError.message);
+            const fileExt = file.name.split(".").pop();
+            const filePath = `drive/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage
+              .from("materials")
+              .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+            if (!uploadError) {
+              const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+              fileUrl = data.publicUrl;
+            } else {
+              console.error("Supabase storage upload error:", uploadError.message);
+            }
           }
         }
 

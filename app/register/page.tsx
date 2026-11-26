@@ -1,12 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { SmartImage } from "@/components/ui/smart-image";
+
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db, Kaderisasi, ensureEvaluationForRegistration } from "@/lib/db";
 import type { UserRole, UserAccount } from "@/lib/db";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { getKomisariatSlug } from "@/lib/tenancy";
+import { createUniqueFileName } from "@/lib/utils";
+import { useMounted } from "@/hooks/use-mounted";
 import QRCode from "qrcode";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -184,9 +188,25 @@ function GoogleIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function getReferrerKomisariatUrl(): string | null {
+  if (typeof document === "undefined" || !document.referrer || !document.referrer.includes("/komisariat/")) {
+    return null;
+  }
+  try {
+    const refUrl = new URL(document.referrer);
+    if (refUrl.pathname.startsWith("/komisariat/")) {
+      return refUrl.pathname;
+    }
+  } catch {
+    const match = document.referrer.match(/\/komisariat\/[a-zA-Z0-9_-]+/);
+    if (match) return match[0];
+  }
+  return null;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [darkMode, setDarkMode] = useState(true);
   const [step, setStep] = useState<number>(1);
 
@@ -199,31 +219,19 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [redirectParam, setRedirectParam] = useState("");
-  const [previousKomisariatUrl, setPreviousKomisariatUrl] = useState<string | null>(null);
+  const [targetEventId, setTargetEventId] = useState<string | null>(null);
+  const previousKomisariatUrl = mounted ? getReferrerKomisariatUrl() : null;
 
   useEffect(() => {
-    setMounted(true);
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return;
+    queueMicrotask(() => {
       const savedTheme = localStorage.getItem("PMII_THEME");
       if (savedTheme) {
         setDarkMode(savedTheme === "dark");
       } else {
         setDarkMode(document.documentElement.classList.contains("dark"));
       }
-
-      // Deteksi jika user datang dari halaman landing komisariat
-      if (document.referrer && document.referrer.includes("/komisariat/")) {
-        try {
-          const refUrl = new URL(document.referrer);
-          if (refUrl.pathname.startsWith("/komisariat/")) {
-            setPreviousKomisariatUrl(refUrl.pathname);
-          }
-        } catch {
-          const match = document.referrer.match(/\/komisariat\/[a-zA-Z0-9_-]+/);
-          if (match) setPreviousKomisariatUrl(match[0]);
-        }
-      }
-    }
+    });
   }, []);
 
   useEffect(() => {
@@ -365,6 +373,11 @@ export default function RegisterPage() {
     }
   };
 
+  const accountCheckRef = useRef({ checkExistingAccount, checkEventRegistrationStatus });
+  useEffect(() => {
+    accountCheckRef.current = { checkExistingAccount, checkEventRegistrationStatus };
+  });
+
   useEffect(() => {
     const checkCurrentUser = async () => {
       // 1. Cek sesi Supabase jika user baru saja login dari Google OAuth
@@ -381,11 +394,11 @@ export default function RegisterPage() {
             if (user.user_metadata?.phone) {
               setPhone((prev) => prev || user.user_metadata.phone);
             }
-            await checkExistingAccount(user.email, true);
+            await accountCheckRef.current.checkExistingAccount(user.email, true);
             const currentParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
             const evId = currentParams?.get("event");
             if (evId) {
-              await checkEventRegistrationStatus(user.email, evId);
+              await accountCheckRef.current.checkEventRegistrationStatus(user.email, evId);
             }
             return;
           }
@@ -406,11 +419,11 @@ export default function RegisterPage() {
             if (savedUser.phone) setPhone((prev) => prev || savedUser.phone);
             if (savedUser.commissariat) setCommissariat((prev) => prev || savedUser.commissariat);
             setIsGoogleAuthUser(true);
-            await checkExistingAccount(savedUser.email, true);
+            await accountCheckRef.current.checkExistingAccount(savedUser.email, true);
             const currentParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
             const evId = currentParams?.get("event");
             if (evId) {
-              await checkEventRegistrationStatus(savedUser.email, evId);
+              await accountCheckRef.current.checkEventRegistrationStatus(savedUser.email, evId);
             }
           }
         } catch (e) {}
@@ -420,9 +433,14 @@ export default function RegisterPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     if (!registeredNumber) {
-      setQrCodeDataUrl("");
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) setQrCodeDataUrl("");
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     QRCode.toDataURL(registeredNumber, {
       width: 200,
@@ -432,10 +450,15 @@ export default function RegisterPage() {
         light: "#ffffff"
       }
     })
-      .then((url) => setQrCodeDataUrl(url))
+      .then((url) => {
+        if (!cancelled) setQrCodeDataUrl(url);
+      })
       .catch((err) => {
         console.error("Local QR code generation error:", err);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [registeredNumber]);
 
   const handleGoogleRegister = async () => {
@@ -499,7 +522,6 @@ export default function RegisterPage() {
   };
 
   // Dynamic custom event states
-  const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [eventDetails, setEventDetails] = useState<EventActivity | null>(null);
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
@@ -543,9 +565,9 @@ export default function RegisterPage() {
     try {
       let finalUrl = "";
       if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop();
+        const fileExt = file.name.split(".").pop() || "bin";
         const eventFolder = targetEventId || "general";
-        const filePath = `registrations/${eventFolder}/${fieldId}-${Date.now()}.${fileExt}`;
+        const filePath = `registrations/${eventFolder}/${createUniqueFileName(fieldId, fileExt)}`;
         
         const { error: uploadError } = await supabase.storage
           .from("materials")
@@ -672,10 +694,13 @@ export default function RegisterPage() {
     return <FileText className="w-4 h-4 text-blue-500" />;
   };
 
+  const eventInitRef = useRef({ email, name, phone, syncAnswersWithData });
+  useEffect(() => {
+    eventInitRef.current = { email, name, phone, syncAnswersWithData };
+  });
+
   useEffect(() => {
     const loadEvents = async () => {
-      setMounted(true);
-
       if (typeof window !== "undefined") {
         router.prefetch("/anggota/kegiatan");
         router.prefetch("/peserta/kegiatan");
@@ -709,14 +734,14 @@ export default function RegisterPage() {
 
           // Cek apakah user saat ini sudah pernah terdaftar di kegiatan ini
           const savedStr = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
-          let mailToCheck = email;
+          let mailToCheck = eventInitRef.current.email;
           if (savedStr) {
             try {
-              mailToCheck = JSON.parse(savedStr)?.email || email;
+              mailToCheck = JSON.parse(savedStr)?.email || eventInitRef.current.email;
             } catch (e) {}
           }
           if (mailToCheck) {
-            await checkEventRegistrationStatus(mailToCheck, eventId);
+            await accountCheckRef.current.checkEventRegistrationStatus(mailToCheck, eventId);
           }
 
           const events = await db.getEvents();
@@ -730,7 +755,16 @@ export default function RegisterPage() {
             (foundEvent.formFields || []).forEach((field: any) => {
               initialAnswers[field.id] = "";
             });
-            setCustomAnswers(syncAnswersWithData(initialAnswers, name, phone, mailToCheck, null, foundEvent.formFields));
+            setCustomAnswers(
+              eventInitRef.current.syncAnswersWithData(
+                initialAnswers,
+                eventInitRef.current.name,
+                eventInitRef.current.phone,
+                mailToCheck,
+                null,
+                foundEvent.formFields
+              )
+            );
 
             // Fetch curriculum syllabus and module
             try {
@@ -746,7 +780,16 @@ export default function RegisterPage() {
                 activeFields.forEach((field: any) => {
                   syncedAnswers[field.id] = "";
                 });
-                setCustomAnswers(syncAnswersWithData(syncedAnswers, name, phone, mailToCheck, null, activeFields));
+                setCustomAnswers(
+                  eventInitRef.current.syncAnswersWithData(
+                    syncedAnswers,
+                    eventInitRef.current.name,
+                    eventInitRef.current.phone,
+                    mailToCheck,
+                    null,
+                    activeFields
+                  )
+                );
                 setEventDetails({ ...foundEvent, formFields: activeFields });
               }
             } catch (err) {
@@ -757,7 +800,7 @@ export default function RegisterPage() {
       }
     };
     loadEvents();
-  }, []);
+  }, [router]);
 
   const handleNextStep = async () => {
     setError("");
@@ -1586,7 +1629,7 @@ export default function RegisterPage() {
                 <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-xs">
                   <div className="flex items-center gap-3 min-w-0">
                     {googleAvatar ? (
-                      <img src={googleAvatar} alt={name} className="w-10 h-10 rounded-full object-cover shrink-0 border border-emerald-400/80 shadow-2xs" />
+                      <SmartImage src={googleAvatar} alt={name} width={40} height={40} className="w-10 h-10 rounded-full object-cover shrink-0 border border-emerald-400/80 shadow-2xs" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                         <GoogleIcon className="w-5 h-5" />
@@ -1972,9 +2015,11 @@ export default function RegisterPage() {
                                       <div className="flex items-center justify-between p-2.5 bg-zinc-50/70 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 rounded-xl">
                                         <div className="flex items-center gap-2.5 min-w-0">
                                           {isImg ? (
-                                            <img
+                                            <SmartImage
                                               src={value}
                                               alt={fileNames[field.id] || field.label}
+                                              width={36}
+                                              height={36}
                                               className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer"
                                               onClick={() => handlePreviewFile(value, field.label)}
                                             />

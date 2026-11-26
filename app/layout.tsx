@@ -1,7 +1,30 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Poppins } from "next/font/google";
+import { Archivo_Narrow, Carlito, Charm, Inter, JetBrains_Mono, Poppins } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+const charm = Charm({
+  variable: "--font-corsiva",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+const archivoNarrow = Archivo_Narrow({
+  variable: "--font-arial-narrow",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+const carlito = Carlito({
+  variable: "--font-calibri",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
 
 const inter = Inter({
   variable: "--font-inter",
@@ -40,7 +63,7 @@ export default function RootLayout({
       lang="id"
       suppressHydrationWarning
       data-scroll-behavior="smooth"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${poppins.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${poppins.variable} ${charm.variable} ${archivoNarrow.variable} ${carlito.variable} h-full antialiased`}
     >
       <head>
         <script

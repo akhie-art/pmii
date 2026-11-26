@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -37,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { normalizeTenantName } from "@/lib/tenancy";
+import { isUserAdmin, isUserPengurus, isUserInstruktur, getTargetStaffPrefix } from "@/lib/auth-helpers";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -90,8 +93,13 @@ export default function KaderLayout({
   const match = pathname ? pathname.match(/^\/(peserta|anggota|kader)/) : null;
   const rolePrefix = match ? `/${match[1]}` : `/${userRole || "peserta"}`;
   const isPeserta = (match ? match[1] : (userRole || "peserta")) === "peserta";
+  const rolePrefixRef = React.useRef(rolePrefix);
+  useEffect(() => {
+    rolePrefixRef.current = rolePrefix;
+  });
 
-  const fetchPortalNotifications = async (userEmail?: string, userName?: string, isAnggota?: boolean) => {
+  const fetchPortalNotifications = React.useCallback(async (userEmail?: string, userName?: string, _isAnggota?: boolean) => {
+    const activeRolePrefix = rolePrefixRef.current;
     try {
       const emailNorm = (userEmail || "").trim().toLowerCase();
       const nameNorm = (userName || "").trim().toLowerCase();
@@ -137,7 +145,7 @@ export default function KaderLayout({
             timestamp: new Date(reg.dateApplied || Date.now()).getTime(),
             unread: !readIds.includes(id),
             type: "graduation",
-            link: `${rolePrefix}/kegiatan?event=${reg.eventId}`,
+            link: `${activeRolePrefix}/kegiatan?event=${reg.eventId}`,
             iconType: "award"
           });
         } else if (reg.status === "APPROVED") {
@@ -150,7 +158,7 @@ export default function KaderLayout({
             timestamp: new Date(reg.dateApplied || Date.now()).getTime(),
             unread: !readIds.includes(id),
             type: "registration",
-            link: `${rolePrefix}/kegiatan?event=${reg.eventId}`,
+            link: `${activeRolePrefix}/kegiatan?event=${reg.eventId}`,
             iconType: "success"
           });
         } else if (reg.status === "REJECTED") {
@@ -163,7 +171,7 @@ export default function KaderLayout({
             timestamp: new Date(reg.dateApplied || Date.now()).getTime(),
             unread: !readIds.includes(id),
             type: "registration",
-            link: `${rolePrefix}/kegiatan?event=${reg.eventId}`,
+            link: `${activeRolePrefix}/kegiatan?event=${reg.eventId}`,
             iconType: "warning"
           });
         } else {
@@ -176,7 +184,7 @@ export default function KaderLayout({
             timestamp: new Date(reg.dateApplied || Date.now()).getTime(),
             unread: !readIds.includes(id),
             type: "registration",
-            link: `${rolePrefix}/kegiatan?event=${reg.eventId}`,
+            link: `${activeRolePrefix}/kegiatan?event=${reg.eventId}`,
             iconType: "info"
           });
         }
@@ -196,7 +204,7 @@ export default function KaderLayout({
             timestamp: new Date(ev.date || (ev as any).startDate || Date.now()).getTime(),
             unread: !readIds.includes(id),
             type: "event",
-            link: `${rolePrefix}/kegiatan?event=${ev.id}`,
+            link: `${activeRolePrefix}/kegiatan?event=${ev.id}`,
             iconType: "info"
           });
         });
@@ -210,7 +218,7 @@ export default function KaderLayout({
     } catch (err) {
       console.warn("Failed to load portal notifications:", err);
     }
-  };
+  }, []);
 
   const markNotificationAsRead = (id: string, link?: string) => {
     let currentRead: string[] = [];
@@ -276,7 +284,9 @@ export default function KaderLayout({
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return;
+
+    const initAndLoad = async () => {
       const activeAnggotaId = localStorage.getItem("PMII_ACTIVE_ANGGOTA_ID") || localStorage.getItem("PMII_ACTIVE_CADRE_ID");
       const savedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
 
@@ -296,9 +306,9 @@ export default function KaderLayout({
             return;
           }
           const r = (parsedUser?.role || "").toLowerCase();
-          if (r === "admin" || r === "pengurus" || r === "komisariat") {
+          if (isUserAdmin(r) || isUserPengurus(r) || isUserInstruktur(r)) {
             setIsStaffUser(true);
-            router.replace("/dashboard");
+            router.replace(getTargetStaffPrefix(r));
             return;
           } else if (r) {
             detectedRole = r;
@@ -307,7 +317,7 @@ export default function KaderLayout({
       }
       setUserRole(detectedRole);
 
-      // Fast synchronous hydration from local cache so the layout renders instantly without freeze
+      // Fast hydration from local cache so the layout renders instantly without freeze
       if (parsedUser) {
         setActiveAnggota({
           id: parsedUser.id || activeAnggotaId || "anggota-user",
@@ -324,124 +334,118 @@ export default function KaderLayout({
           });
         }
         setMounted(true);
-        fetchPortalNotifications(parsedUser.email, parsedUser.name, (parsedUser.role || detectedRole) === "anggota");
+        void fetchPortalNotifications(parsedUser.email, parsedUser.name, (parsedUser.role || detectedRole) === "anggota");
       }
 
       // Synchronize browser address bar URL cleanly without freezing Next.js App Router
       const path = window.location.pathname;
       if (path === "/kader" || path.startsWith("/kader/")) {
         const target = path.replace(/^\/kader/, `/${detectedRole}`);
-        if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", target + window.location.search);
-        }
+        window.history.replaceState(null, "", target + window.location.search);
       } else {
         const matchRole = path.match(/^\/(peserta|anggota)/);
         if (matchRole && matchRole[1] !== detectedRole && (detectedRole === "peserta" || detectedRole === "anggota")) {
           const target = path.replace(/^\/(peserta|anggota)/, `/${detectedRole}`);
-          if (typeof window !== "undefined") {
-            window.history.replaceState(null, "", target + window.location.search);
-          }
+          window.history.replaceState(null, "", target + window.location.search);
         }
       }
 
       const savedTheme = localStorage.getItem("PMII_THEME") || "dark";
       setDarkMode(savedTheme === "dark");
 
-      const loadAnggota = async () => {
-        if (isSupabaseConfigured && supabase) {
-          const {
-            data: { user: authUser },
-            error: authErr,
-          } = await supabase.auth.getUser();
-          if (authErr || !authUser) {
+      if (isSupabaseConfigured && supabase) {
+        const {
+          data: { user: authUser },
+          error: authErr,
+        } = await supabase.auth.getUser();
+        if (authErr || !authUser) {
+          await safeSignOut();
+          const fullPath = window.location.pathname + window.location.search;
+          router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
+          return;
+        }
+        const profile = await db.getMyProfile();
+        if (profile) {
+          if (profile.status === "NONAKTIF") {
             await safeSignOut();
-            const fullPath = window.location.pathname + window.location.search;
-            router.replace(`/login?redirect=${encodeURIComponent(fullPath)}`);
+            router.replace("/login");
             return;
           }
-          const profile = await db.getMyProfile();
-          if (profile) {
-            if (profile.status === "NONAKTIF") {
-              await safeSignOut();
-              router.replace("/login");
-              return;
-            }
-            if (profile.needsOnboarding) {
-              localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(profile));
-              router.replace("/onboarding");
-              return;
-            }
+          if (profile.needsOnboarding) {
+            localStorage.setItem("PMII_LOGGED_IN_USER", JSON.stringify(profile));
+            router.replace("/onboarding");
+            return;
           }
         }
+      }
 
-        const [anggotaList, commList] = await Promise.all([
-          db.getAnggota([]),
-          db.getCommissariats().catch(() => [])
-        ]);
+      const [anggotaList, commList] = await Promise.all([
+        db.getAnggota([]),
+        db.getCommissariats().catch(() => [])
+      ]);
 
-        let found = null;
-        let parsedUser: any = null;
-        if (savedUser) {
-          try {
-            parsedUser = JSON.parse(savedUser);
-            if (parsedUser?.email) {
-              found = anggotaList.find(c => c.email && c.email.trim().toLowerCase() === parsedUser.email.trim().toLowerCase());
-            }
-          } catch (e) {}
-        }
-        if (!found && activeAnggotaId) {
-          found = anggotaList.find(c => c.id === activeAnggotaId);
-        }
-
-        const targetComm = found?.commissariat || parsedUser?.commissariat || "PMII Grobogan";
-        const targetTenantId = found?.tenant_id || (found as any)?.komisariat_id || parsedUser?.tenant_id;
-        const targetNorm = normalizeTenantName(targetComm);
-
-        const matchedTenant = commList.find((c: any) =>
-          (targetTenantId && (c.id === targetTenantId || c.tenant_id === targetTenantId)) ||
-          (c.name && normalizeTenantName(c.name) === targetNorm) ||
-          (c.university && normalizeTenantName(c.university) === targetNorm)
-        );
-
-        if (matchedTenant) {
-          setTenantInfo({
-            name: matchedTenant.name,
-            logo: matchedTenant.logo || null,
-          });
-        } else {
-          setTenantInfo({
-            name: targetComm,
-            logo: null,
-          });
-        }
-
-        if (found) {
-          setActiveAnggota(found);
-          localStorage.setItem("PMII_ACTIVE_ANGGOTA_ID", found.id);
-          localStorage.setItem("PMII_ACTIVE_CADRE_ID", found.id);
-          if (found.role) {
-            setUserRole(found.role.toLowerCase());
+      let found = null;
+      let parsedUserRefresh: any = null;
+      if (savedUser) {
+        try {
+          parsedUserRefresh = JSON.parse(savedUser);
+          if (parsedUserRefresh?.email) {
+            found = anggotaList.find(c => c.email && c.email.trim().toLowerCase() === parsedUserRefresh.email.trim().toLowerCase());
           }
-        } else if (parsedUser) {
-          setActiveAnggota({
-            id: parsedUser.id || "anggota-user",
-            name: parsedUser.name || "Anggota PMII",
-            email: parsedUser.email || "",
-            level: "MAPABA",
-            commissariat: parsedUser.commissariat || "Ki Ageng Getas Pendawa",
-            role: parsedUser.role || detectedRole
-          });
-        }
-        setMounted(true);
-        const activeEmail = found?.email || parsedUser?.email;
-        const activeName = found?.name || parsedUser?.name;
-        const isAnggota = (found?.role || parsedUser?.role || detectedRole) === "anggota";
-        fetchPortalNotifications(activeEmail, activeName, isAnggota);
-      };
+        } catch (e) {}
+      }
+      if (!found && activeAnggotaId) {
+        found = anggotaList.find(c => c.id === activeAnggotaId);
+      }
 
-      loadAnggota();
-    }
-  }, [router]);
+      const targetComm = found?.commissariat || parsedUserRefresh?.commissariat || "PMII Grobogan";
+      const targetTenantId = found?.tenant_id || (found as any)?.komisariat_id || parsedUserRefresh?.tenant_id;
+      const targetNorm = normalizeTenantName(targetComm);
+
+      const matchedTenant = commList.find((c: any) =>
+        (targetTenantId && (c.id === targetTenantId || c.tenant_id === targetTenantId)) ||
+        (c.name && normalizeTenantName(c.name) === targetNorm) ||
+        (c.university && normalizeTenantName(c.university) === targetNorm)
+      );
+
+      if (matchedTenant) {
+        setTenantInfo({
+          name: matchedTenant.name,
+          logo: matchedTenant.logo || null,
+        });
+      } else {
+        setTenantInfo({
+          name: targetComm,
+          logo: null,
+        });
+      }
+
+      if (found) {
+        setActiveAnggota(found);
+        localStorage.setItem("PMII_ACTIVE_ANGGOTA_ID", found.id);
+        localStorage.setItem("PMII_ACTIVE_CADRE_ID", found.id);
+        if (found.role) {
+          setUserRole(found.role.toLowerCase());
+        }
+      } else if (parsedUserRefresh) {
+        setActiveAnggota({
+          id: parsedUserRefresh.id || "anggota-user",
+          name: parsedUserRefresh.name || "Anggota PMII",
+          email: parsedUserRefresh.email || "",
+          level: "MAPABA",
+          commissariat: parsedUserRefresh.commissariat || "Ki Ageng Getas Pendawa",
+          role: parsedUserRefresh.role || detectedRole
+        });
+      }
+      setMounted(true);
+      const activeEmail = found?.email || parsedUserRefresh?.email;
+      const activeName = found?.name || parsedUserRefresh?.name;
+      const isAnggota = (found?.role || parsedUserRefresh?.role || detectedRole) === "anggota";
+      void fetchPortalNotifications(activeEmail, activeName, isAnggota);
+    };
+
+    void initAndLoad();
+  }, [router, fetchPortalNotifications]);
 
   // Real-time listener: refresh notifications when data changes in other tabs/pages
   useEffect(() => {
@@ -450,7 +454,7 @@ export default function KaderLayout({
       const email = activeAnggota?.email;
       const name = activeAnggota?.name;
       const isAnggota = (activeAnggota?.role || userRole) === "anggota";
-      fetchPortalNotifications(email, name, isAnggota);
+      void fetchPortalNotifications(email, name, isAnggota);
     };
 
     window.addEventListener("PMII_TABLE_SYNC", handleSync);
@@ -460,7 +464,7 @@ export default function KaderLayout({
       window.removeEventListener("PMII_TABLE_SYNC", handleSync);
       window.removeEventListener("storage", handleSync);
     };
-  }, [mounted, activeAnggota, userRole]);
+  }, [mounted, activeAnggota, userRole, fetchPortalNotifications]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -514,13 +518,13 @@ export default function KaderLayout({
           <SidebarHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:border-zinc-700 p-1 flex items-center justify-center flex-shrink-0 shadow-xs overflow-hidden">
-                <img
+                <SmartImage
                   src={tenantInfo.logo || "/image/logo_komsat.png"}
+                  fallbackSrc="/image/logo_komsat.png"
                   alt="Logo"
+                  width={32}
+                  height={32}
                   className="w-full h-full object-contain"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "/image/logo_komsat.png";
-                  }}
                 />
               </div>
               <div className="group-data-[collapsible=icon]:hidden overflow-hidden">

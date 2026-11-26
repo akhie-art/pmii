@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { SmartImage } from "@/components/ui/smart-image";
 import {
   Building,
   Phone,
@@ -251,9 +252,11 @@ export const OrganizationTab: React.FC<OrganizationTabProps> = ({
                 <span className="text-[9px]">Mengunggah...</span>
               </div>
             ) : settings.organization.logo ? (
-              <img
+              <SmartImage
                 src={settings.organization.logo}
                 alt="Logo Organisasi"
+                width={80}
+                height={80}
                 className="w-full h-full object-contain p-2"
               />
             ) : (

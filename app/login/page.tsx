@@ -79,25 +79,26 @@ export default function LoginPage() {
   const [redirectUrl, setRedirectUrl] = useState<string>("");
 
   useEffect(() => {
-    setMounted(true);
     if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("PMII_THEME");
-      if (savedTheme) {
-        setDarkMode(savedTheme === "dark");
-      } else {
-        setDarkMode(document.documentElement.classList.contains("dark"));
-      }
-
-      const params = new URLSearchParams(window.location.search);
-      const safeRedirect = sanitizeRedirectPath(params.get("redirect"));
-      if (safeRedirect) {
-        setRedirectUrl(safeRedirect);
-      }
-
       // Bersihkan token autentikasi usang jika belum login
       if (!localStorage.getItem("PMII_LOGGED_IN_USER")) {
         clearSupabaseStorage();
       }
+      queueMicrotask(() => {
+        setMounted(true);
+        const savedTheme = localStorage.getItem("PMII_THEME");
+        if (savedTheme) {
+          setDarkMode(savedTheme === "dark");
+        } else {
+          setDarkMode(document.documentElement.classList.contains("dark"));
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const safeRedirect = sanitizeRedirectPath(params.get("redirect"));
+        if (safeRedirect) {
+          setRedirectUrl(safeRedirect);
+        }
+      });
     }
   }, []);
 
@@ -221,7 +222,6 @@ export default function LoginPage() {
       const appRole = String(
         profile?.role ||
           authenticatedUser.app_metadata?.role ||
-          authenticatedUser.user_metadata?.role ||
           "anggota"
       )
         .toLowerCase()
@@ -515,3 +515,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+

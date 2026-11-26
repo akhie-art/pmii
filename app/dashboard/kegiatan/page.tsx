@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -47,7 +47,7 @@ import {
   getTenantIdByName,
   CABANG_TENANT_ID
 } from "@/lib/tenancy";
-import { generateUUID } from "@/lib/utils";
+import { generateUUID, createRegistrationCode } from "@/lib/utils";
 import { useFeedbackModal } from "@/components/ui/feedback-modal";
 
 import type { FormField, EventActivity, ParticipantRegistration } from "./_components/types";
@@ -93,6 +93,10 @@ export default function KomisariatKegiatanPage() {
   const [showAddParticipantModal, setShowAddParticipantModal] = useState(false);
 
   const { showToast, FeedbackModalComponent } = useFeedbackModal();
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    showToastRef.current = showToast;
+  });
   const [copiedId, setCopiedId] = useState<string>("");
   const [selectedTab, setSelectedTab] = useState<"timeline" | "screening" | "absensi" | "twibbon">("timeline");
 
@@ -137,35 +141,47 @@ export default function KomisariatKegiatanPage() {
         }
       }
 
-      // Load commissariats
-      try {
-        const commList = await db.getCommissariats();
-        setCommissariats(commList);
-        const storedCampus = localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || (commList[0]?.name || "Pengurus Cabang Grobogan");
-        setActiveCampus(storedCampus);
-      } catch (cErr) {
-        console.error("Error loading commissariats:", cErr);
-      }
+      // Load commissariats, kaderisasi, events, dan registrations (paginated) secara paralel
+      const [commList, parsedKaderisasi, fetchedEvents, firstRegsPage] = await Promise.all([
+        db.getCommissariats().catch((cErr) => {
+          console.error("Error loading commissariats:", cErr);
+          return [];
+        }),
+        db.getKaderisasi().catch((err) => {
+          console.error("Error loading kaderisasi list:", err);
+          return [];
+        }),
+        db.getEvents([]).catch(() => []),
+        db.getRegistrationsPaginated({ page: 1, pageSize: 200 }).catch(async () => {
+          const fallback = await db.getRegistrations([]).catch(() => []);
+          return { data: fallback, total: fallback.length, page: 1, pageSize: 200, totalPages: 1 };
+        }),
+      ]);
 
-      // Load kaderisasi list
-      let parsedKaderisasi: any[] = [];
-      try {
-        parsedKaderisasi = await db.getKaderisasi();
-        setKaderisasiList(parsedKaderisasi);
-      } catch (err) {
-        console.error("Error loading kaderisasi list:", err);
-      }
-
-      // Load activities
-      const fetchedEvents = await db.getEvents([]);
+      setActiveTenant(getActiveTenant() || "ALL");
+      setCommissariats(commList);
+      const storedCampus =
+        localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") ||
+        (commList[0]?.name || "Pengurus Cabang Grobogan");
+      setActiveCampus(storedCampus);
+      setKaderisasiList(parsedKaderisasi);
       setEvents(fetchedEvents);
       if (fetchedEvents.length > 0) {
         setSelectedEventId(fetchedEvents[0].id);
       }
 
-      // Load registrations
-      const fetchedRegs = await db.getRegistrations([]);
-      const cleanedRegs = fetchedRegs.filter((r: any) => !r.id?.startsWith("reg-mock") && !r.id?.includes("mock"));
+      let fetchedRegs = firstRegsPage.data;
+      if (firstRegsPage.totalPages > 1) {
+        const restPages = await Promise.all(
+          Array.from({ length: firstRegsPage.totalPages - 1 }, (_, i) =>
+            db.getRegistrationsPaginated({ page: i + 2, pageSize: 200 })
+          )
+        );
+        fetchedRegs = [...fetchedRegs, ...restPages.flatMap((p) => p.data)];
+      }
+      const cleanedRegs = fetchedRegs.filter(
+        (r: any) => !r.id?.startsWith("reg-mock") && !r.id?.includes("mock")
+      );
       setRegistrations(cleanedRegs);
 
       setMounted(true);
@@ -180,7 +196,7 @@ export default function KomisariatKegiatanPage() {
             const newItems = cleanedRegs.filter((nr) => !prev.some((pr) => pr.id === nr.id));
             if (newItems.length > 0) {
               const newest = newItems[0];
-              showToast(`Pendaftar baru masuk: ${newest.cadreName || "Peserta"}`);
+              showToastRef.current(`Pendaftar baru masuk: ${newest.cadreName || "Peserta"}`);
             }
           }
           return cleanedRegs;
@@ -199,7 +215,6 @@ export default function KomisariatKegiatanPage() {
       }
     };
 
-    setActiveTenant(getActiveTenant() || "ALL");
     const handleTenant = (e: any) => {
       const nextTenant = e.detail?.activeTenant || "ALL";
       setActiveTenant(nextTenant);
@@ -579,7 +594,7 @@ export default function KomisariatKegiatanPage() {
           });
 
           const newCadre = {
-            id: `cadre-${Date.now()}`,
+            id: generateUUID(),
             name: targetReg.cadreName,
             level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
             commissariat: activeCampus,
@@ -592,7 +607,7 @@ export default function KomisariatKegiatanPage() {
             submissions: [],
             isGraduated: selectedEvent?.level !== "MAPABA",
             registrationNumber:
-              targetReg.registrationNumber || `MAP-${Math.floor(100000 + Math.random() * 900000)}`
+              targetReg.registrationNumber || createRegistrationCode("MAP", 6)
           };
           updatedCadresList = [...cadresList, newCadre];
         }
@@ -704,7 +719,7 @@ export default function KomisariatKegiatanPage() {
           });
 
           const newCadre = {
-            id: `cadre-${Date.now()}-${Math.random()}`,
+            id: generateUUID(),
             name: reg.cadreName,
             level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
             commissariat: activeCampus,
@@ -717,7 +732,7 @@ export default function KomisariatKegiatanPage() {
             submissions: [],
             isGraduated: selectedEvent?.level !== "MAPABA",
             registrationNumber:
-              reg.registrationNumber || `MAP-${Math.floor(100000 + Math.random() * 900000)}`
+              reg.registrationNumber || createRegistrationCode("MAP", 6)
           };
           workingCadres.push(newCadre);
         }
@@ -770,9 +785,9 @@ export default function KomisariatKegiatanPage() {
       allVerified[f.id] = true;
     });
 
-    const regNumber = `REG-${selectedEvent.level}-${Date.now().toString().slice(-4)}`;
+    const regNumber = createRegistrationCode(`REG-${selectedEvent.level}`, 4);
     const newReg: ParticipantRegistration = {
-      id: `reg-${Date.now()}`,
+      id: generateUUID(),
       eventId: selectedEvent.id,
       cadreName: data.cadreName,
       cadreEmail: data.cadreEmail,
@@ -799,7 +814,7 @@ export default function KomisariatKegiatanPage() {
 
       if (!exists) {
         const newCadre = {
-          id: `cadre-${Date.now()}`,
+          id: generateUUID(),
           name: data.cadreName,
           level: (selectedEvent.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
           commissariat: activeCampus,

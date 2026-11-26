@@ -45,16 +45,18 @@ export const SyllabusSection: React.FC<SyllabusSectionProps> = ({
 
   // Load completed subjects for this level from local storage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`PMII_STUDIED_SUBJECTS_${levelId}`);
-      if (stored) {
-        setCompletedSubjects(JSON.parse(stored));
-      } else {
+    queueMicrotask(() => {
+      try {
+        const stored = localStorage.getItem(`PMII_STUDIED_SUBJECTS_${levelId}`);
+        if (stored) {
+          setCompletedSubjects(JSON.parse(stored));
+        } else {
+          setCompletedSubjects({});
+        }
+      } catch (e) {
         setCompletedSubjects({});
       }
-    } catch (e) {
-      setCompletedSubjects({});
-    }
+    });
   }, [levelId]);
 
   const toggleSubjectComplete = (subjectKey: string) => {

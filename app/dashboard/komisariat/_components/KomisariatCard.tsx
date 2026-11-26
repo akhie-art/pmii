@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React from "react";
 import Link from "next/link";
 import {
@@ -53,9 +55,11 @@ export function KomisariatCard({
           <div className="flex items-center gap-3">
             {komisariat.logo ? (
               <div className="w-12 h-12 rounded-xl bg-white dark:bg-zinc-950 p-1 flex items-center justify-center border border-zinc-200 dark:border-zinc-800 shadow-md flex-shrink-0">
-                <img
+                <SmartImage
                   src={komisariat.logo}
                   alt={komisariat.name}
+                  width={64}
+                  height={64}
                   className="w-full h-full object-contain rounded-lg"
                 />
               </div>

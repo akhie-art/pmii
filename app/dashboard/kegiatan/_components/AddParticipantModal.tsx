@@ -42,6 +42,11 @@ export default function AddParticipantModal({
     if (!isOpen) return;
 
     const loadCadres = async () => {
+      setManualName("");
+      setManualEmail("");
+      setManualPhone("");
+      setSearchQuery("");
+      setMode("SELECT");
       setLoading(true);
       try {
         const list = await db.getCadres();
@@ -53,12 +58,7 @@ export default function AddParticipantModal({
       }
     };
 
-    loadCadres();
-    setManualName("");
-    setManualEmail("");
-    setManualPhone("");
-    setSearchQuery("");
-    setMode("SELECT");
+    void loadCadres();
   }, [isOpen]);
 
   if (!isOpen || !event) return null;

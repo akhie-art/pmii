@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -113,111 +115,115 @@ export default function MemberFormModal({
   const [komisariat, setKomisariat] = useState(defaultKomisariat);
   const [status, setStatus] = useState<"Aktif" | "Alumni" | "Pasif">("Aktif");
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setFormErrors({});
-    setValidationAlert(null);
+  const modalSyncKey = isOpen ? `${member?.id || "new"}:${defaultKomisariat}` : "";
+  const [prevModalSyncKey, setPrevModalSyncKey] = useState("");
+  if (modalSyncKey !== prevModalSyncKey) {
+    setPrevModalSyncKey(modalSyncKey);
+    if (isOpen) {
+      setFormErrors({});
+      setValidationAlert(null);
 
-    if (member) {
-      setName(member.name || "");
-      setGender(member.gender || "Laki-laki");
-      setNim(member.nim || member.nik || "");
-      setTempatLahir(member.tempatLahir || "");
-      setTanggalLahir(member.tanggalLahir || "");
-      setAlamatRumah(member.alamatRumah || "");
-      setAlamatDomisili(member.alamatDomisili || "");
-      setGolonganDarah(member.golonganDarah || "O");
-      setAvatar(member.avatar || "");
-      setPasFoto(member.pasFoto || "");
-      setRiwayatPenyakit(member.riwayatPenyakit || "");
+      if (member) {
+        setName(member.name || "");
+        setGender(member.gender || "Laki-laki");
+        setNim(member.nim || member.nik || "");
+        setTempatLahir(member.tempatLahir || "");
+        setTanggalLahir(member.tanggalLahir || "");
+        setAlamatRumah(member.alamatRumah || "");
+        setAlamatDomisili(member.alamatDomisili || "");
+        setGolonganDarah(member.golonganDarah || "O");
+        setAvatar(member.avatar || "");
+        setPasFoto(member.pasFoto || "");
+        setRiwayatPenyakit(member.riwayatPenyakit || "");
 
-      setPerguruanTinggi(member.perguruanTinggi || "");
-      setFakultas(member.fakultas || "");
-      setJurusan(member.jurusan || "");
-      setKtmName(member.ktmName || "");
-      setKtmFileUrl(member.ktmFileUrl || "");
-      setEmail(member.email || "");
-      setPhone(member.phone || "");
-      setInstagram(member.instagram || "");
-      setTwitter(member.twitter || "");
-      setFacebook(member.facebook || "");
+        setPerguruanTinggi(member.perguruanTinggi || "");
+        setFakultas(member.fakultas || "");
+        setJurusan(member.jurusan || "");
+        setKtmName(member.ktmName || "");
+        setKtmFileUrl(member.ktmFileUrl || "");
+        setEmail(member.email || "");
+        setPhone(member.phone || "");
+        setInstagram(member.instagram || "");
+        setTwitter(member.twitter || "");
+        setFacebook(member.facebook || "");
 
-      setPendidikanSD(member.pendidikanSD || "");
-      setTahunMasukSD(member.tahunMasukSD || "");
-      setTahunLulusSD(member.tahunLulusSD || "");
+        setPendidikanSD(member.pendidikanSD || "");
+        setTahunMasukSD(member.tahunMasukSD || "");
+        setTahunLulusSD(member.tahunLulusSD || "");
 
-      setPendidikanSMP(member.pendidikanSMP || "");
-      setTahunMasukSMP(member.tahunMasukSMP || "");
-      setTahunLulusSMP(member.tahunLulusSMP || "");
+        setPendidikanSMP(member.pendidikanSMP || "");
+        setTahunMasukSMP(member.tahunMasukSMP || "");
+        setTahunLulusSMP(member.tahunLulusSMP || "");
 
-      setPendidikanSMA(member.pendidikanSMA || "");
-      setTahunMasukSMA(member.tahunMasukSMA || "");
-      setTahunLulusSMA(member.tahunLulusSMA || "");
+        setPendidikanSMA(member.pendidikanSMA || "");
+        setTahunMasukSMA(member.tahunMasukSMA || "");
+        setTahunLulusSMA(member.tahunLulusSMA || "");
 
-      setOrganisasiSMP(member.organisasiSMP || "");
-      setOrganisasiSMA(member.organisasiSMA || "");
-      setOrganisasiPT(member.organisasiPT || "");
+        setOrganisasiSMP(member.organisasiSMP || "");
+        setOrganisasiSMA(member.organisasiSMA || "");
+        setOrganisasiPT(member.organisasiPT || "");
 
-      setOrientasiProfetik(member.orientasiProfetik || "");
-      setMinatPassion(member.minatPassion || "");
-      setMotivasiMapaba(member.motivasiMapaba || "");
-      setLevel(member.level || "MAPABA");
-      setAngkatan(member.angkatan || "2026");
-      setJabatan(member.jabatan || "Anggota");
-      setKomisariat(member.komisariat || defaultKomisariat);
-      setStatus(member.status || "Aktif");
-    } else {
-      // Reset form
-      setName("");
-      setGender("Laki-laki");
-      setNim("");
-      setTempatLahir("");
-      setTanggalLahir("");
-      setAlamatRumah("");
-      setAlamatDomisili("");
-      setGolonganDarah("O");
-      setAvatar("");
-      setPasFoto("");
-      setRiwayatPenyakit("");
+        setOrientasiProfetik(member.orientasiProfetik || "");
+        setMinatPassion(member.minatPassion || "");
+        setMotivasiMapaba(member.motivasiMapaba || "");
+        setLevel(member.level || "MAPABA");
+        setAngkatan(member.angkatan || "2026");
+        setJabatan(member.jabatan || "Anggota");
+        setKomisariat(member.komisariat || defaultKomisariat);
+        setStatus(member.status || "Aktif");
+      } else {
+        // Reset form
+        setName("");
+        setGender("Laki-laki");
+        setNim("");
+        setTempatLahir("");
+        setTanggalLahir("");
+        setAlamatRumah("");
+        setAlamatDomisili("");
+        setGolonganDarah("O");
+        setAvatar("");
+        setPasFoto("");
+        setRiwayatPenyakit("");
 
-      setPerguruanTinggi("");
-      setFakultas("");
-      setJurusan("");
-      setKtmName("");
-      setKtmFileUrl("");
-      setEmail("");
-      setPhone("");
-      setInstagram("");
-      setTwitter("");
-      setFacebook("");
+        setPerguruanTinggi("");
+        setFakultas("");
+        setJurusan("");
+        setKtmName("");
+        setKtmFileUrl("");
+        setEmail("");
+        setPhone("");
+        setInstagram("");
+        setTwitter("");
+        setFacebook("");
 
-      setPendidikanSD("");
-      setTahunMasukSD("");
-      setTahunLulusSD("");
+        setPendidikanSD("");
+        setTahunMasukSD("");
+        setTahunLulusSD("");
 
-      setPendidikanSMP("");
-      setTahunMasukSMP("");
-      setTahunLulusSMP("");
+        setPendidikanSMP("");
+        setTahunMasukSMP("");
+        setTahunLulusSMP("");
 
-      setPendidikanSMA("");
-      setTahunMasukSMA("");
-      setTahunLulusSMA("");
+        setPendidikanSMA("");
+        setTahunMasukSMA("");
+        setTahunLulusSMA("");
 
-      setOrganisasiSMP("");
-      setOrganisasiSMA("");
-      setOrganisasiPT("");
+        setOrganisasiSMP("");
+        setOrganisasiSMA("");
+        setOrganisasiPT("");
 
-      setOrientasiProfetik("");
-      setMinatPassion("");
-      setMotivasiMapaba("");
-      setLevel("MAPABA");
-      setAngkatan("2026");
-      setJabatan("Anggota");
-      setKomisariat(defaultKomisariat);
-      setStatus("Aktif");
+        setOrientasiProfetik("");
+        setMinatPassion("");
+        setMotivasiMapaba("");
+        setLevel("MAPABA");
+        setAngkatan("2026");
+        setJabatan("Anggota");
+        setKomisariat(defaultKomisariat);
+        setStatus("Aktif");
+      }
+      setActiveTab("diri");
     }
-    setActiveTab("diri");
-  }, [isOpen, member, defaultKomisariat]);
+  }
 
   const handlePasFotoUpload = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
@@ -624,9 +630,11 @@ export default function MemberFormModal({
                       {/* 3x4 Preview Box */}
                       <div className="relative w-22 h-28 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center shadow-2xs">
                         {pasFoto ? (
-                          <img
+                          <SmartImage
                             src={pasFoto}
                             alt="Pas Foto Resmi"
+                            width={88}
+                            height={112}
                             className="w-full h-full object-cover"
                           />
                         ) : (

@@ -7,24 +7,25 @@ import {
   FileSpreadsheet,
   Printer,
   CheckCheck,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
 import {
   db,
   syncEvaluationsWithRegistrations,
   type ParticipantEvaluation,
   type EventActivity,
-  type ParticipantRegistration,
   type CadreFollowUp
 } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { isRecordInTenant, isCabangRecord, getActiveTenant, TENANT_CHANGED_EVENT } from "@/lib/tenancy";
+import { isRecordInTenant, getActiveTenant, TENANT_CHANGED_EVENT } from "@/lib/tenancy";
 
 import { LeaderboardPodium } from "./_components/LeaderboardPodium";
 import { YudisiumFilters } from "./_components/YudisiumFilters";
 import { YudisiumTable } from "./_components/YudisiumTable";
 import { ScoreDetailModal } from "./_components/ScoreDetailModal";
+import { exportRekapNilaiToExcel } from "./_components/rekapExportHelpers";
 
 export default function RekapNilaiPage() {
   const pathname = usePathname();
@@ -32,10 +33,10 @@ export default function RekapNilaiPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [events, setEvents] = useState<EventActivity[]>([]);
-  const [registrations, setRegistrations] = useState<ParticipantRegistration[]>([]);
   const [evaluations, setEvaluations] = useState<ParticipantEvaluation[]>([]);
   const [cadres, setCadres] = useState<CadreFollowUp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,8 +52,8 @@ export default function RekapNilaiPage() {
     : (currentUser?.role?.toLowerCase() === "admin" ? "/admin" : currentUser?.role?.toLowerCase() === "instruktur" ? "/instruktur" : "/pengurus");
 
   useEffect(() => {
-    setMounted(true);
     const loadData = async () => {
+      setMounted(true);
       try {
         const [eventsData, regsData, evalsData, cadresData] = await Promise.all([
           db.getEvents([]),
@@ -93,7 +94,6 @@ export default function RekapNilaiPage() {
             return prev;
           });
         }
-        setRegistrations(cleanRegs);
 
         // Comprehensive sync of all registered participants across all events
         const { synced, hasChanges } = syncEvaluationsWithRegistrations(
@@ -116,18 +116,20 @@ export default function RekapNilaiPage() {
     };
 
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      let uObj: any = null;
-      if (stored) {
-        try {
-          uObj = JSON.parse(stored);
-          setCurrentUser(uObj);
-        } catch (e) {
-          console.error("User parse error:", e);
+      queueMicrotask(() => {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        let uObj: any = null;
+        if (stored) {
+          try {
+            uObj = JSON.parse(stored);
+            setCurrentUser(uObj);
+          } catch (e) {
+            console.error("User parse error:", e);
+          }
         }
-      }
-      const curTenant = getActiveTenant(uObj) || "ALL";
-      setActiveTenant(curTenant);
+        const curTenant = getActiveTenant(uObj) || "ALL";
+        setActiveTenant(curTenant);
+      });
 
       const handleTenant = (e: any) => {
         setActiveTenant(e.detail?.activeTenant || "ALL");
@@ -168,12 +170,14 @@ export default function RekapNilaiPage() {
     return undefined;
   };
 
+  const effectiveActivityId = currentActivity?.id || selectedActivityId;
+
   // All evaluations for current activity sorted by score descending
   const currentActivityEvals = useMemo(() => {
     return evaluations
-      .filter((e) => e.activityId === selectedActivityId)
+      .filter((e) => e.activityId === effectiveActivityId)
       .sort((a, b) => b.finalScore - a.finalScore);
-  }, [evaluations, selectedActivityId]);
+  }, [evaluations, effectiveActivityId]);
 
   // Top 3 Leaderboard
   const topThree = useMemo(() => {
@@ -193,55 +197,29 @@ export default function RekapNilaiPage() {
     });
   }, [currentActivityEvals, searchQuery, statusFilter]);
 
-
-  // Export CSV
-  const handleExportCSV = () => {
+  // Export Excel (.xlsx) 1 sheet persis tabel web (merge cell per peserta + sub-baris materi + Rata-rata Akumulasi)
+  const handleExportExcel = async () => {
+    if (isExporting) return;
     if (filteredList.length === 0) {
-      toast.error("Tidak ada data untuk diekspor");
+      toast.error("Tidak ada data nilai untuk diekspor ke Excel.");
       return;
     }
 
-    const headers = [
-      "Peringkat",
-      "Nama Peserta",
-      "Gender",
-      "Asal Kampus",
-      "Komisariat",
-      "Jumlah Materi Dinilai",
-      "Rata-rata Kognitif (30%)",
-      "Rata-rata Afektif (35%)",
-      "Rata-rata Motorik (35%)",
-      "Nilai Akhir Kumulatif",
-      "Predikat",
-      "Status Kelulusan",
-      "Catatan Instruktur"
-    ];
-
-    const rows = filteredList.map((item, index) => [
-      index + 1,
-      `"${item.participantName}"`,
-      `"${item.gender || "-"}"`,
-      `"${item.university || "-"}"`,
-      `"${item.commissariat || "-"}"`,
-      item.sessionScores ? Object.keys(item.sessionScores).length : 0,
-      item.kognitif,
-      item.afektif,
-      item.psikomotorik,
-      item.finalScore,
-      item.grade,
-      item.status,
-      `"${(item.notes || "").replace(/"/g, '""')}"`
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Rekap_Nilai_Yudisium_${selectedActivityId}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("File CSV rekapitulasi berhasil diunduh!");
+    setIsExporting(true);
+    try {
+      const { fileName, rowCount } = await exportRekapNilaiToExcel({
+        evaluations: filteredList,
+        activity: currentActivity,
+        statusFilter,
+        searchQuery,
+      });
+      toast.success(`Berhasil mengekspor ${rowCount} data peserta ke ${fileName}`);
+    } catch (err) {
+      console.error("Gagal mengekspor rekap nilai ke Excel:", err);
+      toast.error("Gagal mengekspor data rekap nilai ke Excel. Silakan coba lagi.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleOpenDetail = (participant: ParticipantEvaluation) => {
@@ -292,11 +270,16 @@ export default function RekapNilaiPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportCSV}
-            className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer text-zinc-700 dark:text-zinc-300 shadow-2xs"
+            disabled={isExporting || filteredList.length === 0}
+            onClick={handleExportExcel}
+            className="h-8.5 text-xs font-medium border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer text-zinc-700 dark:text-zinc-300 shadow-2xs disabled:opacity-50"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span className="truncate">Ekspor Excel/CSV</span>
+            {isExporting ? (
+              <Loader2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-spin shrink-0" />
+            ) : (
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            )}
+            <span className="truncate">{isExporting ? "Mengekspor..." : "Ekspor Excel"}</span>
           </Button>
 
           <Button
@@ -327,7 +310,7 @@ export default function RekapNilaiPage() {
       {/* 4. CONTROLS BAR */}
       <YudisiumFilters
         events={tenantEvents}
-        selectedActivityId={selectedActivityId}
+        selectedActivityId={effectiveActivityId}
         setSelectedActivityId={setSelectedActivityId}
         currentActivityName={currentActivity?.name}
         searchQuery={searchQuery}

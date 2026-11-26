@@ -35,11 +35,13 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
 }) => {
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setHasAttemptedSubmit(false);
     }
-  }, [isOpen]);
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

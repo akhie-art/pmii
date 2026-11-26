@@ -66,9 +66,11 @@ export default function TimelineTab({
   );
 
   // Sync state if event prop changes
-  React.useEffect(() => {
+  const [prevEvent, setPrevEvent] = useState(event);
+  if (event !== prevEvent) {
+    setPrevEvent(event);
     setTimeline(getDefaultEventTimeline(event));
-  }, [event]);
+  }
 
   // Immediate toggle for individual stages
   const handleToggleStage = async (

@@ -17,10 +17,11 @@ export function ParticipantAvatar({
   textClass = "text-xs",
 }: ParticipantAvatarProps) {
   const [imgError, setImgError] = useState(false);
-
-  useEffect(() => {
-    setImgError(false);
-  }, [photoUrl]);
+  const [prevPhotoUrl, setPrevPhotoUrl] = useState(photoUrl);
+  if (photoUrl !== prevPhotoUrl) {
+    setPrevPhotoUrl(photoUrl);
+    if (imgError) setImgError(false);
+  }
 
   return (
     <div

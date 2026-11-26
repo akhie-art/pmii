@@ -1,6 +1,8 @@
 // app/drive/page.tsx
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Folder, FolderOpen, Search, Grid, List, Info, Star, ChevronLeft, MoreVertical, Share2, Trash2, FileText, FileSpreadsheet, FileImage, File, ShieldCheck, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DocumentItem, FolderItem, DriveTab } from "@/types/drive";
 import { db } from "@/lib/db";
 import { deleteStorageFile } from "@/lib/supabase";
+import { resolveStorageUrl } from "@/lib/storage";
 import { toast } from "sonner";
 import {
   Select,
@@ -78,7 +81,7 @@ export const UserUploaderAvatar = ({
   if (avatar) {
     return (
       <div className={`${sizeClasses} rounded-full overflow-hidden shrink-0 border border-zinc-200 dark:border-zinc-700 shadow-2xs bg-zinc-100 dark:bg-zinc-800`}>
-        <img src={avatar} alt={name || "User"} className="w-full h-full object-cover" />
+        <SmartImage src={avatar} alt={name || "User"} width={20} height={20} className="w-full h-full object-cover" />
       </div>
     );
   }
@@ -181,10 +184,11 @@ const renderFilePreview = (fileMeta: { type: string; url: string }, doc: Documen
             backgroundSize: "12px 12px"
           }}
         >
-          <img 
-            src={fileMeta.url} 
-            alt={doc.title} 
-            className="max-w-full max-h-full object-contain p-2" 
+          <SmartImage
+            src={fileMeta.url}
+            alt={doc.title}
+            preserveAspect
+            className="max-w-full max-h-full object-contain p-2"
           />
         </div>
       );
@@ -206,10 +210,11 @@ const renderFilePreview = (fileMeta: { type: string; url: string }, doc: Documen
         }}
       >
         {fileMeta.url ? (
-          <img 
-            src={fileMeta.url} 
-            alt={doc.title} 
-            className="max-w-full max-h-full object-contain p-2" 
+          <SmartImage
+            src={fileMeta.url}
+            alt={doc.title}
+            preserveAspect
+            className="max-w-full max-h-full object-contain p-2"
           />
         ) : isPmiiLogo ? (
           <svg width="60" height="70" viewBox="0 0 60 70" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-md select-none">
@@ -509,11 +514,11 @@ export default function DrivePage() {
     return { type: "OTHER", url: fileUrl };
   };
 
-  const updateDocuments = async (newDocs: DocumentItem[]) => {
+  const updateDocuments = useCallback(async (newDocs: DocumentItem[]) => {
     const taggedDocs = newDocs.map(d => enforceTenantWrite(currentUser, d, activeTenant));
     setDocuments(taggedDocs);
     await db.saveArsip(taggedDocs);
-  };
+  }, [currentUser, activeTenant]);
 
   const updateFolders = (newFolders: FolderItem[]) => {
     setFolders(newFolders);
@@ -572,27 +577,27 @@ export default function DrivePage() {
     } finally {
       setDocToDelete(null);
     }
-  }, [docToDelete, documents, selectedDoc]);
+  }, [docToDelete, documents, selectedDoc, updateDocuments]);
 
   useEffect(() => {
-    setIsMounted(true);
-    const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
-    let uObj: any = null;
-    if (storedUser) {
-      try {
-        uObj = JSON.parse(storedUser);
-        setCurrentUser(uObj);
-      } catch {}
-    }
-    const currentTenant = getActiveTenant(uObj) || "ALL";
-    setActiveTenant(currentTenant);
-
     const handleTenant = (e: any) => {
       setActiveTenant(e.detail?.activeTenant || "ALL");
     };
     window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
     const loadData = async () => {
+      const storedUser = typeof window !== "undefined" ? localStorage.getItem("PMII_LOGGED_IN_USER") : null;
+      let uObj: any = null;
+      if (storedUser) {
+        try {
+          uObj = JSON.parse(storedUser);
+          setCurrentUser(uObj);
+        } catch {}
+      }
+      const currentTenant = getActiveTenant(uObj) || "ALL";
+      setActiveTenant(currentTenant);
+      setIsMounted(true);
+
       let parsedDocs: DocumentItem[] = [];
       try {
         const docs = await db.getArsip();
@@ -738,7 +743,7 @@ export default function DrivePage() {
     updateDocuments(updated);
   };
 
-  const handleDownload = (docId: string) => {
+  const handleDownload = async (docId: string) => {
     const targetDoc = documents.find(d => d.id === docId);
     if (!targetDoc) return;
 
@@ -746,7 +751,8 @@ export default function DrivePage() {
     updateDocuments(updated);
 
     const meta = getFileMeta(targetDoc);
-    const fileUrl = meta.url || (targetDoc as any).url;
+    const rawUrl = meta.url || (targetDoc as any).url;
+    const fileUrl = rawUrl ? await resolveStorageUrl(rawUrl) : "";
 
     if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://") || fileUrl.startsWith("data:") || fileUrl.startsWith("blob:"))) {
       toast.success(`Mengunduh berkas "${targetDoc.title}"...`);
@@ -783,7 +789,7 @@ export default function DrivePage() {
     }
     setFolderToDelete(null);
     toast.success(`Folder "${folderToDelete}" berhasil dihapus.`);
-  }, [folderToDelete, folders, documents, selectedFolder]);
+  }, [folderToDelete, folders, documents, selectedFolder, updateDocuments]);
 
   const handleShareLink = (type: "folder" | "file", idOrName: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -1280,10 +1286,11 @@ export default function DrivePage() {
                     if (isImage) {
                       return (
                         <div className="w-full h-full flex items-center justify-center p-4">
-                          <img 
-                            src={fileUrl} 
-                            alt={selectedDoc.title} 
-                            className="max-w-full max-h-full object-contain rounded-lg shadow-sm" 
+                          <SmartImage
+                            src={fileUrl}
+                            alt={selectedDoc.title}
+                            preserveAspect
+                            className="max-w-full max-h-full object-contain rounded-lg shadow-sm"
                           />
                         </div>
                       );

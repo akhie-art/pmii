@@ -38,11 +38,13 @@ export const BiroModal: React.FC<BiroModalProps> = ({
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   // Reset validation state when modal opens or closes
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setHasAttemptedSubmit(false);
     }
-  }, [isOpen]);
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   X,
@@ -149,49 +151,52 @@ export function AgendaFormModal({
     zoomLevelRef.current = zoomLevel;
   }, [zoomLevel]);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const agendaSyncKey = isOpen ? `${agenda?.id || "new"}:${agenda?.nama || ""}` : "";
+  const [prevAgendaSyncKey, setPrevAgendaSyncKey] = useState("");
+  if (agendaSyncKey !== prevAgendaSyncKey) {
+    setPrevAgendaSyncKey(agendaSyncKey);
+    if (isOpen) {
+      if (agenda) {
+        setNama(agenda.nama || "");
+        setTipe(agenda.tipe || "FORMAL");
+        setMateriList(agenda.materi && agenda.materi.length > 0 ? [...agenda.materi] : []);
+        setFormFields(
+          agenda.formFields && agenda.formFields.length > 0
+            ? [...agenda.formFields]
+            : [...DEFAULT_FORM_FIELDS]
+        );
+        setCertificateTemplate(agenda.certificateTemplate);
+        const loadedCfg = agenda.certificateConfig || DEFAULT_CERT_CONFIG;
+        setCertConfig({
+          ...loadedCfg,
+          nama: { ...loadedCfg.nama, fontSize: sanitizeCertFontSize("nama", loadedCfg.nama?.fontSize, 13) },
+          nomor: { ...loadedCfg.nomor, fontSize: sanitizeCertFontSize("nomor", loadedCfg.nomor?.fontSize, 13) },
+          nik: { ...loadedCfg.nik, fontSize: sanitizeCertFontSize("nik", loadedCfg.nik?.fontSize, 12) },
+          ttl: { ...loadedCfg.ttl, fontSize: sanitizeCertFontSize("ttl", loadedCfg.ttl?.fontSize, 12) },
+          jurusan: { ...loadedCfg.jurusan, fontSize: sanitizeCertFontSize("jurusan", loadedCfg.jurusan?.fontSize, 12) },
+          kampus: { ...loadedCfg.kampus, fontSize: sanitizeCertFontSize("kampus", loadedCfg.kampus?.fontSize, 12) },
+        });
+      } else {
+        setNama("");
+        setTipe("FORMAL");
+        setMateriList([]);
+        setFormFields([...DEFAULT_FORM_FIELDS]);
+        setCertificateTemplate(undefined);
+        setCertConfig(DEFAULT_CERT_CONFIG);
+      }
 
-    if (agenda) {
-      setNama(agenda.nama || "");
-      setTipe(agenda.tipe || "FORMAL");
-      setMateriList(agenda.materi && agenda.materi.length > 0 ? [...agenda.materi] : []);
-      setFormFields(
-        agenda.formFields && agenda.formFields.length > 0
-          ? [...agenda.formFields]
-          : [...DEFAULT_FORM_FIELDS]
-      );
-      setCertificateTemplate(agenda.certificateTemplate);
-      const loadedCfg = agenda.certificateConfig || DEFAULT_CERT_CONFIG;
-      setCertConfig({
-        ...loadedCfg,
-        nama: { ...loadedCfg.nama, fontSize: sanitizeCertFontSize("nama", loadedCfg.nama?.fontSize, 13) },
-        nomor: { ...loadedCfg.nomor, fontSize: sanitizeCertFontSize("nomor", loadedCfg.nomor?.fontSize, 13) },
-        nik: { ...loadedCfg.nik, fontSize: sanitizeCertFontSize("nik", loadedCfg.nik?.fontSize, 12) },
-        ttl: { ...loadedCfg.ttl, fontSize: sanitizeCertFontSize("ttl", loadedCfg.ttl?.fontSize, 12) },
-        jurusan: { ...loadedCfg.jurusan, fontSize: sanitizeCertFontSize("jurusan", loadedCfg.jurusan?.fontSize, 12) },
-        kampus: { ...loadedCfg.kampus, fontSize: sanitizeCertFontSize("kampus", loadedCfg.kampus?.fontSize, 12) },
-      });
-    } else {
-      setNama("");
-      setTipe("FORMAL");
-      setMateriList([]);
-      setFormFields([...DEFAULT_FORM_FIELDS]);
-      setCertificateTemplate(undefined);
-      setCertConfig(DEFAULT_CERT_CONFIG);
+      setActiveTab("info");
+      setNewMateriJudul("");
+      setNewFieldLabel("");
+      setNewFieldType("file");
+      setNewFieldRequired(true);
+      setNewFieldOptions("");
+      setEditingFieldId(null);
+      setEditFieldLabel("");
+      setEditFieldOptions("");
+      setActiveCertField("nama");
     }
-
-    setActiveTab("info");
-    setNewMateriJudul("");
-    setNewFieldLabel("");
-    setNewFieldType("file");
-    setNewFieldRequired(true);
-    setNewFieldOptions("");
-    setEditingFieldId(null);
-    setEditFieldLabel("");
-    setEditFieldOptions("");
-    setActiveCertField("nama");
-  }, [isOpen, agenda]);
+  }
 
   // Auto-fit canvas zoom when switching to certificate tab
   useEffect(() => {
@@ -1462,9 +1467,10 @@ export function AgendaFormModal({
                           className="relative shrink-0 shadow-2xl border border-zinc-300/80 dark:border-zinc-700 select-none bg-white rounded-md transition-transform duration-75"
                         >
                           {/* Background Image Template */}
-                          <img
+                          <SmartImage
                             src={certificateTemplate}
                             alt="Template Piagam Resmi"
+                            preserveAspect
                             className="w-full h-full object-fill block select-none pointer-events-none rounded-md"
                           />
 

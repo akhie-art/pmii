@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React from "react";
 import {
   GraduationCap,
@@ -82,9 +84,11 @@ export function KomisariatTable({
                     <div className="flex items-center gap-3">
                       {k.logo ? (
                         <div className="w-10 h-10 rounded-xl bg-white dark:bg-zinc-950 p-1 flex items-center justify-center border border-zinc-200 dark:border-zinc-800 shadow-xs flex-shrink-0">
-                          <img
+                          <SmartImage
                             src={k.logo}
                             alt={k.name}
+                            width={40}
+                            height={40}
                             className="w-full h-full object-contain rounded-lg"
                           />
                         </div>

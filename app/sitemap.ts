@@ -27,12 +27,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/anggota`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
       url: `${baseUrl}/twibbon`,
       lastModified: now,
       changeFrequency: "monthly",
@@ -44,7 +38,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const articles = await getArticles();
     if (Array.isArray(articles)) {
       for (const article of articles) {
-        if (article.slug) {
+        if (article.slug && (!article.status || article.status === "DITAMPILKAN")) {
           routes.push({
             url: `${baseUrl}/artikel/${article.slug}`,
             lastModified: article.createdAt ? new Date(article.createdAt) : now,

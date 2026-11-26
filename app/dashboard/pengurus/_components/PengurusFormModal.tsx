@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { SmartImage } from "@/components/ui/smart-image";
 import { Edit2, UserPlus, AlertTriangle, AlertCircle, Network, ClipboardList, Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -70,11 +71,13 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
 }) => {
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setHasAttemptedSubmit(false);
     }
-  }, [isOpen]);
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -355,9 +358,11 @@ export const PengurusFormModal: React.FC<PengurusFormModalProps> = ({
               {selectedCadreData && (
                 <div className="p-2.5 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 text-[11px] text-zinc-600 dark:text-zinc-400 flex items-center gap-3">
                   {selectedCadreData.avatar ? (
-                    <img
+                    <SmartImage
                       src={selectedCadreData.avatar}
                       alt={selectedCadreData.name}
+                      width={36}
+                      height={36}
                       className="w-9 h-9 rounded-full object-cover border border-blue-300 dark:border-blue-700 shrink-0"
                     />
                   ) : (

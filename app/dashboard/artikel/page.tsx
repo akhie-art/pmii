@@ -43,7 +43,7 @@ export default function AdminArtikelPage() {
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
 
   useEffect(() => {
-    setActiveTenant(getActiveTenant() || "ALL");
+    queueMicrotask(() => setActiveTenant(getActiveTenant() || "ALL"));
     const handleTenant = (e: any) => {
       setActiveTenant(e.detail?.activeTenant || "ALL");
     };
@@ -83,24 +83,26 @@ export default function AdminArtikelPage() {
 
   // Load User & Articles
   useEffect(() => {
-    setMounted(true);
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
-      if (stored) {
-        try {
-          const user = JSON.parse(stored);
-          setCurrentUser(user);
-          const author = getAuthorDetails(user);
-          setFormData((prev) => ({
-            ...prev,
-            authorName: author.name,
-            authorRole: author.role
-          }));
-        } catch (e) {
-          console.error("Error parsing logged in user", e);
+    queueMicrotask(() => {
+      setMounted(true);
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("PMII_LOGGED_IN_USER");
+        if (stored) {
+          try {
+            const user = JSON.parse(stored);
+            setCurrentUser(user);
+            const author = getAuthorDetails(user);
+            setFormData((prev) => ({
+              ...prev,
+              authorName: author.name,
+              authorRole: author.role
+            }));
+          } catch (e) {
+            console.error("Error parsing logged in user", e);
+          }
         }
       }
-    }
+    });
 
     if (typeof window !== "undefined") {
       const storedArticles = localStorage.getItem("PMII_ARTICLES_DATA");

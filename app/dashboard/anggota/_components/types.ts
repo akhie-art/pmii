@@ -197,6 +197,10 @@ export function mapMemberToCadre(m: Member): CadreFollowUp {
  */
 export function resolveMemberPhotoUrl(member?: Partial<Member> | null): string {
   if (!member) return "";
+  const baseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const buildPublicMaterialUrl = (subpath: string) =>
+    baseUrl ? `${baseUrl}/storage/v1/object/public/materials/${subpath}` : "";
+
   // 1. Check official pasFoto (formal 3x4 photo) first
   if (member.pasFoto && typeof member.pasFoto === "string" && member.pasFoto.trim()) {
     const p = member.pasFoto.trim();
@@ -204,9 +208,9 @@ export function resolveMemberPhotoUrl(member?: Partial<Member> | null): string {
       return p;
     }
     if (p.includes("/")) {
-      return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/${p}`;
+      return buildPublicMaterialUrl(p);
     }
-    return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/avatars/${p}`;
+    return buildPublicMaterialUrl(`avatars/${p}`);
   }
 
   // 2. Fallback to profile avatar
@@ -216,9 +220,9 @@ export function resolveMemberPhotoUrl(member?: Partial<Member> | null): string {
       return a;
     }
     if (a.includes("/")) {
-      return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/${a}`;
+      return buildPublicMaterialUrl(a);
     }
-    return `https://fmmimbdsenazexeytuge.supabase.co/storage/v1/object/public/materials/avatars/${a}`;
+    return buildPublicMaterialUrl(`avatars/${a}`);
   }
 
   return "";

@@ -1,5 +1,7 @@
 "use client";
 
+import { SmartImage } from "@/components/ui/smart-image";
+
 import React, { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,7 @@ import {
   Trash2
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { createUniqueFileName } from "@/lib/utils";
 import { readFileAsDataURL } from "./types";
 import type { EventActivity } from "./types";
 
@@ -55,8 +58,11 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
   const [isDragging, setIsDragging] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset and prefill form when modal closes/opens with new event
-  React.useEffect(() => {
+  // Reset and prefill form when modal opens with a new event
+  const openSyncKey = isOpen ? `${event?.id || ""}:${activeCadre?.id || ""}:${formFields?.length || 0}` : "";
+  const [prevOpenSyncKey, setPrevOpenSyncKey] = useState("");
+  if (openSyncKey !== prevOpenSyncKey) {
+    setPrevOpenSyncKey(openSyncKey);
     if (isOpen) {
       const initialAnswers: Record<string, any> = {};
       if (activeCadre && formFields) {
@@ -93,15 +99,15 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
       setFileNames({});
       setIsSubmitting(false);
     }
-  }, [isOpen, event, activeCadre, formFields]);
+  }
 
   const handleFileUpload = async (fieldId: string, file: File) => {
     setUploadingFields((prev) => ({ ...prev, [fieldId]: true }));
     try {
       let finalUrl = "";
       if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const fileExt = file.name.split(".").pop() || "bin";
+        const fileName = createUniqueFileName("form", fileExt);
         const filePath = `form_answers/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
@@ -267,9 +273,11 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
                               {/* Preview Thumbnail */}
                               {isImg ? (
                                 <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/80 shrink-0 group/thumb">
-                                  <img
+                                  <SmartImage
                                     src={fileUrl}
                                     alt={fileName || f.label}
+                                    width={64}
+                                    height={64}
                                     className="w-full h-full object-cover"
                                   />
                                   <a

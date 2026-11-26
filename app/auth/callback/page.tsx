@@ -65,7 +65,7 @@ export default function AuthCallbackPage() {
         const targetRedirect = sanitizeRedirectPath(rawRedirect);
 
         const roleNorm = String(
-          profile?.role || user.app_metadata?.role || user.user_metadata?.role || "peserta"
+          profile?.role || user.app_metadata?.role || "peserta"
         )
           .toLowerCase()
           .trim();

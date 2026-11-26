@@ -72,48 +72,51 @@ export default function EventFormModal({
     ? (isCabangRecord(event) ? CABANG_TENANT_ID : (event.tenant_id || event.komisariat_id || getTenantIdByName(event.commissariat) || null))
     : (organizerIsCabang ? CABANG_TENANT_ID : (currentUser?.tenant_id || currentUser?.komisariat_id || resolvedKomId));
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const eventSyncKey = isOpen ? `${event?.id || "new"}:${kaderisasiList?.length || 0}` : "";
+  const [prevEventSyncKey, setPrevEventSyncKey] = useState("");
+  if (eventSyncKey !== prevEventSyncKey) {
+    setPrevEventSyncKey(eventSyncKey);
+    if (isOpen) {
+      if (event) {
+        setFormName(event.name || "");
+        setFormLevel(event.level || "MAPABA");
+        setFormDate(event.date || "");
+        setFormDescription(event.description || "");
+        setFormWaGroupLink(event.waGroupLink || "");
 
-    if (event) {
-      setFormName(event.name || "");
-      setFormLevel(event.level || "MAPABA");
-      setFormDate(event.date || "");
-      setFormDescription(event.description || "");
-      setFormWaGroupLink(event.waGroupLink || "");
-
-      const matched = kaderisasiList?.find(
-        (k: any) => k.nama === event.level || k.id === event.level
-      );
-      if (matched && matched.materi && matched.materi.length > 0) {
-        setSessions(matched.materi.map((m: any) => m.judul));
-      } else if (event.sessions && event.sessions.length > 0) {
-        setSessions(event.sessions);
+        const matched = kaderisasiList?.find(
+          (k: any) => k.nama === event.level || k.id === event.level
+        );
+        if (matched && matched.materi && matched.materi.length > 0) {
+          setSessions(matched.materi.map((m: any) => m.judul));
+        } else if (event.sessions && event.sessions.length > 0) {
+          setSessions(event.sessions);
+        } else {
+          setSessions(DEFAULT_EVENT_SESSIONS);
+        }
       } else {
-        setSessions(DEFAULT_EVENT_SESSIONS);
-      }
-    } else {
-      setFormName("");
-      const defaultLvl =
-        kaderisasiList && kaderisasiList.length > 0 ? kaderisasiList[0].nama : "MAPABA";
-      setFormLevel(defaultLvl);
-      setFormDate("");
-      setFormDescription("");
-      setFormWaGroupLink("");
+        setFormName("");
+        const defaultLvl =
+          kaderisasiList && kaderisasiList.length > 0 ? kaderisasiList[0].nama : "MAPABA";
+        setFormLevel(defaultLvl);
+        setFormDate("");
+        setFormDescription("");
+        setFormWaGroupLink("");
 
-      // Auto-fill sessions from matching kaderisasi agenda's materi
-      const matched = kaderisasiList?.find(
-        (k: any) => k.nama === defaultLvl || k.id === defaultLvl
-      );
-      if (matched && matched.materi && matched.materi.length > 0) {
-        setSessions(matched.materi.map((m: any) => m.judul));
-      } else {
-        setSessions(DEFAULT_EVENT_SESSIONS);
+        // Auto-fill sessions from matching kaderisasi agenda's materi
+        const matched = kaderisasiList?.find(
+          (k: any) => k.nama === defaultLvl || k.id === defaultLvl
+        );
+        if (matched && matched.materi && matched.materi.length > 0) {
+          setSessions(matched.materi.map((m: any) => m.judul));
+        } else {
+          setSessions(DEFAULT_EVENT_SESSIONS);
+        }
       }
+
+      setActiveTab("info");
     }
-
-    setActiveTab("info");
-  }, [isOpen, event, kaderisasiList]);
+  }
 
   if (!isOpen) return null;
 

@@ -63,17 +63,16 @@ export const UserTable: React.FC<UserTableProps> = ({
 
   // Reset ke halaman 1 saat daftar users berubah (karena filter/pencarian)
   const usersSignature = useMemo(() => users.map((u) => u.id).join(","), [users]);
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [usersSignature]);
+  const [prevUsersSignature, setPrevUsersSignature] = useState(usersSignature);
+  if (usersSignature !== prevUsersSignature) {
+    setPrevUsersSignature(usersSignature);
+    if (currentPage !== 1) setCurrentPage(1);
+  }
 
   const totalPages = Math.ceil(users.length / pageSize) || 1;
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(1);
-    }
-  }, [totalPages, currentPage]);
+  if (currentPage > totalPages) {
+    setCurrentPage(1);
+  }
 
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, users.length);
