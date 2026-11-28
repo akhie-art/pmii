@@ -1,7 +1,7 @@
-import { getCadres, saveCadres, updateCadre, getAnggota, getAnggotaPaginated, saveAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./anggota";
+import { getCadres, saveCadres, upsertCadre, updateCadre, getAnggota, getAnggotaPaginated, saveAnggota, upsertAnggota, updateAnggota, deleteCadre, deleteAnggota } from "./anggota";
 import { getEvents, saveEvents, deleteEvent, getDefaultEventTimeline } from "./events";
-import { getRegistrations, getRegistrationsPaginated, saveRegistrations, deleteRegistration } from "./registrations";
-import { getRequirements, saveRequirements } from "./requirements";
+import { getRegistrations, getRegistrationsPaginated, saveRegistrations, upsertRegistration, updateRegistration, deleteRegistration } from "./registrations";
+import { getRequirements, saveRequirements, upsertRequirement, deleteRequirement } from "./requirements";
 import { getBoards, saveBoards, deleteBoard, deletePengurus } from "./boards";
 import { getCommissariats, saveCommissariats, upsertCommissariat, deleteCommissariat } from "./commissariats";
 import { getUsers, getUsersPaginated, saveUsers } from "./users";
@@ -65,10 +65,12 @@ export const db = {
   // Cadres / Anggota
   getCadres,
   saveCadres,
+  upsertCadre,
   updateCadre,
   getAnggota,
   getAnggotaPaginated,
   saveAnggota,
+  upsertAnggota,
   updateAnggota,
   deleteCadre,
   deleteAnggota,
@@ -85,11 +87,15 @@ export const db = {
   getRegistrations,
   getRegistrationsPaginated,
   saveRegistrations,
+  upsertRegistration,
+  updateRegistration,
   deleteRegistration,
 
   // Requirements / Persyaratan RTL
   getRequirements,
   saveRequirements,
+  upsertRequirement,
+  deleteRequirement,
 
   // Boards / Pengurus
   getBoards,
@@ -194,7 +200,13 @@ export {
   deleteBoard,
   deletePengurus,
   deleteEvent,
+  upsertRegistration,
+  updateRegistration,
   deleteRegistration,
+  upsertRequirement,
+  deleteRequirement,
+  upsertCadre,
+  upsertAnggota,
   getUserCredentials,
   setUserPassword,
   getUserPassword,

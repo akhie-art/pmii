@@ -63,6 +63,17 @@ import {
 import { LetterNumberingBoxes } from "./letter-numbering-boxes";
 import { LetterExcelImporter } from "./letter-excel-importer";
 import { LetterDocxPlaceholders } from "./letter-docx-placeholders";
+import { LetterSignatureStampPanel } from "./letter-signature-stamp-panel";
+import { LetterOverlayCanvas } from "./letter-overlay-canvas";
+import {
+  injectOverlaysIntoLetterHtml,
+  stripLetterOverlaysFromHtml,
+  loadSavedOverlayAssets,
+  saveOverlayAssetToLibrary,
+  deleteOverlayAssetFromLibrary,
+  type LetterImageOverlay,
+  type SavedOverlayAsset,
+} from "./letter-overlay-helper";
 import {
   isCoreStandardKey,
   buildLetterMergeData,
@@ -190,6 +201,109 @@ export default function LetterGeneratorDialog({
   const isSavingEdit = savingEditAction !== null;
   const printAfterSaveRef = useRef<boolean>(false);
   const canvasTextareaRef = useRef<HTMLDivElement>(null);
+  const canvasStageRef = useRef<HTMLDivElement>(null);
+
+  // States upload gambar Tanda Tangan & Stempel Organisasi
+  const [letterOverlays, setLetterOverlays] = useState<LetterImageOverlay[]>([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+  const [overlayRawMap, setOverlayRawMap] = useState<Record<string, string>>({});
+  const [savedOverlayAssets, setSavedOverlayAssets] = useState<SavedOverlayAsset[]>([]);
+  const [overlayPageCount, setOverlayPageCount] = useState<number>(1);
+  const [canvasRenderVersion, setCanvasRenderVersion] = useState<number>(0);
+
+  const overlayTenantKey =
+    targetTenantInfo.tenantId || targetTenantInfo.tenantOverrideForWrite || activeTenant || "default";
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    queueMicrotask(() => {
+      setSavedOverlayAssets(loadSavedOverlayAssets(overlayTenantKey));
+    });
+  }, [dialogOpen, overlayTenantKey]);
+
+  const handleAddLetterOverlay = React.useCallback(
+    (overlay: LetterImageOverlay, rawDataUrl?: string) => {
+      setLetterOverlays((prev) => [...prev, overlay]);
+      setSelectedOverlayId(overlay.id);
+      if (rawDataUrl) {
+        setOverlayRawMap((prev) => ({ ...prev, [overlay.id]: rawDataUrl }));
+      }
+    },
+    []
+  );
+
+  const handleUpdateLetterOverlay = React.useCallback(
+    (id: string, patch: Partial<LetterImageOverlay>) => {
+      setLetterOverlays((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
+      );
+    },
+    []
+  );
+
+  const handleDuplicateLetterOverlay = React.useCallback((id: string) => {
+    const newId = `ov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    let duplicated = false;
+    setLetterOverlays((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (!target) return prev;
+      duplicated = true;
+      const copy: LetterImageOverlay = {
+        ...target,
+        id: newId,
+        label: `${target.label} (Salinan)`,
+        xPct: Math.min(85, target.xPct + 4),
+        yPct: Math.min(85, target.yPct + 3),
+      };
+      return [...prev, copy];
+    });
+    setOverlayRawMap((prev) => (prev[id] ? { ...prev, [newId]: prev[id] } : prev));
+    if (duplicated) {
+      setSelectedOverlayId(newId);
+    } else {
+      queueMicrotask(() => setSelectedOverlayId(newId));
+    }
+  }, []);
+
+  const handleRemoveLetterOverlay = React.useCallback((id: string) => {
+    setLetterOverlays((prev) => prev.filter((item) => item.id !== id));
+    setSelectedOverlayId((prev) => (prev === id ? null : prev));
+    setOverlayRawMap((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const handleSaveOverlayAssetToLibrary = React.useCallback(
+    (overlay: LetterImageOverlay) => {
+      const updated = saveOverlayAssetToLibrary(
+        {
+          id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          kind: overlay.kind,
+          label: overlay.label,
+          dataUrl: overlay.dataUrl,
+          aspectRatio: overlay.aspectRatio,
+          transparentBg: overlay.transparentBg,
+          createdAt: new Date().toISOString(),
+        },
+        overlayTenantKey
+      );
+      setSavedOverlayAssets(updated);
+      toast.success(`"${overlay.label}" disimpan ke koleksi untuk dipakai ulang di surat berikutnya.`);
+    },
+    [overlayTenantKey]
+  );
+
+  const handleDeleteSavedOverlayAsset = React.useCallback(
+    (assetId: string) => {
+      const updated = deleteOverlayAssetFromLibrary(assetId, overlayTenantKey);
+      setSavedOverlayAssets(updated);
+      toast.success("Aset dihapus dari koleksi tersimpan.");
+    },
+    [overlayTenantKey]
+  );
 
   // States khusus Surat Massal
   const [bulkRecipientsText, setBulkRecipientsText] = useState<string>("");
@@ -424,7 +538,9 @@ export default function LetterGeneratorDialog({
 
       const rawWithoutMeta = stripLetterEditMetadata(editingMail.content || "");
       const hasHtml = isFormattedHtmlContent(rawWithoutMeta);
-      const cleanedEditableHtml = hasHtml ? stripHtmlQrFooter(rawWithoutMeta) : "";
+      const cleanedEditableHtml = hasHtml
+        ? stripLetterOverlaysFromHtml(stripHtmlQrFooter(rawWithoutMeta))
+        : "";
       const plainNote =
         !hasHtml &&
         rawWithoutMeta.trim() &&
@@ -432,6 +548,9 @@ export default function LetterGeneratorDialog({
           ? rawWithoutMeta.trim()
           : "";
 
+      setLetterOverlays(extractedMeta?.overlays || []);
+      setSelectedOverlayId(null);
+      setOverlayRawMap({});
       setSavedExistingHtml(cleanedEditableHtml);
       setPlainTextFallbackNote(plainNote);
       setCreateTemplate(hasHtml ? EXISTING_DOCUMENT_TEMPLATE_ID : "");
@@ -1185,6 +1304,7 @@ export default function LetterGeneratorDialog({
       }
       await renderDocxToElement(filledBuffer, canvasEl);
       setCreateContent(canvasEl.innerHTML);
+      setCanvasRenderVersion((v) => v + 1);
     } catch (e) {
       console.error("Gagal render docx preview:", e);
     } finally {
@@ -1200,13 +1320,19 @@ export default function LetterGeneratorDialog({
       const mergedData = getRowDataForIndex(idx);
       const targetLetterId = getLetterIdForIndex();
       const qrMeta = await getOrCreateQrMeta(targetLetterId);
-      const { blob, error } = fillDocxTemplate(arrayBuffer, mergedData, undefined, {
-        qrDataUrl: qrMeta.qrDataUrl,
-        letterId: targetLetterId,
-        nomor: mergedData.nomor || currentPreviewNomor,
-        verificationUrl: qrMeta.verificationUrl,
-        orgLabel: activeOrgLabel,
-      });
+      const { blob, error } = fillDocxTemplate(
+        arrayBuffer,
+        mergedData,
+        undefined,
+        {
+          qrDataUrl: qrMeta.qrDataUrl,
+          letterId: targetLetterId,
+          nomor: mergedData.nomor || currentPreviewNomor,
+          verificationUrl: qrMeta.verificationUrl,
+          orgLabel: activeOrgLabel,
+        },
+        letterOverlays
+      );
       if (error) {
         toast.error("Gagal mengisi data ke docx: " + error);
         return;
@@ -1235,13 +1361,19 @@ export default function LetterGeneratorDialog({
         const nomor = getNomorForIndex(idx);
         const data = getRowDataForIndex(idx, "bulk");
 
-        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data, undefined, {
-          qrDataUrl: qrMeta.qrDataUrl,
-          letterId: unifiedLetterId,
-          nomor,
-          verificationUrl: qrMeta.verificationUrl,
-          orgLabel: activeOrgLabel,
-        });
+        const { arrayBuffer: filledBuffer } = fillDocxTemplate(
+          arrayBuffer,
+          data,
+          undefined,
+          {
+            qrDataUrl: qrMeta.qrDataUrl,
+            letterId: unifiedLetterId,
+            nomor,
+            verificationUrl: qrMeta.verificationUrl,
+            orgLabel: activeOrgLabel,
+          },
+          letterOverlays
+        );
         const safeNomor = nomor.replace(/[/\\?%*:|"<>]/g, "_");
         const safeRec = rec.replace(/[/\\?%*:|"<>]/g, "_");
         zip.file(`${safeNomor}_${safeRec}.docx`, filledBuffer);
@@ -1797,9 +1929,12 @@ export default function LetterGeneratorDialog({
   ]);
 
   const handlePrintLetter = (overrideHtml?: string) => {
-    const htmlToPrint =
+    const rawHtmlToPrint =
       overrideHtml ?? document.getElementById("custom-letter-print-area")?.innerHTML;
-    if (!htmlToPrint) return;
+    if (!rawHtmlToPrint) return;
+    const htmlToPrint = overrideHtml
+      ? rawHtmlToPrint
+      : injectOverlaysIntoLetterHtml(rawHtmlToPrint, letterOverlays);
     openLetterPrintWindow(
       currentPreviewNomor || "Surat_PMII",
       htmlToPrint,
@@ -1823,24 +1958,40 @@ export default function LetterGeneratorDialog({
         const data = getRowDataForIndex(i, "bulk");
         const nomor = getNomorForIndex(i);
 
-        const { arrayBuffer: filledBuffer } = fillDocxTemplate(arrayBuffer, data, undefined, {
-          qrDataUrl: qrMeta.qrDataUrl,
-          letterId: unifiedLetterId,
-          nomor,
-          verificationUrl: qrMeta.verificationUrl,
-          orgLabel: activeOrgLabel,
-        });
+        // Jangan sematkan overlay ke DOCX buffer di sini karena akan dirender HTML + injectOverlaysIntoLetterHtml
+        const { arrayBuffer: filledBuffer } = fillDocxTemplate(
+          arrayBuffer,
+          data,
+          undefined,
+          {
+            qrDataUrl: qrMeta.qrDataUrl,
+            letterId: unifiedLetterId,
+            nomor,
+            verificationUrl: qrMeta.verificationUrl,
+            orgLabel: activeOrgLabel,
+          }
+        );
         const pageEl = document.createElement("div");
         await renderDocxToElement(filledBuffer, pageEl);
-        rawPagesHtml.push(pageEl.innerHTML);
+        rawPagesHtml.push(injectOverlaysIntoLetterHtml(pageEl.innerHTML, letterOverlays));
       }
     } else {
-      const baseHtml = stripLetterEditMetadata(
-        createContent || (canvasTextareaRef.current?.innerHTML ?? buildCanvasHtml())
+      const baseHtml = stripLetterOverlaysFromHtml(
+        stripLetterEditMetadata(
+          createContent || (canvasTextareaRef.current?.innerHTML ?? buildCanvasHtml())
+        )
       );
       if (baseHtml.includes("bulk-letter-page")) {
+        const container = document.createElement("div");
+        container.innerHTML = sanitizeLetterHtml(baseHtml, { preserveDocxLayout: true });
+        const bulkPages = container.querySelectorAll(".bulk-letter-page");
+        if (bulkPages.length > 0 && letterOverlays.length > 0) {
+          bulkPages.forEach((pageNode) => {
+            pageNode.innerHTML = injectOverlaysIntoLetterHtml(pageNode.innerHTML, letterOverlays);
+          });
+        }
         return {
-          combinedPrintHtml: sanitizeLetterHtml(baseHtml, { preserveDocxLayout: true }),
+          combinedPrintHtml: container.innerHTML,
           unifiedLetterId,
         };
       }
@@ -1862,7 +2013,7 @@ export default function LetterGeneratorDialog({
         const renderedHtml = sanitizeLetterHtml(mergedWithFooter, {
           preserveDocxLayout: true,
         });
-        rawPagesHtml.push(renderedHtml);
+        rawPagesHtml.push(injectOverlaysIntoLetterHtml(renderedHtml, letterOverlays));
       }
     }
 
@@ -1935,6 +2086,10 @@ export default function LetterGeneratorDialog({
     setExcelRowsData([]);
     setPreviewBulkIndex(0);
     setLetterMode("single");
+    setLetterOverlays([]);
+    setSelectedOverlayId(null);
+    setOverlayRawMap({});
+    setOverlayPageCount(1);
     printAfterSaveRef.current = false;
     resetDraftLetterIds();
   }, [onCloseEdit, resetDraftLetterIds]);
@@ -1973,6 +2128,7 @@ export default function LetterGeneratorDialog({
             excelColumns,
             excelRowsData,
           },
+          ...(letterOverlays.length > 0 ? { overlays: letterOverlays } : {}),
         });
 
         if (isEditMode && editingMail && onUpdateMail) {
@@ -2064,25 +2220,36 @@ export default function LetterGeneratorDialog({
         });
         const renderTarget = document.createElement("div");
         await renderDocxToElement(filledBuffer, renderTarget);
-        printableSingleContent = renderTarget.innerHTML;
+        const renderedWithOverlays = injectOverlaysIntoLetterHtml(
+          renderTarget.innerHTML,
+          letterOverlays
+        );
+        printableSingleContent = renderedWithOverlays;
+        const resolvedTemplateId =
+          createTemplate && createTemplate !== EXISTING_DOCUMENT_TEMPLATE_ID
+            ? createTemplate
+            : "";
         finalSingleContent =
-          createTemplate &&
-          createTemplate !== EXISTING_DOCUMENT_TEMPLATE_ID
-            ? embedLetterEditMetadata(renderTarget.innerHTML, {
+          resolvedTemplateId || letterOverlays.length > 0
+            ? embedLetterEditMetadata(renderedWithOverlays, {
                 v: 1,
-                templateId: createTemplate,
+                templateId: resolvedTemplateId,
                 docxValues,
+                ...(letterOverlays.length > 0 ? { overlays: letterOverlays } : {}),
               })
-            : renderTarget.innerHTML;
+            : renderedWithOverlays;
       } else {
-        const rawSingleHtml = stripLetterEditMetadata(
-          (canvasTextareaRef.current?.innerHTML || createContent || buildCanvasHtml()).trim()
+        const rawSingleHtml = stripLetterOverlaysFromHtml(
+          stripLetterEditMetadata(
+            (canvasTextareaRef.current?.innerHTML || createContent || buildCanvasHtml()).trim()
+          )
         );
         const alreadyHasDocxEmbeddedQr =
           rawSingleHtml.includes("docx-wrapper") && /<footer\b[\s\S]*?<img\b/i.test(rawSingleHtml);
 
+        let sanitizedSingleHtml = "";
         if (alreadyHasDocxEmbeddedQr) {
-          finalSingleContent = sanitizeLetterHtml(rawSingleHtml, {
+          sanitizedSingleHtml = sanitizeLetterHtml(rawSingleHtml, {
             preserveDocxLayout: true,
           });
         } else {
@@ -2093,12 +2260,25 @@ export default function LetterGeneratorDialog({
             verificationUrl: qrMeta.verificationUrl,
             orgLabel: activeOrgLabel,
           });
-          finalSingleContent = sanitizeLetterHtml(
+          sanitizedSingleHtml = sanitizeLetterHtml(
             upsertHtmlQrFooter(replacePlaceholdersInHtml(rawSingleHtml, singleData), footerHtml),
             { preserveDocxLayout: true }
           );
         }
-        printableSingleContent = finalSingleContent;
+        const singleWithOverlays = injectOverlaysIntoLetterHtml(
+          sanitizedSingleHtml,
+          letterOverlays
+        );
+        printableSingleContent = singleWithOverlays;
+        finalSingleContent =
+          letterOverlays.length > 0
+            ? embedLetterEditMetadata(singleWithOverlays, {
+                v: 1,
+                templateId: "",
+                docxValues,
+                overlays: letterOverlays,
+              })
+            : singleWithOverlays;
       }
 
       if (isEditMode && editingMail && onUpdateMail) {
@@ -2733,6 +2913,22 @@ export default function LetterGeneratorDialog({
                     humanizePlaceholderKey={humanizePlaceholderKey}
                     isMultilineField={isMultilineField}
                   />
+
+                  {/* CARD 4: UPLOAD GAMBAR TANDA TANGAN & STEMPEL ORGANISASI */}
+                  <LetterSignatureStampPanel
+                    overlays={letterOverlays}
+                    selectedOverlayId={selectedOverlayId}
+                    onSelectOverlay={setSelectedOverlayId}
+                    onAddOverlay={handleAddLetterOverlay}
+                    onUpdateOverlay={handleUpdateLetterOverlay}
+                    onRemoveOverlay={handleRemoveLetterOverlay}
+                    rawImageMap={overlayRawMap}
+                    savedAssets={savedOverlayAssets}
+                    onSaveAssetToLibrary={handleSaveOverlayAssetToLibrary}
+                    onDeleteSavedAsset={handleDeleteSavedOverlayAsset}
+                    pageCount={overlayPageCount}
+                    disabled={!isEditMode && !createTemplate && !activeFileBase64 && !createContent.trim()}
+                  />
                 </div>
 
                 {/* Footer Form Kiri */}
@@ -2975,7 +3171,11 @@ export default function LetterGeneratorDialog({
               )}
 
               {/* CANVAS KERTAS SURAT (Word Asli / Empty State bila belum ada template) */}
-              <div className="w-full relative min-h-[600px] flex flex-col items-center justify-start">
+              <div
+                ref={canvasStageRef}
+                onPointerDown={() => setSelectedOverlayId(null)}
+                className="w-full relative min-h-[600px] flex flex-col items-center justify-start"
+              >
                 {!isEditMode && !createTemplate && !activeFileBase64 && !createContent.trim() ? (
                   <div className="w-full max-w-md my-auto bg-white dark:bg-zinc-900 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-2xl p-8 text-center space-y-3 shadow-2xs">
                     <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center">
@@ -3043,10 +3243,24 @@ export default function LetterGeneratorDialog({
                     !isEditMode && !createTemplate && !activeFileBase64 && !createContent.trim()
                       ? "hidden"
                       : isDocxStyledCanvas
-                      ? "w-full min-h-[600px] flex flex-col items-center justify-start p-2 sm:p-4 overflow-auto outline-none"
-                      : "w-full aspect-[215/330] bg-white text-zinc-900 p-8 sm:p-10 rounded-xl border border-zinc-300 shadow-xl flex flex-col outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 cursor-text overflow-auto"
+                      ? "relative z-0 isolate w-full min-h-[600px] flex flex-col items-center justify-start p-2 sm:p-4 overflow-auto outline-none"
+                      : "relative z-0 isolate w-full aspect-[215/330] bg-white text-zinc-900 p-8 sm:p-10 rounded-xl border border-zinc-300 shadow-xl flex flex-col outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 cursor-text overflow-auto"
                   }
                   style={isDocxStyledCanvas ? undefined : { fontFamily: '"Arial Narrow", Arial, sans-serif', lineHeight: "1.35" }}
+                />
+
+                {/* Layer Interaktif Drag & Resize Tanda Tangan + Stempel Organisasi */}
+                <LetterOverlayCanvas
+                  stageRef={canvasStageRef}
+                  canvasRef={canvasTextareaRef}
+                  overlays={letterOverlays}
+                  selectedOverlayId={selectedOverlayId}
+                  onSelectOverlay={setSelectedOverlayId}
+                  onUpdateOverlay={handleUpdateLetterOverlay}
+                  onDuplicateOverlay={handleDuplicateLetterOverlay}
+                  onRemoveOverlay={handleRemoveLetterOverlay}
+                  onPageCountChange={setOverlayPageCount}
+                  renderVersion={canvasRenderVersion}
                 />
 
                 {/* Pratinjau Footer QR Verifikasi Otomatis (Mode Kanvas HTML Edit) */}

@@ -156,16 +156,23 @@ export default function RekapNilaiPage() {
   }, [tenantEvents, selectedActivityId]);
 
   const getParticipantAvatar = (item: ParticipantEvaluation): string | undefined => {
-    if (item.avatar && typeof item.avatar === "string" && (item.avatar.startsWith("http") || item.avatar.startsWith("data:") || item.avatar.startsWith("/"))) {
-      return item.avatar;
-    }
+    const isValidUrl = (val: unknown): val is string =>
+      typeof val === "string" &&
+      (val.startsWith("http") || val.startsWith("data:") || val.startsWith("/"));
+
     const matchedCadre = cadres.find(
       (c) =>
         (item.cadreId && c.id === item.cadreId) ||
         (c.name && item.participantName && c.name.trim().toLowerCase() === item.participantName.trim().toLowerCase())
     );
-    if (matchedCadre?.avatar && typeof matchedCadre.avatar === "string" && (matchedCadre.avatar.startsWith("http") || matchedCadre.avatar.startsWith("data:") || matchedCadre.avatar.startsWith("/"))) {
+    if (isValidUrl(matchedCadre?.avatar)) {
       return matchedCadre.avatar;
+    }
+    if (matchedCadre && !matchedCadre.avatar && item.avatar?.includes("/materials/avatars/")) {
+      return undefined;
+    }
+    if (isValidUrl(item.avatar)) {
+      return item.avatar;
     }
     return undefined;
   };

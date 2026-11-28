@@ -1,7 +1,15 @@
 "use client";
 
 import React from "react";
-import { Clock, Upload, RefreshCw, FileText, ExternalLink, Trash2 } from "lucide-react";
+import {
+  Clock,
+  Upload,
+  RefreshCw,
+  FileText,
+  ExternalLink,
+  Trash2,
+  ListChecks,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,6 +20,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import type { EventActivity } from "@/lib/db";
+import {
+  ALLOWED_REQUIREMENT_ACCEPT,
+  isSafeDocumentUrl,
+  openSafeDocumentUrl,
+} from "./verifikasi-helper";
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -26,10 +39,13 @@ interface TaskModalProps {
   onReqFormTitleChange: (title: string) => void;
   reqFormDeadline: string;
   onReqFormDeadlineChange: (dl: string) => void;
+  reqFormMinSubmissions: number;
+  onReqFormMinSubmissionsChange: (val: number) => void;
   reqFormFileUrl: string;
   reqFormFileName: string;
   reqFormFileSize: string;
   isUploadingReqFile: boolean;
+  isSavingReq: boolean;
   onReqFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveReqFile: () => void;
   reqFormDescription: string;
@@ -50,16 +66,21 @@ export function TaskModal({
   onReqFormTitleChange,
   reqFormDeadline,
   onReqFormDeadlineChange,
+  reqFormMinSubmissions,
+  onReqFormMinSubmissionsChange,
   reqFormFileUrl,
   reqFormFileName,
   reqFormFileSize,
   isUploadingReqFile,
+  isSavingReq,
   onReqFileChange,
   onRemoveReqFile,
   reqFormDescription,
   onReqFormDescriptionChange,
   onSaveRequirement,
 }: TaskModalProps) {
+  const canOpenFile = isSafeDocumentUrl(reqFormFileUrl);
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg w-full p-0 overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl">
@@ -94,17 +115,23 @@ export function TaskModal({
                 <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                   Pilih Kegiatan Penugasan <span className="text-rose-500">*</span>
                 </label>
-                <select
-                  value={reqFormEventId}
-                  onChange={(e) => onReqFormEventIdChange(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                >
-                  {tenantEvents.map((evt) => (
-                    <option key={evt.id} value={evt.id}>
-                      [{evt.level}] {evt.name || evt.title}
-                    </option>
-                  ))}
-                </select>
+                {tenantEvents.length > 0 ? (
+                  <select
+                    value={reqFormEventId}
+                    onChange={(e) => onReqFormEventIdChange(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  >
+                    {tenantEvents.map((evt) => (
+                      <option key={evt.id} value={evt.id}>
+                        [{evt.level}] {evt.name || evt.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-700 dark:text-amber-300">
+                    Belum ada agenda kegiatan pada lingkup komisariat ini. Buat kegiatan terlebih dahulu untuk mengikat tugas RTL ke agenda spesifik.
+                  </div>
+                )}
               </div>
             )}
 
@@ -122,21 +149,48 @@ export function TaskModal({
               />
             </div>
 
-            {/* 3. Deadline Tugas (Date Picker & Waktu) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Deadline Tugas (Batas Waktu Pengumpulan)</span>
-              </label>
-              <Input
-                type="datetime-local"
-                value={reqFormDeadline}
-                onChange={(e) => onReqFormDeadlineChange(e.target.value)}
-                className="h-9 text-xs rounded-xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:ring-1 focus-visible:ring-zinc-400 shadow-none px-3 cursor-pointer"
-              />
-              <p className="text-[10.5px] text-zinc-400">
-                Tentukan tanggal dan jam batas akhir pengumpulan bagi para peserta.
-              </p>
+            {/* 3. Deadline Tugas & Minimal Laporan Disetujui */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Deadline Tugas</span>
+                </label>
+                <Input
+                  type="datetime-local"
+                  value={reqFormDeadline}
+                  onChange={(e) => onReqFormDeadlineChange(e.target.value)}
+                  className="h-9 text-xs rounded-xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:ring-1 focus-visible:ring-zinc-400 shadow-none px-3 cursor-pointer"
+                />
+                <p className="text-[10.5px] text-zinc-400">
+                  Batas akhir pengumpulan tugas (opsional).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <ListChecks className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Minimal Laporan Disetujui</span>
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={reqFormMinSubmissions}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    onReqFormMinSubmissionsChange(
+                      Number.isFinite(parsed)
+                        ? Math.max(1, Math.min(20, parsed))
+                        : 1
+                    );
+                  }}
+                  className="h-9 text-xs rounded-xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:ring-1 focus-visible:ring-zinc-400 shadow-none px-3"
+                />
+                <p className="text-[10.5px] text-zinc-400">
+                  Jumlah laporan terverifikasi untuk menuntaskan tugas ini (default 1).
+                </p>
+              </div>
             </div>
 
             {/* 4. Upload Berkas Panduan / Soal Tugas */}
@@ -163,18 +217,20 @@ export function TaskModal({
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    <a
-                      href={reqFormFileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="h-8 w-8 inline-flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors"
-                      title="Lihat Berkas"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                    {canOpenFile && (
+                      <button
+                        type="button"
+                        onClick={() => void openSafeDocumentUrl(reqFormFileUrl)}
+                        className="h-8 w-8 inline-flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                        title="Lihat Berkas"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={onRemoveReqFile}
+                      disabled={isSavingReq}
                       className="h-8 w-8 inline-flex items-center justify-center text-rose-500 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                       title="Hapus Berkas"
                     >
@@ -188,14 +244,16 @@ export function TaskModal({
                     type="file"
                     id="req-file-upload"
                     onChange={onReqFileChange}
-                    disabled={isUploadingReqFile}
-                    accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.jpg,.jpeg,.png"
+                    disabled={isUploadingReqFile || isSavingReq}
+                    accept={ALLOWED_REQUIREMENT_ACCEPT}
                     className="hidden"
                   />
                   <label
                     htmlFor="req-file-upload"
                     className={`w-full p-4 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-950/50 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
-                      isUploadingReqFile ? "opacity-50 pointer-events-none" : ""
+                      isUploadingReqFile || isSavingReq
+                        ? "opacity-50 pointer-events-none"
+                        : ""
                     }`}
                   >
                     {isUploadingReqFile ? (
@@ -211,8 +269,8 @@ export function TaskModal({
                         <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                           Pilih berkas panduan / modul / soal
                         </span>
-                        <span className="text-[10.5px] text-zinc-400">
-                          PDF, Word, PPT, Gambar, atau ZIP (Maks. 25MB)
+                        <span className="text-[10.5px] text-zinc-400 text-center">
+                          PDF, Word, Excel, PPT, CSV, atau Gambar (Maks. 10 MB)
                         </span>
                       </>
                     )}
@@ -241,6 +299,7 @@ export function TaskModal({
             <Button
               type="button"
               variant="outline"
+              disabled={isSavingReq}
               onClick={() => onOpenChange(false)}
               className="h-9 px-4 text-xs font-medium rounded-xl border-zinc-200 dark:border-zinc-800 shadow-none cursor-pointer"
             >
@@ -248,10 +307,19 @@ export function TaskModal({
             </Button>
             <Button
               type="submit"
-              disabled={isUploadingReqFile}
-              className="h-9 px-5 text-xs font-semibold rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 shadow-none cursor-pointer transition-colors"
+              disabled={isUploadingReqFile || isSavingReq}
+              className="h-9 px-5 text-xs font-semibold rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 shadow-none cursor-pointer transition-colors inline-flex items-center gap-1.5"
             >
-              {editingReqId ? "Simpan Perubahan" : "Tambahkan Tugas"}
+              {isSavingReq ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Menyimpan...</span>
+                </>
+              ) : editingReqId ? (
+                "Simpan Perubahan"
+              ) : (
+                "Tambahkan Tugas"
+              )}
             </Button>
           </div>
         </form>

@@ -7,6 +7,9 @@ const OPTIMIZABLE_HOSTS = new Set([
   "lh3.googleusercontent.com",
 ]);
 
+/** Cache in-memory URL gambar yang gagal dimuat agar tidak memicu request berulang lintas halaman. */
+const FAILED_IMAGE_URLS = new Set<string>();
+
 export function isSafeImageSrc(src: string | null | undefined): boolean {
   if (!src || typeof src !== "string") return false;
   const trimmed = src.trim();
@@ -57,6 +60,8 @@ export interface SmartImageProps
   preserveAspect?: boolean;
   /** Preload above-the-fold LCP assets (Next.js 16 `preload` prop). */
   preload?: boolean;
+  /** Lewati proxy `/_next/image` (cocok untuk avatar dinamis hasil unggahan pengguna). */
+  unoptimized?: boolean;
 }
 
 /**
@@ -65,7 +70,7 @@ export interface SmartImageProps
  *   public Supabase Storage assets, and configured OAuth avatar hosts.
  * - Safely falls back to native `<img>` with `loading="lazy"` and `decoding="async"`
  *   for signed private URLs, `data:`/`blob:` previews, unconfigured external URLs,
- *   or intrinsic-aspect layouts (`preserveAspect`).
+ *   `unoptimized` dynamic uploads, or intrinsic-aspect layouts (`preserveAspect`).
  */
 export function SmartImage({
   src,
@@ -75,6 +80,7 @@ export function SmartImage({
   fallbackSrc,
   preserveAspect = false,
   preload = false,
+  unoptimized = false,
   className,
   onError,
   ...rest
@@ -82,21 +88,24 @@ export function SmartImage({
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   const primarySrc = typeof src === "string" ? src.trim() : "";
-  const effectiveSrc =
-    failedSrc && failedSrc === primarySrc && fallbackSrc ? fallbackSrc : primarySrc;
+  const isPrimaryFailed =
+    Boolean(primarySrc) && (failedSrc === primarySrc || FAILED_IMAGE_URLS.has(primarySrc));
 
-  if (!isSafeImageSrc(effectiveSrc)) {
+  const effectiveSrc = isPrimaryFailed ? (fallbackSrc || "") : primarySrc;
+
+  if (!isSafeImageSrc(effectiveSrc) || FAILED_IMAGE_URLS.has(effectiveSrc)) {
     return null;
   }
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    if (fallbackSrc && effectiveSrc !== fallbackSrc) {
-      setFailedSrc(primarySrc);
+    if (effectiveSrc) {
+      FAILED_IMAGE_URLS.add(effectiveSrc);
+      setFailedSrc(effectiveSrc);
     }
     onError?.(e);
   };
 
-  if (!preserveAspect && canOptimizeWithNextImage(effectiveSrc)) {
+  if (!preserveAspect && !unoptimized && canOptimizeWithNextImage(effectiveSrc)) {
     return (
       <Image
         src={effectiveSrc}

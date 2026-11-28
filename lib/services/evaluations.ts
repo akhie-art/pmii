@@ -336,8 +336,14 @@ export function syncEvaluationsWithRegistrations(
 
     if (matchedCadre) {
       let itemChanged = false;
-      if (!item.avatar && matchedCadre.avatar) {
-        item.avatar = matchedCadre.avatar;
+      const freshAvatar = typeof matchedCadre.avatar === "string" ? matchedCadre.avatar.trim() : "";
+      const currentAvatar = typeof item.avatar === "string" ? item.avatar.trim() : "";
+      if (freshAvatar && freshAvatar !== currentAvatar) {
+        item.avatar = freshAvatar;
+        itemChanged = true;
+      } else if (!freshAvatar && currentAvatar.includes("/materials/avatars/")) {
+        // Bersihkan URL avatar profil lama yang sudah dihapus dari profil anggota agar tidak 404/400
+        item.avatar = "";
         itemChanged = true;
       }
       if (!item.commissariat && matchedCadre.commissariat) {
@@ -502,7 +508,8 @@ export async function ensureEvaluationForRegistration(
       avatar: cadre?.avatar || reg.avatar || "",
       gender: resolvedGender,
       commissariat: resolvedComm,
-      komisariat_id: cadre?.komisariat_id || reg.komisariat_id || (event as any)?.komisariat_id || null,
+      tenant_id: event?.tenant_id || (event as any)?.komisariat_id || cadre?.tenant_id || cadre?.komisariat_id || reg.tenant_id || reg.komisariat_id || null,
+      komisariat_id: event?.tenant_id || (event as any)?.komisariat_id || cadre?.komisariat_id || reg.komisariat_id || null,
       university: resolvedUniv,
       level: event?.level || "MAPABA",
       sessionScores: {},

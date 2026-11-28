@@ -525,6 +525,16 @@ export default function KomisariatKegiatanPage() {
     const targetReg = registrations.find((r) => r.id === regId);
     if (!targetReg) return;
 
+    const savedReg = await db.updateRegistration(regId, {
+      status,
+      notes,
+      verificationStatus
+    });
+    if (!savedReg) {
+      showToast("Gagal menyimpan hasil screening ke database. Periksa izin akses dan koneksi Anda.");
+      return;
+    }
+
     const updatedRegs = registrations.map((r) => {
       if (r.id === regId) {
         return { ...r, status, notes, verificationStatus };
@@ -533,7 +543,6 @@ export default function KomisariatKegiatanPage() {
     });
 
     setRegistrations(updatedRegs);
-    await db.saveRegistrations(updatedRegs);
 
     if (status === "APPROVED") {
       try {
@@ -660,9 +669,25 @@ export default function KomisariatKegiatanPage() {
       allVerified[f.id] = true;
     });
 
-    const pendingIds = new Set(pendingRegs.map((r) => r.id));
+    const updateResults = await Promise.all(
+      pendingRegs.map((r) =>
+        db.updateRegistration(r.id, {
+          status: "APPROVED",
+          notes: "Pendaftaran disetujui otomatis oleh Admin.",
+          verificationStatus: allVerified
+        })
+      )
+    );
+    const succeededIds = new Set(
+      pendingRegs.filter((_, idx) => updateResults[idx]).map((r) => r.id)
+    );
+    if (succeededIds.size === 0) {
+      showToast("Gagal menyetujui pendaftar ke database. Periksa izin akses dan koneksi Anda.");
+      return;
+    }
+
     const updatedRegs = registrations.map((r) => {
-      if (pendingIds.has(r.id)) {
+      if (succeededIds.has(r.id)) {
         return {
           ...r,
           status: "APPROVED" as const,
@@ -674,7 +699,6 @@ export default function KomisariatKegiatanPage() {
     });
 
     setRegistrations(updatedRegs);
-    await db.saveRegistrations(updatedRegs);
 
     // Sync cadres for approved participants
     try {
@@ -757,10 +781,13 @@ export default function KomisariatKegiatanPage() {
   // Delete participant registration
   const handleDeleteRegistration = async (regId: string, cadreName?: string) => {
     try {
-      await db.deleteRegistration(regId);
+      const deleted = await db.deleteRegistration(regId);
+      if (!deleted) {
+        showToast("Gagal menghapus data pendaftar di database.");
+        return;
+      }
       const remainingRegs = registrations.filter((r) => r.id !== regId);
       setRegistrations(remainingRegs);
-      await db.saveRegistrations(remainingRegs);
       showToast(`Data pendaftar ${cadreName ? `"${cadreName}" ` : ""}berhasil dihapus.`);
     } catch (err) {
       console.error("Error deleting registration:", err);
@@ -785,8 +812,17 @@ export default function KomisariatKegiatanPage() {
       allVerified[f.id] = true;
     });
 
+    const resolvedTenantId =
+      selectedEvent.tenant_id ||
+      selectedEvent.komisariat_id ||
+      currentUser?.tenant_id ||
+      currentUser?.komisariat_id ||
+      null;
+    const resolvedCommissariat =
+      selectedEvent.commissariat || currentUser?.commissariat || activeCampus;
+
     const regNumber = createRegistrationCode(`REG-${selectedEvent.level}`, 4);
-    const newReg: ParticipantRegistration = {
+    const rawNewReg: ParticipantRegistration = {
       id: generateUUID(),
       eventId: selectedEvent.id,
       cadreName: data.cadreName,
@@ -796,39 +832,57 @@ export default function KomisariatKegiatanPage() {
       notes: "Ditambahkan dan disetujui langsung oleh Admin.",
       answers: data.answers || {},
       verificationStatus: allVerified,
-      registrationNumber: regNumber
+      registrationNumber: regNumber,
+      commissariat: resolvedCommissariat,
+      tenant_id: resolvedTenantId,
+      komisariat_id: resolvedTenantId
     };
+    const newReg = enforceTenantWrite<ParticipantRegistration>(
+      currentUser,
+      rawNewReg,
+      resolvedCommissariat
+    );
+
+    const regSaved = await db.upsertRegistration(newReg);
+    if (!regSaved) {
+      showToast(
+        `Gagal menyimpan pendaftaran ${data.cadreName} ke database. Periksa hak akses tenant dan koneksi Anda.`
+      );
+      return;
+    }
 
     const updated = [newReg, ...registrations];
     setRegistrations(updated);
-    await db.saveRegistrations(updated);
 
-    // Sync cadre
+    // Sync cadre (delta O(1) dengan tenant_id yang benar)
     try {
       const cadresList = await db.getCadres();
       const exists = cadresList.some(
         (c: any) =>
-          c.name.toLowerCase().includes(data.cadreName.toLowerCase()) ||
-          (c.email && c.email.toLowerCase() === data.cadreEmail.toLowerCase())
+          (c.email && data.cadreEmail && c.email.toLowerCase() === data.cadreEmail.toLowerCase()) ||
+          c.name.toLowerCase() === data.cadreName.toLowerCase()
       );
 
       if (!exists) {
-        const newCadre = {
+        const rawNewCadre = {
           id: generateUUID(),
           name: data.cadreName,
           level: (selectedEvent.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
-          commissariat: activeCampus,
+          commissariat: resolvedCommissariat,
+          tenant_id: resolvedTenantId,
+          komisariat_id: resolvedTenantId,
           startDate: new Date().toISOString().split("T")[0],
           status: "AKTIF" as const,
           phone: data.answers?.["f-hp"] || "",
           email: data.cadreEmail,
-          address: data.answers?.["f-alamat"] || `Komisariat ${activeCampus}`,
+          address: data.answers?.["f-alamat"] || `Komisariat ${resolvedCommissariat}`,
           instagram: data.answers?.["f-ig"] || "",
           submissions: [],
           isGraduated: selectedEvent.level !== "MAPABA",
           registrationNumber: regNumber
         };
-        await db.saveCadres([...cadresList, newCadre]);
+        const newCadre = enforceTenantWrite(currentUser, rawNewCadre, resolvedCommissariat);
+        await db.upsertCadre(newCadre);
       }
     } catch (err) {
       console.error("Failed to sync cadre on manual participant add:", err);
@@ -896,7 +950,7 @@ export default function KomisariatKegiatanPage() {
     });
 
     setRegistrations(updatedRegs);
-    db.saveRegistrations(updatedRegs);
+    void db.updateRegistration(foundReg.id, { attendance: updatedAtt });
 
     return {
       success: true,
@@ -910,6 +964,12 @@ export default function KomisariatKegiatanPage() {
     const reg = registrations.find((r) => r.id === regId);
     if (!reg) return;
 
+    const regSaved = await db.updateRegistration(regId, { isGraduated: true });
+    if (!regSaved) {
+      showToast("Gagal memperbarui status kelulusan di database.");
+      return;
+    }
+
     const updatedRegs = registrations.map((r) => {
       if (r.id === regId) {
         return { ...r, isGraduated: true };
@@ -917,55 +977,57 @@ export default function KomisariatKegiatanPage() {
       return r;
     });
     setRegistrations(updatedRegs);
-    await db.saveRegistrations(updatedRegs);
 
     const cadresList = await db.getCadres();
     const generatedNTA = generateUniqueNTA(cadresList);
 
     const matchedCadre = cadresList.find(
       (c: any) =>
-        c.email?.toLowerCase() === reg.cadreEmail.toLowerCase() ||
+        (c.email && reg.cadreEmail && c.email.toLowerCase() === reg.cadreEmail.toLowerCase()) ||
         c.name.toLowerCase() === reg.cadreName.toLowerCase()
     );
 
-    let updatedCadresList;
     if (matchedCadre) {
-      updatedCadresList = cadresList.map((c: any) => {
-        if (c.id === matchedCadre.id) {
-          return {
-            ...c,
-            isGraduated: true,
-            status: "SELESAI",
-            nta: c.nta || generatedNTA,
-            startDate: c.startDate || new Date().toISOString().split("T")[0],
-            angkatan: c.angkatan || (c.startDate ? c.startDate.split("-")[0] : new Date().getFullYear().toString())
-          };
-        }
-        return c;
+      await db.updateCadre(matchedCadre.id, {
+        isGraduated: true,
+        status: "SELESAI",
+        nta: matchedCadre.nta || generatedNTA,
+        startDate: matchedCadre.startDate || new Date().toISOString().split("T")[0],
+        angkatan:
+          matchedCadre.angkatan ||
+          (matchedCadre.startDate ? matchedCadre.startDate.split("-")[0] : new Date().getFullYear().toString())
       });
     } else {
       const gradYear = new Date().getFullYear().toString();
-      const newCadre = {
-        id: `cadre-${Date.now()}`,
-        name: reg.cadreName,
-        level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
-        commissariat: activeCampus,
-        startDate: new Date().toISOString().split("T")[0],
-        status: "SELESAI" as const,
-        phone: reg.answers["f-hp"] || reg.answers["f-phone"] || "",
-        email: reg.cadreEmail,
-        address: reg.answers["f-alamat"] || `Komisariat ${activeCampus}`,
-        instagram: reg.answers["f-ig"] || "",
-        submissions: [],
-        isGraduated: true,
-        nta: generatedNTA,
-        registrationNumber: reg.registrationNumber,
-        angkatan: gradYear
-      };
-      updatedCadresList = [...cadresList, newCadre];
+      const resolvedComm = selectedEvent?.commissariat || currentUser?.commissariat || activeCampus;
+      const resolvedTid =
+        selectedEvent?.tenant_id || selectedEvent?.komisariat_id || currentUser?.tenant_id || null;
+      const newCadre = enforceTenantWrite(
+        currentUser,
+        {
+          id: generateUUID(),
+          name: reg.cadreName,
+          level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
+          commissariat: resolvedComm,
+          tenant_id: resolvedTid,
+          komisariat_id: resolvedTid,
+          startDate: new Date().toISOString().split("T")[0],
+          status: "SELESAI" as const,
+          phone: reg.answers?.["f-hp"] || reg.answers?.["f-phone"] || "",
+          email: reg.cadreEmail,
+          address: reg.answers?.["f-alamat"] || `Komisariat ${resolvedComm}`,
+          instagram: reg.answers?.["f-ig"] || "",
+          submissions: [],
+          isGraduated: true,
+          nta: generatedNTA,
+          registrationNumber: reg.registrationNumber,
+          angkatan: gradYear
+        },
+        resolvedComm
+      );
+      await db.upsertCadre(newCadre);
     }
 
-    await db.saveCadres(updatedCadresList);
     showToast(`${reg.cadreName} dinyatakan lulus.`);
   };
 
@@ -974,6 +1036,12 @@ export default function KomisariatKegiatanPage() {
     const reg = registrations.find((r) => r.id === regId);
     if (!reg) return;
 
+    const regSaved = await db.updateRegistration(regId, { isGraduated: false });
+    if (!regSaved) {
+      showToast("Gagal membatalkan kelulusan di database.");
+      return;
+    }
+
     const updatedRegs = registrations.map((r) => {
       if (r.id === regId) {
         return { ...r, isGraduated: false };
@@ -981,25 +1049,30 @@ export default function KomisariatKegiatanPage() {
       return r;
     });
     setRegistrations(updatedRegs);
-    await db.saveRegistrations(updatedRegs);
 
     const cadresList = await db.getCadres();
-    const updatedCadresList = cadresList.map((c: any) => {
-      if (
-        c.email?.toLowerCase() === reg.cadreEmail.toLowerCase() ||
+    const matchedCadre = cadresList.find(
+      (c: any) =>
+        (c.email && reg.cadreEmail && c.email.toLowerCase() === reg.cadreEmail.toLowerCase()) ||
         c.name.toLowerCase() === reg.cadreName.toLowerCase()
-      ) {
-        return { ...c, isGraduated: false, status: "AKTIF", nta: undefined };
-      }
-      return c;
-    });
-    await db.saveCadres(updatedCadresList);
+    );
+    if (matchedCadre) {
+      await db.updateCadre(matchedCadre.id, { isGraduated: false, status: "AKTIF" });
+    }
     showToast(`Status kelulusan ${reg.cadreName} dibatalkan.`);
   };
 
   // Batch graduate
   const handleBatchGraduate = async (regIds: string[]) => {
-    const idSet = new Set(regIds);
+    const results = await Promise.all(
+      regIds.map((id) => db.updateRegistration(id, { isGraduated: true }))
+    );
+    const idSet = new Set(regIds.filter((_, i) => results[i]));
+    if (idSet.size === 0) {
+      showToast("Gagal memproses kelulusan massal ke database.");
+      return;
+    }
+
     const updatedRegs = registrations.map((r) => {
       if (idSet.has(r.id)) {
         return { ...r, isGraduated: true };
@@ -1007,60 +1080,66 @@ export default function KomisariatKegiatanPage() {
       return r;
     });
     setRegistrations(updatedRegs);
-    await db.saveRegistrations(updatedRegs);
 
     const cadresList = await db.getCadres();
-    let workingCadres = [...cadresList];
+    const workingCadres = [...cadresList];
+    const resolvedComm = selectedEvent?.commissariat || currentUser?.commissariat || activeCampus;
+    const resolvedTid =
+      selectedEvent?.tenant_id || selectedEvent?.komisariat_id || currentUser?.tenant_id || null;
 
-    for (const regId of regIds) {
+    for (const regId of Array.from(idSet)) {
       const reg = registrations.find((r) => r.id === regId);
       if (!reg) continue;
 
       const generatedNTA = generateUniqueNTA(workingCadres);
       const matchedCadre = workingCadres.find(
         (c: any) =>
-          c.email?.toLowerCase() === reg.cadreEmail.toLowerCase() ||
+          (c.email && reg.cadreEmail && c.email.toLowerCase() === reg.cadreEmail.toLowerCase()) ||
           c.name.toLowerCase() === reg.cadreName.toLowerCase()
       );
 
       if (matchedCadre) {
-        workingCadres = workingCadres.map((c: any) => {
-          if (c.id === matchedCadre.id) {
-            return {
-              ...c,
-              isGraduated: true,
-              status: "SELESAI",
-              nta: c.nta || generatedNTA,
-              angkatan: c.angkatan || (c.startDate ? c.startDate.split("-")[0] : new Date().getFullYear().toString())
-            };
-          }
-          return c;
+        const nextNta = matchedCadre.nta || generatedNTA;
+        matchedCadre.nta = nextNta;
+        await db.updateCadre(matchedCadre.id, {
+          isGraduated: true,
+          status: "SELESAI",
+          nta: nextNta,
+          angkatan:
+            matchedCadre.angkatan ||
+            (matchedCadre.startDate ? matchedCadre.startDate.split("-")[0] : new Date().getFullYear().toString())
         });
       } else {
         const gradYear = new Date().getFullYear().toString();
-        const newCadre = {
-          id: `cadre-${Date.now()}-${Math.random()}`,
-          name: reg.cadreName,
-          level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
-          commissariat: activeCampus,
-          startDate: new Date().toISOString().split("T")[0],
-          status: "SELESAI" as const,
-          phone: reg.answers["f-hp"] || reg.answers["f-phone"] || "",
-          email: reg.cadreEmail,
-          address: reg.answers["f-alamat"] || `Komisariat ${activeCampus}`,
-          instagram: reg.answers["f-ig"] || "",
-          submissions: [],
-          isGraduated: true,
-          nta: generatedNTA,
-          registrationNumber: reg.registrationNumber,
-          angkatan: gradYear
-        };
+        const newCadre = enforceTenantWrite(
+          currentUser,
+          {
+            id: generateUUID(),
+            name: reg.cadreName,
+            level: (selectedEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA",
+            commissariat: resolvedComm,
+            tenant_id: resolvedTid,
+            komisariat_id: resolvedTid,
+            startDate: new Date().toISOString().split("T")[0],
+            status: "SELESAI" as const,
+            phone: reg.answers?.["f-hp"] || reg.answers?.["f-phone"] || "",
+            email: reg.cadreEmail,
+            address: reg.answers?.["f-alamat"] || `Komisariat ${resolvedComm}`,
+            instagram: reg.answers?.["f-ig"] || "",
+            submissions: [],
+            isGraduated: true,
+            nta: generatedNTA,
+            registrationNumber: reg.registrationNumber,
+            angkatan: gradYear
+          },
+          resolvedComm
+        );
         workingCadres.push(newCadre);
+        await db.upsertCadre(newCadre);
       }
     }
 
-    await db.saveCadres(workingCadres);
-    showToast(`${regIds.length} peserta diluluskan.`);
+    showToast(`${idSet.size} peserta diluluskan.`);
   };
 
   if (!mounted) {

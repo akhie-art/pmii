@@ -73,10 +73,8 @@ export const ScoringModal: React.FC<ScoringModalProps> = ({
                   alt={selectedEval.participantName}
                   width={48}
                   height={48}
+                  unoptimized
                   className="absolute inset-0 w-full h-full object-cover rounded-full"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLElement).style.display = "none";
-                  }}
                 />
               )}
             </div>

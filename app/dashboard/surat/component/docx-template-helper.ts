@@ -123,6 +123,17 @@ export interface DocxQrFooterOptions {
   orgLabel?: string;
 }
 
+export interface DocxImageOverlayInput {
+  id: string;
+  label: string;
+  dataUrl: string;
+  aspectRatio: number;
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  rotation?: number;
+}
+
 function appendRelationshipXml(relsXml: string, relationshipTag: string): string {
   if (/<Relationships\b[^>]*\/>/.test(relsXml)) {
     return relsXml.replace(
@@ -403,6 +414,141 @@ export function embedQrFooterInDocx(zip: PizZip, opts: DocxQrFooterOptions): Piz
 }
 
 /**
+ * Menyematkan gambar tanda tangan & stempel organisasi ke dalam dokumen Word (.docx)
+ * sebagai floating DrawingML anchor (`<wp:anchor relativeFrom="page">`) agar posisi
+ * sesuai persis dengan kanvas tanpa mendorong paragraf / mengubah jarak baris surat.
+ */
+export function embedImageOverlaysInDocx(
+  zip: PizZip,
+  overlays: DocxImageOverlayInput[]
+): PizZip {
+  try {
+    if (!Array.isArray(overlays) || overlays.length === 0) return zip;
+    const docFile = zip.file("word/document.xml");
+    if (!docFile) return zip;
+    let docXml = docFile.asText();
+
+    // Hitung ukuran halaman Word dalam EMU dari <w:pgSz> (1 twip = 635 EMU)
+    const pgSzMatch = docXml.match(/<w:pgSz\b[^>]*>/i)?.[0] || "";
+    const wTwips = parseInt(pgSzMatch.match(/\bw:w="(\d+)"/i)?.[1] || "11906", 10) || 11906;
+    const hTwips = parseInt(pgSzMatch.match(/\bw:h="(\d+)"/i)?.[1] || "16838", 10) || 16838;
+    const pageWidthEmu = wTwips * 635;
+    const pageHeightEmu = hTwips * 635;
+
+    const ctFile = zip.file("[Content_Types].xml");
+    let ctXml = ctFile ? ctFile.asText() : "";
+    const docRelsPath = "word/_rels/document.xml.rels";
+    let docRelsXml =
+      zip.file(docRelsPath)?.asText() ||
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>';
+
+    const ensureDocNs: Array<[string, string]> = [
+      ["xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"],
+      ["xmlns:wp", "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"],
+      ["xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main"],
+      ["xmlns:pic", "http://schemas.openxmlformats.org/drawingml/2006/picture"],
+    ];
+    for (const [attr, uri] of ensureDocNs) {
+      if (!docXml.includes(`${attr}=`)) {
+        docXml = docXml.replace("<w:document", `<w:document ${attr}="${uri}"`);
+      }
+    }
+
+    const anchorRuns: string[] = [];
+
+    overlays.forEach((ov, idx) => {
+      if (!ov?.dataUrl || !ov.dataUrl.startsWith("data:image/")) return;
+      const mimeMatch = ov.dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (!mimeMatch) return;
+      const rawFmt = mimeMatch[1].toLowerCase();
+      const ext = rawFmt === "jpeg" ? "jpg" : rawFmt;
+      const contentType =
+        ext === "jpg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+
+      const binary = base64ToArrayBuffer(mimeMatch[2]);
+      const mediaFileName = `letter_overlay_${idx + 1}.${ext}`;
+      zip.file(`word/media/${mediaFileName}`, binary);
+
+      if (ctXml && !new RegExp(`Extension="${ext}"`, "i").test(ctXml)) {
+        ctXml = ctXml.replace(
+          "</Types>",
+          `<Default Extension="${ext}" ContentType="${contentType}"/></Types>`
+        );
+      }
+
+      const relId = `rIdLetterOverlay${idx + 1}`;
+      if (!docRelsXml.includes(`Id="${relId}"`)) {
+        const relTag = `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mediaFileName}"/>`;
+        docRelsXml = appendRelationshipXml(docRelsXml, relTag);
+      }
+
+      const xPct = Math.min(95, Math.max(0, Number(ov.xPct) || 0));
+      const yPct = Math.min(95, Math.max(0, Number(ov.yPct) || 0));
+      const widthPct = Math.min(65, Math.max(5, Number(ov.widthPct) || 20));
+      const ratio = Math.min(6, Math.max(0.2, Number(ov.aspectRatio) || 1.5));
+
+      const posXEmu = Math.round((xPct / 100) * pageWidthEmu);
+      const posYEmu = Math.round((yPct / 100) * pageHeightEmu);
+      const cx = Math.round((widthPct / 100) * pageWidthEmu);
+      const cy = Math.round(cx / ratio);
+      const rotVal = Math.round((Number(ov.rotation) || 0) * 60000);
+      const docPrId = 9020001 + idx;
+      const safeName = String(ov.label || `TTD_Stempel_${idx + 1}`).replace(/["'<>&]/g, "");
+
+      const drawingXml =
+        `<w:drawing>` +
+        `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${251660000 + idx}" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">` +
+        `<wp:simplePos x="0" y="0"/>` +
+        `<wp:positionH relativeFrom="page"><wp:posOffset>${posXEmu}</wp:posOffset></wp:positionH>` +
+        `<wp:positionV relativeFrom="page"><wp:posOffset>${posYEmu}</wp:posOffset></wp:positionV>` +
+        `<wp:extent cx="${cx}" cy="${cy}"/>` +
+        `<wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+        `<wp:wrapNone/>` +
+        `<wp:docPr id="${docPrId}" name="${safeName}"/>` +
+        `<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+        `<a:graphic>` +
+        `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+        `<pic:pic>` +
+        `<pic:nvPicPr><pic:cNvPr id="${docPrId}" name="${mediaFileName}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+        `<pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+        `<pic:spPr><a:xfrm${rotVal !== 0 ? ` rot="${rotVal}"` : ""}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+        `</pic:pic>` +
+        `</a:graphicData>` +
+        `</a:graphic>` +
+        `</wp:anchor>` +
+        `</w:drawing>`;
+
+      anchorRuns.push(`<w:r>${drawingXml}</w:r>`);
+    });
+
+    if (anchorRuns.length === 0) return zip;
+
+    if (ctXml) zip.file("[Content_Types].xml", ctXml);
+    zip.file(docRelsPath, docRelsXml);
+
+    // Sematkan floating anchor ke dalam paragraf terakhir (sebelum </w:p> terakhir) agar tidak menambah baris baru
+    const lastParagraphClose = docXml.lastIndexOf("</w:p>");
+    if (lastParagraphClose !== -1) {
+      docXml =
+        docXml.slice(0, lastParagraphClose) +
+        anchorRuns.join("") +
+        docXml.slice(lastParagraphClose);
+    } else if (docXml.includes("<w:sectPr")) {
+      const sectIdx = docXml.lastIndexOf("<w:sectPr");
+      docXml =
+        docXml.slice(0, sectIdx) +
+        `<w:p>${anchorRuns.join("")}</w:p>` +
+        docXml.slice(sectIdx);
+    }
+
+    zip.file("word/document.xml", docXml);
+  } catch (err) {
+    console.warn("Gagal menyematkan overlay TTD/Stempel ke DOCX:", err);
+  }
+  return zip;
+}
+
+/**
  * Isi template DOCX dengan data placeholder menggunakan docxtemplater + PizZip
  * Format asli dokumen (font, margin, header, footer, tabel) tetap 100% utuh!
  */
@@ -410,7 +556,8 @@ export function fillDocxTemplate(
   arrayBuffer: ArrayBuffer,
   data: Record<string, any>,
   photoBase64?: string,
-  qrFooter?: DocxQrFooterOptions
+  qrFooter?: DocxQrFooterOptions,
+  imageOverlays?: DocxImageOverlayInput[]
 ): {
   blob: Blob;
   arrayBuffer: ArrayBuffer;
@@ -530,6 +677,11 @@ export function fillDocxTemplate(
     // Jika ada QR Code verifikasi surat keluar, sematkan ke footer dokumen Word (.docx)
     if (qrFooter?.qrDataUrl) {
       embedQrFooterInDocx(outZip, qrFooter);
+    }
+
+    // Jika ada gambar TTD / Stempel organisasi, sematkan sebagai floating anchor di dokumen Word (.docx)
+    if (imageOverlays && imageOverlays.length > 0) {
+      embedImageOverlaysInDocx(outZip, imageOverlays);
     }
 
     const outBuffer = outZip.generate({

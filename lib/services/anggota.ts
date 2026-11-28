@@ -141,6 +141,22 @@ export async function saveAnggota(anggotaList: Anggota[]): Promise<boolean> {
   return saveTableData("anggota", KEYS.CADRES, normalized);
 }
 
+export async function upsertAnggota(cadre: Anggota): Promise<boolean> {
+  const copy: Record<string, unknown> = { ...cadre };
+  delete copy.password;
+  const normalized = {
+    ...copy,
+    id: cadre.id,
+    created_at: (copy.created_at as string) || new Date().toISOString(),
+    commissariat: normalizeKomisariat(copy.commissariat as string | undefined),
+    startDate: normalizeDateString(copy.startDate as string | undefined),
+  };
+  return saveTableData("anggota", KEYS.CADRES, [normalized as unknown as Anggota], {
+    allowDeletion: false,
+    mergeLocalCache: true,
+  });
+}
+
 export async function updateAnggota(id: string, updates: Partial<Anggota>): Promise<boolean> {
   const { updateTableRow } = await import("./core");
   const cleanUpdates = { ...updates };
@@ -162,5 +178,6 @@ export async function deleteAnggota(id: string): Promise<boolean> {
 // Backward-compatible aliases for Cadres
 export const getCadres = getAnggota;
 export const saveCadres = saveAnggota;
+export const upsertCadre = upsertAnggota;
 export const updateCadre = updateAnggota;
 export const deleteCadre = deleteAnggota;

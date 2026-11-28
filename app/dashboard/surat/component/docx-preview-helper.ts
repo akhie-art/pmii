@@ -1902,6 +1902,7 @@ export function buildDocxPrintStyleBlock(
       width: 100% !important;
     }
     .docx-wrapper > section.docx {
+      position: relative !important;
       margin: 0 auto !important;
       margin-bottom: 0 !important;
       box-shadow: none !important;
@@ -1912,6 +1913,19 @@ export function buildDocxPrintStyleBlock(
       font-family: "Calibri", var(--font-calibri, "Carlito"), Arial, sans-serif;
       hyphens: none !important;
       -webkit-hyphens: none !important;
+    }
+    .pmii-letter-overlay-item {
+      position: absolute !important;
+      pointer-events: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      line-height: 0 !important;
+    }
+    .pmii-letter-overlay-item img {
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      max-width: 100% !important;
     }
     .docx-wrapper > section.docx:not(:last-child) {
       page-break-after: always !important;

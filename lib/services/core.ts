@@ -814,7 +814,7 @@ export async function saveTableData<T extends { id: string | number }>(
           }
 
           // 5. Pastikan kolom id & user_id bertipe UUID valid untuk tabel PostgreSQL bertipe UUID
-          if (["anggota", "kader", "users", "tenant", "kegiatan", "surat", "arsip", "kaderisasi", "evaluations", "pengurus"].includes(effectiveTable)) {
+          if (["anggota", "kader", "users", "tenant", "kegiatan", "pendaftaran", "surat", "arsip", "kaderisasi", "evaluations", "pengurus", "persyaratan"].includes(effectiveTable)) {
             if (copy.id && !isValidUUID(copy.id)) {
               copy.id = generateUUID();
             }

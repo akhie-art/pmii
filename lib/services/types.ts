@@ -257,6 +257,7 @@ export interface Requirement {
   fileSize?: string;
   minSubmissions?: number;
   kaderisasiId?: string;
+  commissariat?: string;
   komisariat_id?: string | null;
   tenant_id?: string | null;
 }

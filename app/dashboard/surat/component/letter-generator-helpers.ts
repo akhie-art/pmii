@@ -6,6 +6,10 @@ import {
   buildDocxPrintStyleBlock,
   buildPrintAutoTriggerScript,
 } from "./docx-preview-helper";
+import {
+  normalizeOverlayItem,
+  type LetterImageOverlay,
+} from "./letter-overlay-helper";
 
 export interface LetterCoreFields {
   nomor: string;
@@ -76,6 +80,7 @@ export interface LetterEditMetadata {
   docxValues: Record<string, string>;
   mode?: "single" | "bulk";
   bulk?: BulkLetterMetadata;
+  overlays?: LetterImageOverlay[];
 }
 
 export interface ParsedBulkRangeNomor {
@@ -321,7 +326,12 @@ export function stripLetterEditMetadata(html: string | null | undefined): string
 export function embedLetterEditMetadata(html: string, meta: LetterEditMetadata): string {
   const cleaned = stripLetterEditMetadata(html);
   const hasBulk = meta.mode === "bulk" && Boolean(meta.bulk?.recipients?.length);
-  if (!meta.templateId && !hasBulk) return cleaned;
+  const safeOverlays = Array.isArray(meta.overlays)
+    ? meta.overlays
+        .map((o) => normalizeOverlayItem(o))
+        .filter((o): o is LetterImageOverlay => Boolean(o))
+    : [];
+  if (!meta.templateId && !hasBulk && safeOverlays.length === 0) return cleaned;
 
   const safeValues: Record<string, string> = {};
   for (const [k, v] of Object.entries(meta.docxValues || {})) {
@@ -334,6 +344,7 @@ export function embedLetterEditMetadata(html: string, meta: LetterEditMetadata):
     v: 1,
     templateId: (meta.templateId || "").trim(),
     docxValues: safeValues,
+    ...(safeOverlays.length > 0 ? { overlays: safeOverlays } : {}),
   };
 
   if (hasBulk && meta.bulk) {
@@ -400,8 +411,13 @@ export function extractLetterEditMetadata(
       Array.isArray(parsed?.bulk?.recipients) &&
       parsed.bulk.recipients.length > 0;
     const hasTemplateId = typeof parsed?.templateId === "string" && parsed.templateId.trim().length > 0;
+    const safeOverlays = Array.isArray(parsed?.overlays)
+      ? parsed.overlays
+          .map((o) => normalizeOverlayItem(o))
+          .filter((o): o is LetterImageOverlay => Boolean(o))
+      : [];
 
-    if (parsed?.v !== 1 || (!hasTemplateId && !hasBulk)) {
+    if (parsed?.v !== 1 || (!hasTemplateId && !hasBulk && safeOverlays.length === 0)) {
       return null;
     }
 
@@ -418,6 +434,7 @@ export function extractLetterEditMetadata(
       v: 1,
       templateId: typeof parsed.templateId === "string" ? parsed.templateId.trim() : "",
       docxValues,
+      ...(safeOverlays.length > 0 ? { overlays: safeOverlays } : {}),
     };
 
     if (hasBulk && parsed.bulk) {

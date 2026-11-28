@@ -15,7 +15,13 @@ const BASE_ALLOWED_ATTR = [
 ];
 
 const LETTER_STRUCTURAL_TAGS = ["article", "footer", "header", "main", "section"];
-const LETTER_SAFE_DATA_ATTRS = ["data-field", "data-placeholder", "data-borderless", "data-letter-meta"];
+const LETTER_SAFE_DATA_ATTRS = [
+  "data-field",
+  "data-placeholder",
+  "data-borderless",
+  "data-letter-meta",
+  "data-letter-overlay",
+];
 
 const MONOTYPE_CORSIVA_FALLBACK_STACK =
   '"Monotype Corsiva", var(--font-corsiva, "Charm"), "Apple Chancery", "URW Chancery L", cursive';
@@ -143,7 +149,7 @@ export function sanitizeLetterHtml(
 
   const allowedAttr = preservePlaceholders
     ? [...BASE_ALLOWED_ATTR, ...LETTER_SAFE_DATA_ATTRS]
-    : [...BASE_ALLOWED_ATTR, "data-borderless", "data-letter-meta"];
+    : [...BASE_ALLOWED_ATTR, "data-borderless", "data-letter-meta", "data-letter-overlay"];
 
   const forbidTags = preserveDocxLayout
     ? ["script", "iframe", "object", "embed", "form", "input", "button", "textarea", "select"]

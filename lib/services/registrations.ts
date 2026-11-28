@@ -111,6 +111,32 @@ export async function saveRegistrations(regsList: ParticipantRegistration[]): Pr
   return saveTableData<ParticipantRegistration>("pendaftaran", KEYS.REGISTRATIONS, normalized);
 }
 
+/**
+ * Delta upsert O(1) untuk 1 baris pendaftaran tanpa menimpa baris milik peserta/tenant lain
+ * dan mencegah penolakan RLS batch upsert.
+ */
+export async function upsertRegistration(reg: ParticipantRegistration): Promise<boolean> {
+  const normalized = {
+    ...reg,
+    eventId: String(reg.eventId || "").trim(),
+    created_at:
+      (reg as ParticipantRegistration & { created_at?: string }).created_at ||
+      new Date().toISOString(),
+  };
+  return saveTableData<ParticipantRegistration>("pendaftaran", KEYS.REGISTRATIONS, [normalized], {
+    allowDeletion: false,
+    mergeLocalCache: true,
+  });
+}
+
+export async function updateRegistration(
+  id: string,
+  updates: Partial<ParticipantRegistration>
+): Promise<boolean> {
+  const { updateTableRow } = await import("./core");
+  return updateTableRow("pendaftaran", id, updates as Record<string, any>, KEYS.REGISTRATIONS);
+}
+
 export async function deleteRegistration(id: string): Promise<boolean> {
   const { deleteTableRow } = await import("./core");
   return deleteTableRow("pendaftaran", id, KEYS.REGISTRATIONS);

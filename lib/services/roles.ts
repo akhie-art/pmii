@@ -29,7 +29,7 @@ export const DEFAULT_ROLES: Role[] = [
     allowed_menus: [
       "/pengurus", "/pengurus/kegiatan", "/pengurus/anggota", "/pengurus/kaderisasi",
       "/pengurus/pengurus", "/pengurus/surat", "/pengurus/pengajuan-sk", "/pengurus/arsip", "/pengurus/artikel",
-      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil", "/pengurus/pengaturan"
+      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/verifikasi", "/pengurus/profil", "/pengurus/pengaturan"
     ]
   },
   {
@@ -70,7 +70,7 @@ export const DEFAULT_ROLES: Role[] = [
     allowed_menus: [
       "/pengurus", "/pengurus/kegiatan", "/pengurus/anggota", "/pengurus/kaderisasi",
       "/pengurus/pengurus", "/pengurus/surat", "/pengurus/pengajuan-sk", "/pengurus/arsip", "/pengurus/artikel",
-      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil", "/pengurus/pengaturan"
+      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/verifikasi", "/pengurus/profil", "/pengurus/pengaturan"
     ]
   },
   {
@@ -89,7 +89,7 @@ export const DEFAULT_ROLES: Role[] = [
     allowed_menus: [
       "/pengurus", "/pengurus/kegiatan", "/pengurus/anggota", "/pengurus/kaderisasi",
       "/pengurus/surat", "/pengurus/pengajuan-sk", "/pengurus/arsip", "/pengurus/artikel",
-      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/profil", "/pengurus/pengaturan"
+      "/pengurus/penilaian", "/pengurus/rekap-nilai", "/pengurus/verifikasi", "/pengurus/profil", "/pengurus/pengaturan"
     ]
   }
 ];

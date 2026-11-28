@@ -1,8 +1,11 @@
-import React from "react";
+"use client";
+
+import React, { useState, useMemo } from "react";
 import { SmartImage } from "@/components/ui/smart-image";
 import { Users, Pencil, Brain, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { TablePagination, paginateItems } from "@/components/ui/table-pagination";
 import type { ParticipantEvaluation, EventActivity } from "@/lib/db";
 
 interface AssessmentListProps {
@@ -24,6 +27,26 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
   onOpenScoreModal,
   onOpenResetPostTestModal
 }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset ke halaman 1 saat daftar peserta berubah karena filter/pencarian/kegiatan
+  const listSignature = useMemo(
+    () => `${selectedMateri}|${filteredParticipants.map((p) => p.id).join(",")}`,
+    [filteredParticipants, selectedMateri]
+  );
+  const [prevSignature, setPrevSignature] = useState(listSignature);
+  if (listSignature !== prevSignature) {
+    setPrevSignature(listSignature);
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
+  const { paginatedItems: paginatedParticipants, safePage } = paginateItems(
+    filteredParticipants,
+    currentPage,
+    pageSize
+  );
+
   return (
     <Card className="bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800/80 rounded-xl overflow-hidden shadow-xs">
       {/* Table Subheader */}
@@ -71,7 +94,7 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
         </div>
       ) : (
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-          {filteredParticipants.map((item) => {
+          {paginatedParticipants.map((item) => {
             const isSpecificMateri = selectedMateri !== "ALL";
             const currentSessionData =
               isSpecificMateri && item.sessionScores
@@ -141,10 +164,8 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
                         alt={item.participantName}
                         width={40}
                         height={40}
+                        unoptimized
                         className="absolute inset-0 w-full h-full object-cover rounded-full"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLElement).style.display = "none";
-                        }}
                       />
                     )}
                   </div>
@@ -373,6 +394,17 @@ export const AssessmentList: React.FC<AssessmentListProps> = ({
           })}
         </div>
       )}
+
+      {/* Pagination Footer (referensi halaman Pengguna) */}
+      <TablePagination
+        totalItems={filteredParticipants.length}
+        currentPage={safePage}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+        itemLabel="peserta"
+        variant="embedded"
+      />
     </Card>
   );
 };

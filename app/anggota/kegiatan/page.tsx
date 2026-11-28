@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Search, Calendar } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { db, ensureEvaluationForRegistration, KEYS } from "@/lib/db";
+import { db, ensureEvaluationForRegistration, generateUUID, KEYS } from "@/lib/db";
 import { supabase, isSupabaseConfigured, clearSupabaseStorage } from "@/lib/supabase";
 import type {
   EventActivity,
@@ -393,8 +393,15 @@ export default function KaderKegiatanPage() {
       });
     }
 
+    const resolvedTenantId =
+      selectedEvent.tenant_id ||
+      selectedEvent.komisariat_id ||
+      activeCadre.tenant_id ||
+      activeCadre.komisariat_id ||
+      null;
+
     const newReg: ParticipantRegistration = {
-      id: `reg-${Date.now()}`,
+      id: generateUUID(),
       eventId: selectedEvent.id,
       cadreName: activeCadre.name,
       cadreEmail: activeCadre.email || "",
@@ -404,13 +411,22 @@ export default function KaderKegiatanPage() {
       answers,
       verificationStatus: initialVerificationStatus,
       registrationNumber: regNumber,
-      commissariat: activeCadre.commissariat,
-      komisariat_id: activeCadre.komisariat_id || null
+      commissariat: selectedEvent.commissariat || activeCadre.commissariat,
+      tenant_id: resolvedTenantId,
+      komisariat_id: resolvedTenantId
     };
+
+    const saved = await db.upsertRegistration(newReg);
+    if (!saved) {
+      setSuccessMessage(
+        "Pendaftaran gagal disimpan ke server. Periksa koneksi internet Anda atau coba kembali beberapa saat lagi."
+      );
+      setIsSuccessOpen(true);
+      return;
+    }
 
     const updated = [newReg, ...registrations];
     setRegistrations(updated);
-    await db.saveRegistrations(updated);
 
     try {
       await ensureEvaluationForRegistration(newReg, selectedEvent, activeCadre);

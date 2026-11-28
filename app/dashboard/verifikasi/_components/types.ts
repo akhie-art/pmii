@@ -9,22 +9,29 @@ import type {
 
 export interface EventParticipantProgress {
   id: string;
-  registrationId: string;
+  registrationId: string | null;
+  hasRegistration: boolean;
+  source: "REGISTRATION" | "EVALUATION" | "CADRE_SUBMISSION";
   eventId: string;
   eventName: string;
-  eventLevel: "MAPABA" | "PKD" | "PKL";
+  eventLevel: "MAPABA" | "PKD" | "PKL" | string;
   cadreName: string;
   cadreEmail: string;
   phone: string;
   campus: string;
+  commissariat?: string;
+  tenant_id?: string | null;
   dateApplied: string;
   regStatus: string;
+  isGraduated: boolean;
   matchedCadre: CadreFollowUp | null;
   submissions: CadreSubmission[];
   applicableRequirements: Requirement[];
   status: "SELESAI" | "REVISI" | "AKTIF" | "BELUM_MULAI";
   progressPercent: number;
   approvedCount: number;
+  pendingCount: number;
+  rejectedCount: number;
   totalRequirements: number;
   photoUrl: string | null;
 }

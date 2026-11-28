@@ -52,6 +52,8 @@ import {
   FileText,
   SlidersHorizontal,
   Users,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +84,7 @@ import {
   extractLetterEditMetadata,
   type BulkLetterMetadata,
 } from "./component/letter-generator-helpers";
+import { downloadMailAsPdf } from "./component/letter-pdf-helper";
 import type { MailItem } from "./component/types";
 
 export type { MailItem };
@@ -112,6 +115,7 @@ export default function SuratPage() {
   const [mailToDelete, setMailToDelete] = useState<MailItem | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
   const [copiedNomor, setCopiedNomor] = useState(false);
@@ -529,6 +533,20 @@ export default function SuratPage() {
       showToast("Gagal membuka berkas lampiran surat.");
     } finally {
       setOpeningAttachmentId(null);
+    }
+  };
+
+  const handleDownloadPdf = async (mail: MailItem) => {
+    if (downloadingPdfId) return;
+    setDownloadingPdfId(mail.id);
+    try {
+      const { fileName } = await downloadMailAsPdf(mail);
+      showToast(`Berkas PDF "${fileName}" berhasil diunduh!`);
+    } catch (err) {
+      console.error("Gagal mengunduh PDF surat:", err);
+      showToast("Gagal mengunduh PDF surat. Coba lagi atau gunakan Cetak PDF di Detail Surat.");
+    } finally {
+      setDownloadingPdfId(null);
     }
   };
 
@@ -1360,7 +1378,7 @@ export default function SuratPage() {
                       <TableHead className="w-[148px] font-semibold text-[11px] uppercase tracking-wider py-3 text-zinc-500 dark:text-zinc-400">
                         Status
                       </TableHead>
-                      <TableHead className="w-[152px] font-semibold text-[11px] uppercase tracking-wider text-right pr-5 py-3 text-zinc-500 dark:text-zinc-400">
+                      <TableHead className="w-[184px] font-semibold text-[11px] uppercase tracking-wider text-right pr-5 py-3 text-zinc-500 dark:text-zinc-400">
                         Aksi
                       </TableHead>
                     </TableRow>
@@ -1531,6 +1549,22 @@ export default function SuratPage() {
                               type="button"
                               variant="ghost"
                               size="icon-sm"
+                              disabled={downloadingPdfId === mail.id}
+                              onClick={() => void handleDownloadPdf(mail)}
+                              className="h-7 w-7 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer disabled:opacity-60"
+                              title="Unduh PDF"
+                              aria-label={`Unduh PDF surat ${mail.nomor}`}
+                            >
+                              {downloadingPdfId === mail.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => handleEditAction(mail)}
                               className="h-7 w-7 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/50 text-zinc-500 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer"
                               title={
@@ -1674,6 +1708,22 @@ export default function SuratPage() {
                             <QrCode className="w-3.5 h-3.5" />
                           </Link>
                         )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={downloadingPdfId === mail.id}
+                          onClick={() => void handleDownloadPdf(mail)}
+                          className="h-8 px-2.5 text-[11px] font-semibold rounded-lg border-zinc-200 dark:border-zinc-800 cursor-pointer flex items-center gap-1 disabled:opacity-60"
+                          title="Unduh PDF"
+                        >
+                          {downloadingPdfId === mail.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                          ) : (
+                            <Download className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                          )}
+                          <span>PDF</span>
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"

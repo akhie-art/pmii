@@ -47,6 +47,7 @@ import {
   computeBulkRecipientNomor,
   parseBulkRangeNomor,
 } from "./letter-generator-helpers";
+import { downloadMailAsPdf } from "./letter-pdf-helper";
 
 interface LetterDetailDialogProps {
   selectedMail: MailItem | null;
@@ -71,6 +72,7 @@ export function LetterDetailDialog({
 }: LetterDetailDialogProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isOpeningAttachment, setIsOpeningAttachment] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [qrMeta, setQrMeta] = useState<{
     qrDataUrl: string;
     verificationUrl: string;
@@ -167,6 +169,20 @@ export function LetterDetailDialog({
       showToast("Gagal membuka berkas lampiran.");
     } finally {
       setIsOpeningAttachment(false);
+    }
+  };
+
+  const handleDownloadPdf = async (mail: MailItem) => {
+    if (isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      const { fileName } = await downloadMailAsPdf(mail);
+      showToast(`Berkas PDF "${fileName}" berhasil diunduh!`);
+    } catch (err) {
+      console.error("Gagal mengunduh PDF dari detail surat:", err);
+      showToast("Gagal mengunduh berkas PDF surat.");
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -676,6 +692,20 @@ export function LetterDetailDialog({
                 </Button>
               }
             />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isDownloadingPdf}
+              onClick={() => void handleDownloadPdf(selectedMail)}
+              className="h-9 px-3.5 text-xs font-semibold rounded-lg border-indigo-200 dark:border-indigo-900 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100/80 dark:hover:bg-indigo-950/70 flex items-center gap-1.5 cursor-pointer shadow-none disabled:opacity-60"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>{isDownloadingPdf ? "Menyiapkan PDF..." : "Unduh PDF"}</span>
+            </Button>
             {isHtmlDocument && (
               <Button
                 type="button"

@@ -1,17 +1,25 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { db } from "@/lib/db";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { usePathname } from "next/navigation";
+import { db, generateUUID } from "@/lib/db";
 import type {
   EventActivity,
+  ParticipantEvaluation,
   ParticipantRegistration,
   Requirement,
   CadreFollowUp,
   CadreSubmission,
-  UserAccount
+  UserAccount,
 } from "@/lib/db";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { isRecordInTenant, getActiveTenant, TENANT_CHANGED_EVENT } from "@/lib/tenancy";
+import { supabase, isSupabaseConfigured, deleteStorageFile } from "@/lib/supabase";
+import {
+  isRecordInTenant,
+  enforceTenantWrite,
+  getActiveTenant,
+  isCabangOrAdmin,
+  TENANT_CHANGED_EVENT,
+} from "@/lib/tenancy";
 import { FeedbackModal } from "@/components/ui/feedback-modal";
 
 import {
@@ -19,9 +27,22 @@ import {
   readFileAsDataURL,
   getParticipantPhoto,
 } from "./_components/types";
+import {
+  buildRequirementPayload,
+  buildUnifiedEventParticipants,
+  calculateRtlProgress,
+  canManageRequirement,
+  deriveCadreStatusAfterReview,
+  filterRequirementsForContext,
+  resolveSubmissionEventContext,
+  validateRequirementFile,
+} from "./_components/verifikasi-helper";
 import { VerifikasiHero } from "./_components/VerifikasiHero";
 import { VerifikasiTabsHeader } from "./_components/VerifikasiTabsHeader";
-import { VerifikasiSubmissionsTab, DisplaySubmission } from "./_components/VerifikasiSubmissionsTab";
+import {
+  VerifikasiSubmissionsTab,
+  DisplaySubmission,
+} from "./_components/VerifikasiSubmissionsTab";
 import { ParticipantProgressTab } from "./_components/ParticipantProgressTab";
 import { TugasTab } from "./_components/TugasTab";
 import { ReviewSubmissionModal } from "./_components/ReviewSubmissionModal";
@@ -31,40 +52,47 @@ import { DeleteTaskModal } from "./_components/DeleteTaskModal";
 import { SahkanKelulusanModal } from "./_components/SahkanKelulusanModal";
 
 export default function UnifiedRtlVerifikasiPage() {
+  const pathname = usePathname();
+  const staffPrefix = pathname?.startsWith("/admin")
+    ? "/admin"
+    : pathname?.startsWith("/pengurus")
+    ? "/pengurus"
+    : pathname?.startsWith("/instruktur")
+    ? "/instruktur"
+    : "/dashboard";
+
   const [mounted, setMounted] = useState(false);
   const [activeTenant, setActiveTenant] = useState<string>("ALL");
 
-  // Core Data
+  // Core Data (tanpa over-fetching PII db.getUsers())
   const [events, setEvents] = useState<EventActivity[]>([]);
   const [registrations, setRegistrations] = useState<ParticipantRegistration[]>([]);
+  const [evaluations, setEvaluations] = useState<ParticipantEvaluation[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [cadres, setCadres] = useState<CadreFollowUp[]>([]);
-  const [users, setUsers] = useState<UserAccount[]>([]);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
-  const [activeCampus, setActiveCampus] = useState("Ki Ageng Getas Pendawa");
 
   // Filter & View States
   const [selectedEventId, setSelectedEventId] = useState<string>("ALL");
+  const [hasInitializedEvent, setHasInitializedEvent] = useState(false);
   const [mainTab, setMainTab] = useState<"VERIFIKASI" | "PROGRES" | "TUGAS">("VERIFIKASI");
   const [reviewSubTab, setReviewSubTab] = useState<"PENDING" | "APPROVED" | "REJECTED">("PENDING");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [submissionSearch, setSubmissionSearch] = useState("");
+  const [progressSearch, setProgressSearch] = useState("");
   const [progresStatusFilter, setProgresStatusFilter] = useState<string>("ALL");
   const [tugasLevelFilter, setTugasLevelFilter] = useState<string>("ALL");
 
   // Review Dialog States
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [reviewingSubmission, setReviewingSubmission] = useState<CadreSubmission | null>(null);
-  const [reviewingCadreId, setReviewingCadreId] = useState<string>("");
-  const [reviewingCadreName, setReviewingCadreName] = useState<string>("");
-  const [reviewingCadreLevel, setReviewingCadreLevel] = useState<string>("");
-  const [reviewingCadreAvatar, setReviewingCadreAvatar] = useState<string | null>(null);
+  const [reviewingSubmission, setReviewingSubmission] = useState<DisplaySubmission | null>(null);
   const [reviewFeedback, setReviewFeedback] = useState<string>("");
   const [reviewStatus, setReviewStatus] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [reviewError, setReviewError] = useState<string>("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  // Participant Detail Dialog States
+  // Participant Detail Dialog State (simpan ID agar selalu reaktif & tidak stale)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [selectedParticipantProgress, setSelectedParticipantProgress] = useState<EventParticipantProgress | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
 
   // CRUD Requirement (Tugas) Dialog States
   const [isReqModalOpen, setIsReqModalOpen] = useState(false);
@@ -72,20 +100,26 @@ export default function UnifiedRtlVerifikasiPage() {
   const [reqFormEventId, setReqFormEventId] = useState<string>("");
   const [reqFormTitle, setReqFormTitle] = useState("");
   const [reqFormDeadline, setReqFormDeadline] = useState("");
+  const [reqFormMinSubmissions, setReqFormMinSubmissions] = useState<number>(1);
   const [reqFormDescription, setReqFormDescription] = useState("");
   const [reqFormFileUrl, setReqFormFileUrl] = useState("");
   const [reqFormFileName, setReqFormFileName] = useState("");
   const [reqFormFileSize, setReqFormFileSize] = useState("");
+  const [reqOriginalFileUrl, setReqOriginalFileUrl] = useState("");
   const [isUploadingReqFile, setIsUploadingReqFile] = useState(false);
+  const [isSavingReq, setIsSavingReq] = useState(false);
 
   // Delete Confirmation Dialog States
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingReq, setDeletingReq] = useState<Requirement | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Sahkan Kelulusan Dialog States
+  // Sahkan / Batalkan Kelulusan Dialog States
   const [isSahkanModalOpen, setIsSahkanModalOpen] = useState(false);
-  const [participantToSahkan, setParticipantToSahkan] = useState<EventParticipantProgress | null>(null);
+  const [participantToSahkan, setParticipantToSahkan] = useState<EventParticipantProgress | null>(
+    null
+  );
+  const [sahkanActionMode, setSahkanActionMode] = useState<"APPROVE" | "REVOKE">("APPROVE");
   const [isSubmittingSahkan, setIsSubmittingSahkan] = useState(false);
 
   // Success / Feedback Modal State
@@ -97,27 +131,37 @@ export default function UnifiedRtlVerifikasiPage() {
   }>({
     title: "Berhasil",
     description: "Perubahan berhasil disimpan.",
-    type: "success"
+    type: "success",
   });
 
-  const showNotificationModal = (
-    title: string,
-    description: string,
-    type: "success" | "error" = "success"
-  ) => {
-    setSuccessModalData({ title, description, type });
-    setIsSuccessModalOpen(true);
-  };
+  const showNotificationModal = useCallback(
+    (title: string, description: string, type: "success" | "error" = "success") => {
+      setSuccessModalData({ title, description, type });
+      setIsSuccessModalOpen(true);
+    },
+    []
+  );
 
-  // Initial Data Fetch
+  const fetchAllData = useCallback(async () => {
+    const [loadedEvents, loadedRegs, loadedEvals, loadedReqs, loadedCadres] = await Promise.all([
+      db.getEvents(),
+      db.getRegistrations(),
+      db.getEvaluations([]),
+      db.getRequirements(),
+      db.getCadres(),
+    ]);
+    setEvents(Array.isArray(loadedEvents) ? loadedEvents : []);
+    setRegistrations(Array.isArray(loadedRegs) ? loadedRegs : []);
+    setEvaluations(Array.isArray(loadedEvals) ? loadedEvals : []);
+    setRequirements(Array.isArray(loadedReqs) ? loadedReqs : []);
+    setCadres(Array.isArray(loadedCadres) ? loadedCadres : []);
+  }, []);
+
+  // Initial Data Fetch + Live Sync Listener
   useEffect(() => {
-    const loadAll = async () => {
-      const storedCampus =
-        typeof window !== "undefined"
-          ? localStorage.getItem("PMII_ACTIVE_COMMISSARIAT") || "Ki Ageng Getas Pendawa"
-          : "Ki Ageng Getas Pendawa";
-      setActiveCampus(storedCampus);
+    let active = true;
 
+    const loadAll = async () => {
       if (typeof window !== "undefined") {
         const storedUser = localStorage.getItem("PMII_LOGGED_IN_USER");
         if (storedUser) {
@@ -127,212 +171,216 @@ export default function UnifiedRtlVerifikasiPage() {
             console.error("Error parsing user session:", e);
           }
         }
+        setActiveTenant(getActiveTenant() || "ALL");
       }
 
       try {
-        const [loadedEvents, loadedRegs, loadedReqs, loadedCadres, loadedUsers] = await Promise.all([
-          db.getEvents(),
-          db.getRegistrations(),
-          db.getRequirements(),
-          db.getCadres(),
-          db.getUsers()
-        ]);
-
-        setActiveTenant(getActiveTenant() || "ALL");
-        setEvents(loadedEvents);
-        setRegistrations(loadedRegs);
-        setRequirements(loadedReqs);
-        setCadres(loadedCadres);
-        setUsers(loadedUsers);
-
-        // Auto select first open/active event if available
-        if (loadedEvents.length > 0) {
-          const firstEvent = loadedEvents[0];
-          setSelectedEventId(firstEvent.id);
-        }
+        await fetchAllData();
       } catch (err) {
         console.error("Error loading RTL & Verifikasi data:", err);
       } finally {
-        setMounted(true);
+        if (active) setMounted(true);
       }
     };
 
-    const handleTenant = (e: any) => {
-      setActiveTenant(e.detail?.activeTenant || "ALL");
+    const handleTenant = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setActiveTenant(detail?.activeTenant || "ALL");
     };
-    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
 
-    loadAll();
+    const handleTableSync = (e: Event) => {
+      const table = (e as CustomEvent)?.detail?.table;
+      if (
+        table === "kegiatan" ||
+        table === "pendaftaran" ||
+        table === "evaluations" ||
+        table === "persyaratan" ||
+        table === "anggota"
+      ) {
+        void fetchAllData();
+      }
+    };
+
+    window.addEventListener(TENANT_CHANGED_EVENT, handleTenant);
+    window.addEventListener("PMII_TABLE_SYNC", handleTableSync);
+
+    void loadAll();
 
     return () => {
+      active = false;
       window.removeEventListener(TENANT_CHANGED_EVENT, handleTenant);
+      window.removeEventListener("PMII_TABLE_SYNC", handleTableSync);
     };
-  }, []);
+  }, [fetchAllData]);
 
-  // Filtered Events by Tenant
+  // Scope Label untuk Hero Header
+  const scopeLabel = useMemo(() => {
+    if (isCabangOrAdmin(currentUser)) {
+      return !activeTenant || activeTenant === "ALL" || activeTenant === "Semua Komisariat"
+        ? "Seluruh Cabang & Komisariat"
+        : activeTenant;
+    }
+    return currentUser?.commissariat || "Lingkup Komisariat";
+  }, [currentUser, activeTenant]);
+
+  // 1. Kegiatan terisolasi ketat per Tenant (termasuk tenant_id)
   const tenantEvents = useMemo(() => {
     return events.filter((e) =>
-      isRecordInTenant(currentUser, { commissariat: e.commissariat, komisariat_id: e.komisariat_id }, activeTenant)
+      isRecordInTenant(
+        currentUser,
+        {
+          commissariat: e.commissariat,
+          komisariat_id: e.komisariat_id,
+          tenant_id: e.tenant_id || e.komisariat_id,
+        },
+        activeTenant
+      )
     );
   }, [events, currentUser, activeTenant]);
+
+  // Auto-select event pertama milik tenant saat mount, dan jaga agar selectedEventId selalu valid di tenant aktif
+  useEffect(() => {
+    if (!mounted) return;
+    if (!hasInitializedEvent) {
+      queueMicrotask(() => {
+        setSelectedEventId(tenantEvents.length > 0 ? tenantEvents[0].id : "ALL");
+        setHasInitializedEvent(true);
+      });
+      return;
+    }
+    if (
+      selectedEventId !== "ALL" &&
+      !tenantEvents.some((evt) => evt.id === selectedEventId)
+    ) {
+      queueMicrotask(() => {
+        setSelectedEventId(tenantEvents.length > 0 ? tenantEvents[0].id : "ALL");
+      });
+    }
+  }, [mounted, hasInitializedEvent, tenantEvents, selectedEventId]);
 
   const selectedEvent = useMemo(() => {
     if (selectedEventId === "ALL") return null;
     return tenantEvents.find((e) => e.id === selectedEventId) || null;
   }, [selectedEventId, tenantEvents]);
 
-  // Requirements applicable to current selection
+  // 2. Kader terisolasi per Tenant
+  const tenantCadres = useMemo(() => {
+    return cadres.filter((c) =>
+      isRecordInTenant(
+        currentUser,
+        {
+          commissariat: c.commissariat,
+          komisariat_id: c.komisariat_id,
+          tenant_id: c.tenant_id || c.komisariat_id,
+        },
+        activeTenant
+      )
+    );
+  }, [cadres, currentUser, activeTenant]);
+
+  // 3. Tugas RTL yang berlaku untuk konteks & tenant saat ini
   const currentApplicableReqs = useMemo(() => {
-    if (selectedEvent) {
-      return requirements.filter(
-        (r) =>
-          (r.eventId && r.eventId === selectedEvent.id) ||
-          (!r.eventId && r.level === selectedEvent.level)
-      );
-    }
-    if (tugasLevelFilter !== "ALL") {
-      return requirements.filter((r) => r.level === tugasLevelFilter);
-    }
-    return requirements;
-  }, [requirements, selectedEvent, tugasLevelFilter]);
+    return filterRequirementsForContext(requirements, {
+      selectedEvent,
+      tugasLevelFilter,
+      currentUser,
+      activeTenant,
+      events,
+    });
+  }, [requirements, selectedEvent, tugasLevelFilter, currentUser, activeTenant, events]);
 
-  // Automatically derive participant progress list for the selected event (or all)
+  // 4. Progres Peserta Kegiatan (gabungan pendaftaran + evaluations + kader pengunggah RTL, terisolasi tenant)
   const eventParticipantsProgress: EventParticipantProgress[] = useMemo(() => {
-    const allowedEventIds = new Set(tenantEvents.map((e) => e.id));
-    const targetRegs = registrations.filter((r) => {
-      if (selectedEventId !== "ALL") return r.eventId === selectedEventId;
-      return (
-        allowedEventIds.has(r.eventId) ||
-        isRecordInTenant(
-          currentUser,
-          {
-            commissariat: r.commissariat,
-            komisariat_id: (r as any).komisariat_id,
-            tenant_id: (r as any).tenant_id || (r as any).komisariat_id
-          },
-          activeTenant
-        )
-      );
+    return buildUnifiedEventParticipants({
+      registrations,
+      evaluations,
+      tenantCadres,
+      tenantEvents,
+      allEvents: events,
+      requirements,
+      selectedEventId,
+      selectedEvent,
+      currentUser,
+      activeTenant,
     });
+  }, [
+    registrations,
+    evaluations,
+    tenantCadres,
+    tenantEvents,
+    events,
+    requirements,
+    selectedEventId,
+    selectedEvent,
+    currentUser,
+    activeTenant,
+  ]);
 
-    return targetRegs.map((reg) => {
-      // Find event for this registration
-      const evt = events.find((e) => e.id === reg.eventId) || selectedEvent;
-      const effectiveLevel = (evt?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA";
+  // Modal Detail selalu sinkron live berdasarkan ID peserta
+  const selectedParticipantProgress = useMemo(() => {
+    if (!selectedParticipantId) return null;
+    return eventParticipantsProgress.find((p) => p.id === selectedParticipantId) || null;
+  }, [eventParticipantsProgress, selectedParticipantId]);
 
-      // Applicable requirements for this participant's event
-      const reqsForLevel = requirements.filter(
-        (r) =>
-          (evt && r.eventId && r.eventId === evt.id) ||
-          (!r.eventId && r.level === effectiveLevel)
-      );
-
-      // Find matched cadre record if exists
-      const matchedCadre =
-        cadres.find(
-          (c) =>
-            (c.email &&
-              reg.cadreEmail &&
-              c.email.toLowerCase() === reg.cadreEmail.toLowerCase()) ||
-            c.name.toLowerCase() === reg.cadreName.toLowerCase() ||
-            c.id === reg.id
-        ) || null;
-
-      const submissions = matchedCadre?.submissions || [];
-
-      // Calculate progress
-      let approvedCount = 0;
-      let totalRatio = 0;
-      reqsForLevel.forEach((r) => {
-        const minNeeded = r.minSubmissions || 1;
-        const approvedSubs = submissions.filter(
-          (s) => s.requirementId === r.id && s.status === "APPROVED"
-        ).length;
-        if (approvedSubs >= minNeeded) {
-          approvedCount++;
-        }
-        totalRatio += Math.min(1, approvedSubs / minNeeded);
-      });
-
-      const percent =
-        reqsForLevel.length > 0 ? Math.round((totalRatio / reqsForLevel.length) * 100) : 0;
-
-      let status: "SELESAI" | "REVISI" | "AKTIF" | "BELUM_MULAI" = "BELUM_MULAI";
-      if (matchedCadre?.status === "SELESAI" || percent === 100) {
-        status = "SELESAI";
-      } else if (submissions.some((s) => s.status === "REJECTED")) {
-        status = "REVISI";
-      } else if (submissions.length > 0) {
-        status = "AKTIF";
-      }
-
-      const photoUrl = getParticipantPhoto(matchedCadre, reg, users);
-
-      return {
-        id: reg.id,
-        registrationId: reg.id,
-        eventId: reg.eventId,
-        eventName: evt?.name || evt?.title || "Kegiatan Kaderisasi",
-        eventLevel: effectiveLevel,
-        cadreName: reg.cadreName,
-        cadreEmail: reg.cadreEmail,
-        phone: reg.answers?.phone || reg.answers?.noHp || "-",
-        campus: reg.answers?.kampus || reg.answers?.universitas || "-",
-        dateApplied: reg.dateApplied,
-        regStatus: reg.status,
-        matchedCadre,
-        submissions,
-        applicableRequirements: reqsForLevel,
-        status,
-        progressPercent: percent,
-        approvedCount,
-        totalRequirements: reqsForLevel.length,
-        photoUrl
-      };
-    });
-  }, [registrations, selectedEventId, events, selectedEvent, requirements, cadres, users, tenantEvents, currentUser, activeTenant]);
-
-  // Submissions for Tab 1 (Verifikasi Antrean)
+  // 5. Antrean Verifikasi Berkas Masuk (terisolasi tenant + akurat lintas jenjang MAPABA/PKD/PKL)
   const allSubmissions: DisplaySubmission[] = useMemo(() => {
     const list: DisplaySubmission[] = [];
+    const allowedEventIds = new Set(tenantEvents.map((e) => e.id));
 
-    cadres.forEach((cadre) => {
-      const matchingReg = registrations.find(
-        (r) =>
-          r.id === cadre.id ||
-          (r.cadreEmail &&
-            cadre.email &&
-            r.cadreEmail.toLowerCase() === cadre.email.toLowerCase()) ||
-          r.cadreName.toLowerCase() === cadre.name.toLowerCase()
-      );
-      const matchingEvent = matchingReg ? events.find((e) => e.id === matchingReg.eventId) : null;
-      const photoUrl = getParticipantPhoto(cadre, matchingReg, users);
+    tenantCadres.forEach((cadre) => {
+      const subs = Array.isArray(cadre.submissions) ? cadre.submissions : [];
+      subs.forEach((s) => {
+        const ctx = resolveSubmissionEventContext(
+          cadre,
+          s,
+          registrations,
+          events,
+          requirements
+        );
 
-      // Filter by selected event
-      if (selectedEventId !== "ALL") {
-        if (matchingEvent && matchingEvent.id !== selectedEventId) {
+        // Filter ketat sesuai kegiatan yang dipilih
+        if (selectedEventId !== "ALL") {
+          if (ctx.event) {
+            if (ctx.event.id !== selectedEventId) return;
+          } else {
+            const reqLvl = String(ctx.requirement?.level || cadre.level || "").toUpperCase();
+            const selLvl = String(selectedEvent?.level || "").toUpperCase();
+            if (!selLvl || reqLvl !== selLvl) return;
+          }
+        } else if (ctx.event && !allowedEventIds.has(ctx.event.id)) {
           return;
         }
-        if (!matchingEvent && cadre.level !== selectedEvent?.level) {
-          return;
-        }
-      }
 
-      cadre.submissions.forEach((s) => {
+        const photoUrl = getParticipantPhoto(cadre, ctx.registration, []);
         list.push({
           ...s,
           cadreId: cadre.id,
           cadreName: cadre.name,
-          cadreLevel: cadre.level,
+          cadreLevel: ctx.event?.level || ctx.requirement?.level || cadre.level,
           cadreAvatar: photoUrl || cadre.avatar,
-          eventId: matchingEvent?.id,
-          eventName: matchingEvent?.name || matchingEvent?.title || `Kaderisasi ${cadre.level}`
+          eventId: ctx.event?.id,
+          eventName:
+            ctx.event?.name ||
+            ctx.event?.title ||
+            `Kaderisasi ${ctx.requirement?.level || cadre.level}`,
+          requirementTitle: ctx.requirement?.title,
+          requirementDeadline: ctx.requirement?.deadline,
         });
       });
     });
 
+    // Urutkan terbaru dulu
+    list.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
     return list;
-  }, [cadres, registrations, events, selectedEventId, selectedEvent, users]);
+  }, [
+    tenantCadres,
+    tenantEvents,
+    registrations,
+    events,
+    requirements,
+    selectedEventId,
+    selectedEvent,
+  ]);
 
   // Statistics
   const pendingCount = allSubmissions.filter((s) => s.status === "PENDING").length;
@@ -342,117 +390,189 @@ export default function UnifiedRtlVerifikasiPage() {
   const totalParticipantsInEvent = eventParticipantsProgress.length;
   const lulusRtlCount = eventParticipantsProgress.filter((p) => p.status === "SELESAI").length;
 
-  // Filtered submissions for display in Tab 1
+  // Filtered submissions (Tab 1)
   const filteredSubmissions = useMemo(() => {
+    const q = submissionSearch.trim().toLowerCase();
     return allSubmissions.filter((s) => {
       const matchesTab = s.status === reviewSubTab;
       const matchesSearch =
-        searchQuery.trim() === "" ||
-        s.cadreName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.description.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        s.cadreName.toLowerCase().includes(q) ||
+        s.title.toLowerCase().includes(q) ||
+        (s.description || "").toLowerCase().includes(q) ||
+        (s.requirementTitle || "").toLowerCase().includes(q);
       return matchesTab && matchesSearch;
     });
-  }, [allSubmissions, reviewSubTab, searchQuery]);
+  }, [allSubmissions, reviewSubTab, submissionSearch]);
 
-  // Filtered participants for display in Tab 2
+  // Filtered participants (Tab 2)
   const filteredParticipants = useMemo(() => {
+    const q = progressSearch.trim().toLowerCase();
     return eventParticipantsProgress.filter((p) => {
       const matchesSearch =
-        searchQuery.trim() === "" ||
-        p.cadreName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.cadreEmail.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        p.cadreName.toLowerCase().includes(q) ||
+        p.cadreEmail.toLowerCase().includes(q) ||
+        p.eventName.toLowerCase().includes(q);
       const matchesStatus =
         progresStatusFilter === "ALL" || p.status === progresStatusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [eventParticipantsProgress, searchQuery, progresStatusFilter]);
+  }, [eventParticipantsProgress, progressSearch, progresStatusFilter]);
 
   // Review Actions
   const handleOpenReview = (sub: DisplaySubmission) => {
-    setReviewingSubmission({
-      id: sub.id,
-      requirementId: sub.requirementId,
-      title: sub.title,
-      description: sub.description,
-      fileLink: sub.fileLink,
-      date: sub.date,
-      status: sub.status,
-      feedback: sub.feedback
-    });
-    setReviewingCadreId(sub.cadreId);
-    setReviewingCadreName(sub.cadreName);
-    setReviewingCadreLevel(sub.cadreLevel);
-    setReviewingCadreAvatar(sub.cadreAvatar || null);
+    setReviewingSubmission(sub);
     setReviewStatus(sub.status === "REJECTED" ? "REJECTED" : "APPROVED");
     setReviewFeedback(sub.feedback || "");
+    setReviewError("");
     setIsReviewModalOpen(true);
+  };
+
+  const handleOpenReviewFromParticipantDetail = (
+    participant: EventParticipantProgress,
+    sub: CadreSubmission
+  ) => {
+    if (!participant.matchedCadre) return;
+    const req = participant.applicableRequirements.find((r) => r.id === sub.requirementId);
+    handleOpenReview({
+      ...sub,
+      cadreId: participant.matchedCadre.id,
+      cadreName: participant.cadreName,
+      cadreLevel: participant.eventLevel,
+      cadreAvatar: participant.photoUrl,
+      eventId: participant.eventId,
+      eventName: participant.eventName,
+      requirementTitle: req?.title,
+      requirementDeadline: req?.deadline,
+    });
   };
 
   const handleSaveReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewingSubmission || !reviewingCadreId) return;
+    if (!reviewingSubmission) return;
 
+    const trimmedFeedback = reviewFeedback.trim();
+    if (reviewStatus === "REJECTED" && !trimmedFeedback) {
+      setReviewError(
+        "Catatan revisi wajib diisi saat mengembalikan berkas agar kader mengetahui bagian yang perlu diperbaiki."
+      );
+      return;
+    }
+
+    const targetCadre = cadres.find((c) => c.id === reviewingSubmission.cadreId);
+    if (!targetCadre) {
+      showNotificationModal(
+        "Data Kader Tidak Ditemukan",
+        "Record kader tidak lagi tersedia. Silakan muat ulang halaman.",
+        "error"
+      );
+      return;
+    }
+
+    setReviewError("");
     setIsSubmittingReview(true);
+
     try {
-      const updatedCadres = cadres.map((cadre) => {
-        if (cadre.id === reviewingCadreId) {
-          const updatedSubmissions = cadre.submissions.map((sub) => {
-            if (sub.id === reviewingSubmission.id) {
-              return {
-                ...sub,
-                status: reviewStatus,
-                feedback: reviewFeedback.trim()
-              };
+      const updatedSubmissions: CadreSubmission[] = (targetCadre.submissions || []).map((sub) =>
+        sub.id === reviewingSubmission.id
+          ? {
+              ...sub,
+              status: reviewStatus,
+              feedback: trimmedFeedback,
             }
-            return sub;
-          });
+          : sub
+      );
 
-          // Check if cadre should be marked SELESAI
-          const hasPending = updatedSubmissions.some((s) => s.status === "PENDING");
-          const hasRejected = updatedSubmissions.some((s) => s.status === "REJECTED");
-          const reqsForLevel = requirements.filter((r) => r.level === cadre.level);
-          const currentApproved = updatedSubmissions.filter((s) => s.status === "APPROVED").length;
+      // Hitung status baru secara akurat per requirementId & minSubmissions untuk event kader ini
+      const targetEvt = reviewingSubmission.eventId
+        ? events.find((ev) => ev.id === reviewingSubmission.eventId) || null
+        : selectedEvent;
 
-          let newStatus = cadre.status;
-          if (reviewStatus === "REJECTED") {
-            newStatus = "REVISI";
-          } else if (
-            !hasPending &&
-            !hasRejected &&
-            currentApproved >= reqsForLevel.length &&
-            reqsForLevel.length > 0
-          ) {
-            newStatus = "SELESAI";
-          } else {
-            newStatus = "AKTIF";
-          }
-
-          return {
-            ...cadre,
-            submissions: updatedSubmissions,
-            status: newStatus
-          };
-        }
-        return cadre;
+      const applicableReqs = filterRequirementsForContext(requirements, {
+        selectedEvent: targetEvt,
+        tugasLevelFilter: targetEvt ? "ALL" : String(targetCadre.level || "MAPABA"),
+        currentUser,
+        activeTenant,
+        events,
       });
 
-      setCadres(updatedCadres);
-      await db.saveCadres(updatedCadres);
+      const newStatus = deriveCadreStatusAfterReview({
+        updatedSubmissions,
+        applicableReqs,
+        reviewStatus,
+      });
+
+      // O(1) update 1 baris di tabel anggota + cek hasil boolean (anti silent failure & anti RLS lintas tenant)
+      const saved = await db.updateCadre(targetCadre.id, {
+        submissions: updatedSubmissions,
+        status: newStatus,
+        ...(newStatus === "SELESAI" ? { isGraduated: true } : {}),
+      });
+
+      if (!saved) {
+        showNotificationModal(
+          "Gagal Menyimpan Verifikasi",
+          "Database menolak penyimpanan hasil verifikasi. Pastikan Anda memiliki hak akses pada komisariat ini dan koneksi stabil.",
+          "error"
+        );
+        return;
+      }
+
+      // Sinkronkan juga status kelulusan di tabel pendaftaran jika kader resmi lulus seluruh RTL
+      if (newStatus === "SELESAI") {
+        const ctx = resolveSubmissionEventContext(
+          targetCadre,
+          reviewingSubmission,
+          registrations,
+          events,
+          requirements
+        );
+        if (ctx.registration && !ctx.registration.isGraduated) {
+          const regOk = await db.updateRegistration(ctx.registration.id, {
+            isGraduated: true,
+            graduationStatus: "PASSED",
+          });
+          if (regOk) {
+            setRegistrations((prev) =>
+              prev.map((r) =>
+                r.id === ctx.registration!.id
+                  ? { ...r, isGraduated: true, graduationStatus: "PASSED" }
+                  : r
+              )
+            );
+          }
+        }
+      }
+
+      setCadres((prev) =>
+        prev.map((c) =>
+          c.id === targetCadre.id
+            ? {
+                ...c,
+                submissions: updatedSubmissions,
+                status: newStatus,
+                ...(newStatus === "SELESAI" ? { isGraduated: true } : {}),
+              }
+            : c
+        )
+      );
+
       setIsReviewModalOpen(false);
       setReviewingSubmission(null);
-      setReviewingCadreId("");
       setReviewFeedback("");
       showNotificationModal(
-        reviewStatus === "APPROVED" ? "Laporan Berhasil Disetujui" : "Laporan Dikembalikan untuk Revisi",
-        `Hasil peninjauan laporan "${reviewingSubmission.title}" untuk ${reviewingCadreName} telah tersimpan dan disinkronkan ke pangkalan data.`,
+        reviewStatus === "APPROVED"
+          ? "Laporan Berhasil Disetujui"
+          : "Laporan Dikembalikan untuk Revisi",
+        `Hasil peninjauan laporan "${reviewingSubmission.title}" untuk ${reviewingSubmission.cadreName} telah tersimpan di database.`,
         "success"
       );
     } catch (error) {
       console.error("Failed to save review:", error);
       showNotificationModal(
         "Gagal Menyimpan Verifikasi",
-        "Terjadi kendala saat menyimpan hasil verifikasi berkas. Silakan coba lagi.",
+        "Terjadi kendala tak terduga saat menyimpan hasil verifikasi berkas. Silakan coba lagi.",
         "error"
       );
     } finally {
@@ -460,53 +580,133 @@ export default function UnifiedRtlVerifikasiPage() {
     }
   };
 
-  // Sahkan Kelulusan RTL Peserta Modal Triggers
-  const handleSahkanKelulusan = (p: EventParticipantProgress) => {
+  // Sahkan / Batalkan Kelulusan RTL Peserta
+  const handleSahkanKelulusan = (
+    p: EventParticipantProgress,
+    mode: "APPROVE" | "REVOKE" = "APPROVE"
+  ) => {
     setParticipantToSahkan(p);
+    setSahkanActionMode(mode);
     setIsSahkanModalOpen(true);
   };
 
   const handleConfirmSahkanKelulusan = async () => {
     if (!participantToSahkan) return;
     const p = participantToSahkan;
+    const isApprove = sahkanActionMode === "APPROVE";
     setIsSubmittingSahkan(true);
 
     try {
-      let updatedCadres: CadreFollowUp[];
-      if (p.matchedCadre) {
-        updatedCadres = cadres.map((c) =>
-          c.id === p.matchedCadre!.id ? { ...c, status: "SELESAI" } : c
+      let nextCadreStatus: "SELESAI" | "REVISI" | "AKTIF" = "SELESAI";
+      if (!isApprove) {
+        const recalculated = calculateRtlProgress(
+          p.matchedCadre?.submissions || [],
+          p.applicableRequirements
         );
-      } else {
-        const newCadre: CadreFollowUp = {
-          id: `cadre-${Date.now()}`,
-          name: p.cadreName,
-          level: p.eventLevel as any,
-          commissariat: activeCampus,
-          startDate: selectedEvent?.date || new Date().toISOString().split("T")[0],
-          status: "SELESAI",
-          submissions: [],
-          email: p.cadreEmail,
-          phone: p.phone,
-          avatar: p.photoUrl || undefined
-        };
-        updatedCadres = [...cadres, newCadre];
+        nextCadreStatus =
+          recalculated.rejectedCount > 0 ? "REVISI" : "AKTIF";
       }
 
-      setCadres(updatedCadres);
-      await db.saveCadres(updatedCadres);
+      let cadreSaved = false;
+      let createdCadre: CadreFollowUp | null = null;
+
+      if (p.matchedCadre) {
+        cadreSaved = await db.updateCadre(p.matchedCadre.id, {
+          status: nextCadreStatus,
+          isGraduated: isApprove,
+        });
+      } else if (isApprove) {
+        const tenantOverride =
+          p.commissariat ||
+          selectedEvent?.commissariat ||
+          (activeTenant !== "ALL" && activeTenant !== "Semua Komisariat"
+            ? activeTenant
+            : currentUser?.commissariat || "ALL");
+
+        const rawNewCadre: CadreFollowUp = {
+          id: generateUUID(),
+          name: p.cadreName,
+          level: p.eventLevel,
+          commissariat: p.commissariat || selectedEvent?.commissariat || currentUser?.commissariat,
+          tenant_id: p.tenant_id || selectedEvent?.tenant_id || currentUser?.tenant_id || null,
+          komisariat_id:
+            p.tenant_id || selectedEvent?.komisariat_id || currentUser?.komisariat_id || null,
+          startDate: selectedEvent?.date || new Date().toISOString().split("T")[0],
+          status: "SELESAI",
+          isGraduated: true,
+          submissions: [],
+          email: p.cadreEmail,
+          phone: p.phone !== "-" ? p.phone : undefined,
+          avatar: p.photoUrl || undefined,
+        };
+        createdCadre = enforceTenantWrite<CadreFollowUp>(
+          currentUser,
+          rawNewCadre,
+          tenantOverride
+        );
+        cadreSaved = await db.upsertCadre(createdCadre);
+      } else {
+        cadreSaved = true;
+      }
+
+      if (!cadreSaved) {
+        showNotificationModal(
+          isApprove ? "Gagal Mengesahkan Kelulusan" : "Gagal Membatalkan Kelulusan",
+          "Database menolak pembaruan data kader. Periksa hak akses tenant dan koneksi Anda.",
+          "error"
+        );
+        return;
+      }
+
+      // Sinkronkan status kelulusan ke tabel pendaftaran bila peserta berasal dari tabel pendaftaran
+      let regSaved = false;
+      if (p.hasRegistration && p.registrationId) {
+        regSaved = await db.updateRegistration(p.registrationId, {
+          isGraduated: isApprove,
+          graduationStatus: isApprove ? "PASSED" : "PENDING",
+        });
+      }
+
+      if (p.matchedCadre) {
+        setCadres((prev) =>
+          prev.map((c) =>
+            c.id === p.matchedCadre!.id
+              ? { ...c, status: nextCadreStatus, isGraduated: isApprove }
+              : c
+          )
+        );
+      } else if (createdCadre) {
+        setCadres((prev) => [...prev, createdCadre!]);
+      }
+
+      if (regSaved && p.registrationId) {
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.id === p.registrationId
+              ? {
+                  ...r,
+                  isGraduated: isApprove,
+                  graduationStatus: isApprove ? "PASSED" : "PENDING",
+                }
+              : r
+          )
+        );
+      }
+
       setIsSahkanModalOpen(false);
       setParticipantToSahkan(null);
       showNotificationModal(
-        "Kelulusan Berhasil Disahkan",
-        `Kelulusan RTL ${p.cadreName} telah berhasil disahkan! Status kader kini LULUS / SELESAI.`,
+        isApprove ? "Kelulusan Berhasil Disahkan" : "Pengesahan Kelulusan Dibatalkan",
+        isApprove
+          ? `Kelulusan RTL ${p.cadreName} telah disahkan dan disinkronkan ke data kader & pendaftaran.`
+          : `Status kelulusan RTL ${p.cadreName} dikembalikan ke status proses aktif.`,
         "success"
       );
     } catch (err) {
-      console.error("Gagal mengesahkan kelulusan:", err);
+      console.error("Gagal memperbarui pengesahan kelulusan:", err);
       showNotificationModal(
-        "Gagal Mengesahkan Kelulusan",
-        "Terjadi kendala saat mengesahkan kelulusan. Silakan coba lagi.",
+        "Gagal Memperbarui Kelulusan",
+        "Terjadi kendala saat menyimpan perubahan kelulusan. Silakan coba lagi.",
         "error"
       );
     } finally {
@@ -520,80 +720,135 @@ export default function UnifiedRtlVerifikasiPage() {
     setReqFormEventId(selectedEventId !== "ALL" ? selectedEventId : tenantEvents[0]?.id || "");
     setReqFormTitle("");
     setReqFormDeadline("");
+    setReqFormMinSubmissions(1);
     setReqFormDescription("");
     setReqFormFileUrl("");
     setReqFormFileName("");
     setReqFormFileSize("");
+    setReqOriginalFileUrl("");
     setIsReqModalOpen(true);
   };
 
   const handleOpenEditReq = (req: Requirement) => {
+    if (!canManageRequirement(req, currentUser, events)) {
+      showNotificationModal(
+        "Akses Terbatas",
+        "Tugas RTL ini milik tingkat Cabang / komisariat lain dan hanya dapat diubah oleh pengelola terkait.",
+        "error"
+      );
+      return;
+    }
     setEditingReqId(req.id);
     setReqFormEventId(
       req.eventId || (selectedEventId !== "ALL" ? selectedEventId : tenantEvents[0]?.id || "")
     );
     setReqFormTitle(req.title);
     setReqFormDeadline(req.deadline || "");
+    setReqFormMinSubmissions(Math.max(1, Number(req.minSubmissions) || 1));
     setReqFormDescription(req.description || "");
     setReqFormFileUrl(req.fileUrl || "");
     setReqFormFileName(req.fileName || "");
     setReqFormFileSize(req.fileSize || "");
+    setReqOriginalFileUrl(req.fileUrl || "");
     setIsReqModalOpen(true);
   };
 
   const handleReqFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      showNotificationModal(
-        "Ukuran Berkas Terlalu Besar",
-        "Ukuran berkas melebihi batas maksimal 25MB. Harap pilih berkas dokumen yang lebih kecil.",
-        "error"
-      );
+    const validationError = validateRequirementFile(file);
+    if (validationError) {
+      showNotificationModal("Berkas Tidak Valid", validationError, "error");
       return;
     }
 
     setIsUploadingReqFile(true);
-    setReqFormFileName(file.name);
-    setReqFormFileSize(`${(file.size / (1024 * 1024)).toFixed(2)} MB`);
+    const formattedSize =
+      file.size >= 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+        : `${Math.max(1, Math.round(file.size / 1024))} KB`;
 
     try {
       let finalUrl = "";
       if (isSupabaseConfigured && supabase) {
-        const fileExt = file.name.split(".").pop();
-        const filePath = `req-files/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from("materials").upload(filePath, file);
+        const cleanExt = (file.name.split(".").pop() || "pdf")
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .toLowerCase();
+        const tenantSegment =
+          currentUser?.tenant_id && /^[0-9a-fA-F-]{36}$/.test(currentUser.tenant_id)
+            ? currentUser.tenant_id
+            : "general";
+        const filePath = `req-files/${tenantSegment}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 9)}.${cleanExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("materials")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: file.type || undefined,
+          });
+
         if (uploadError) {
-          console.warn("Storage upload failed, falling back to data URL:", uploadError.message);
-          finalUrl = await readFileAsDataURL(file);
-        } else {
-          const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
-          finalUrl = data.publicUrl;
+          console.error("Gagal mengunggah berkas panduan ke Storage:", uploadError.message);
+          showNotificationModal(
+            "Gagal Mengunggah Berkas",
+            `Berkas tidak dapat disimpan ke server penyimpanan (${uploadError.message}). Pastikan ukuran maksimal 10 MB dan format sesuai.`,
+            "error"
+          );
+          return;
         }
+        const { data } = supabase.storage.from("materials").getPublicUrl(filePath);
+        finalUrl = data.publicUrl;
       } else {
+        if (file.size > 2 * 1024 * 1024) {
+          showNotificationModal(
+            "Mode Offline Terbatas",
+            "Pada mode lokal/offline, ukuran lampiran dibatasi maksimal 2 MB.",
+            "error"
+          );
+          return;
+        }
         finalUrl = await readFileAsDataURL(file);
       }
+
+      // Hapus berkas sementara sebelumnya bila user mengganti file sebelum klik Simpan
+      if (reqFormFileUrl && reqFormFileUrl !== reqOriginalFileUrl) {
+        void deleteStorageFile(reqFormFileUrl);
+      }
+
+      setReqFormFileName(file.name);
+      setReqFormFileSize(formattedSize);
       setReqFormFileUrl(finalUrl);
     } catch (err) {
-      console.error("Gagal membaca berkas:", err);
+      console.error("Gagal memproses berkas panduan:", err);
       showNotificationModal(
-        "Gagal Membaca Berkas",
-        "Terjadi kendala saat memproses berkas panduan. Silakan coba unggah kembali.",
+        "Gagal Memproses Berkas",
+        "Terjadi kendala saat mengunggah berkas panduan. Silakan coba kembali.",
         "error"
       );
-      setReqFormFileName("");
-      setReqFormFileSize("");
-      setReqFormFileUrl("");
     } finally {
       setIsUploadingReqFile(false);
     }
   };
 
   const handleRemoveReqFile = () => {
+    if (reqFormFileUrl && reqFormFileUrl !== reqOriginalFileUrl) {
+      void deleteStorageFile(reqFormFileUrl);
+    }
     setReqFormFileName("");
     setReqFormFileSize("");
     setReqFormFileUrl("");
+  };
+
+  const handleCloseReqModal = (open: boolean) => {
+    if (!open && reqFormFileUrl && reqFormFileUrl !== reqOriginalFileUrl) {
+      // Bersihkan file baru yang terlanjur terunggah saat modal dibatalkan
+      void deleteStorageFile(reqFormFileUrl);
+    }
+    setIsReqModalOpen(open);
   };
 
   const handleSaveRequirement = async (e: React.FormEvent) => {
@@ -607,69 +862,102 @@ export default function UnifiedRtlVerifikasiPage() {
       return;
     }
 
-    // Determine target event
+    const existingReq = editingReqId
+      ? requirements.find((r) => r.id === editingReqId) || null
+      : null;
+
+    if (existingReq && !canManageRequirement(existingReq, currentUser, events)) {
+      showNotificationModal(
+        "Akses Ditolak",
+        "Anda tidak memiliki izin mengubah tugas milik tenant lain.",
+        "error"
+      );
+      return;
+    }
+
     const targetEvtId = selectedEventId !== "ALL" ? selectedEventId : reqFormEventId;
-    const targetEvent = events.find((ev) => ev.id === targetEvtId);
-    const targetLevel = (targetEvent?.level as "MAPABA" | "PKD" | "PKL") || "MAPABA";
+    const targetEvent = tenantEvents.find((ev) => ev.id === targetEvtId) || null;
 
+    if (!targetEvent && !isCabangOrAdmin(currentUser) && !existingReq) {
+      showNotificationModal(
+        "Kegiatan Wajib Dipilih",
+        "Buat atau pilih kegiatan kaderisasi komisariat terlebih dahulu sebelum menambahkan tugas RTL.",
+        "error"
+      );
+      return;
+    }
+
+    setIsSavingReq(true);
     try {
-      let updatedReqs: Requirement[];
+      const payload = buildRequirementPayload({
+        existing: existingReq,
+        title: reqFormTitle,
+        description: reqFormDescription,
+        deadline: reqFormDeadline,
+        minSubmissions: reqFormMinSubmissions,
+        targetEvent,
+        fallbackLevel:
+          tugasLevelFilter !== "ALL" ? tugasLevelFilter : selectedEvent?.level || "MAPABA",
+        fileUrl: reqFormFileUrl,
+        fileName: reqFormFileName,
+        fileSize: reqFormFileSize,
+        currentUser,
+        activeTenant,
+      });
 
-      if (editingReqId) {
-        updatedReqs = requirements.map((r) =>
-          r.id === editingReqId
-            ? {
-                ...r,
-                title: reqFormTitle.trim(),
-                eventId: targetEvtId || undefined,
-                level: targetLevel,
-                deadline: reqFormDeadline || undefined,
-                description: reqFormDescription.trim(),
-                fileUrl: reqFormFileUrl || undefined,
-                fileName: reqFormFileName || undefined,
-                fileSize: reqFormFileSize || undefined,
-                category: r.category || "Tugas"
-              }
-            : r
+      // Delta upsert O(1) — tidak mengirim baris milik tenant lain
+      const saved = await db.upsertRequirement(payload);
+      if (!saved) {
+        showNotificationModal(
+          "Gagal Menyimpan Tugas",
+          "Database menolak penyimpanan tugas RTL. Periksa izin akun/tenant dan koneksi internet Anda.",
+          "error"
         );
-      } else {
-        const newReq: Requirement = {
-          id: `req-${Date.now()}`,
-          title: reqFormTitle.trim(),
-          eventId: targetEvtId || undefined,
-          level: targetLevel,
-          category: "Tugas",
-          minSubmissions: 1,
-          deadline: reqFormDeadline || undefined,
-          description: reqFormDescription.trim(),
-          fileUrl: reqFormFileUrl || undefined,
-          fileName: reqFormFileName || undefined,
-          fileSize: reqFormFileSize || undefined
-        };
-        updatedReqs = [newReq, ...requirements];
+        return;
       }
 
-      setRequirements(updatedReqs);
-      await db.saveRequirements(updatedReqs);
+      // Bersihkan berkas lama di Storage bila diganti atau dihapus
+      if (reqOriginalFileUrl && reqOriginalFileUrl !== (payload.fileUrl || "")) {
+        void deleteStorageFile(reqOriginalFileUrl);
+      }
+
+      setRequirements((prev) => {
+        if (existingReq) {
+          return prev.map((r) => (r.id === existingReq.id ? payload : r));
+        }
+        return [payload, ...prev];
+      });
+
+      setReqOriginalFileUrl(payload.fileUrl || "");
       setIsReqModalOpen(false);
       showNotificationModal(
         editingReqId ? "Tugas Berhasil Diperbarui" : "Tugas Berhasil Ditambahkan",
         editingReqId
-          ? "Perubahan tugas RTL telah tersimpan dan disinkronkan ke pangkalan data."
-          : "Tugas RTL baru telah berhasil ditambahkan ke agenda kegiatan.",
+          ? "Perubahan tugas RTL telah tersimpan di database."
+          : "Tugas RTL baru telah ditambahkan ke agenda kegiatan.",
         "success"
       );
     } catch (err) {
       console.error("Gagal menyimpan tugas:", err);
       showNotificationModal(
         "Gagal Menyimpan Tugas",
-        "Terjadi kendala saat menyimpan data tugas. Silakan coba lagi.",
+        "Terjadi kendala tak terduga saat menyimpan data tugas. Silakan coba lagi.",
         "error"
       );
+    } finally {
+      setIsSavingReq(false);
     }
   };
 
   const handlePromptDeleteRequirement = (req: Requirement) => {
+    if (!canManageRequirement(req, currentUser, events)) {
+      showNotificationModal(
+        "Akses Terbatas",
+        "Tugas RTL ini milik tingkat Cabang / komisariat lain dan tidak dapat dihapus dari akun ini.",
+        "error"
+      );
+      return;
+    }
     setDeletingReq(req);
     setIsDeleteModalOpen(true);
   };
@@ -678,14 +966,23 @@ export default function UnifiedRtlVerifikasiPage() {
     if (!deletingReq) return;
     setIsDeleting(true);
     try {
-      const updatedReqs = requirements.filter((r) => r.id !== deletingReq.id);
-      setRequirements(updatedReqs);
-      await db.saveRequirements(updatedReqs);
+      // Hapus langsung 1 baris di Supabase `persyaratan` + bersihkan file Storage
+      const deleted = await db.deleteRequirement(deletingReq.id, deletingReq.fileUrl);
+      if (!deleted) {
+        showNotificationModal(
+          "Gagal Menghapus Tugas",
+          "Database menolak penghapusan tugas RTL ini. Periksa izin akun/tenant dan koneksi Anda.",
+          "error"
+        );
+        return;
+      }
+
+      setRequirements((prev) => prev.filter((r) => r.id !== deletingReq.id));
       setIsDeleteModalOpen(false);
       setDeletingReq(null);
       showNotificationModal(
         "Tugas Berhasil Dihapus",
-        "Tugas RTL telah berhasil dihapus secara permanen dari pangkalan data.",
+        "Tugas RTL dan berkas panduannya telah dihapus secara permanen dari database.",
         "success"
       );
     } catch (err) {
@@ -712,9 +1009,11 @@ export default function UnifiedRtlVerifikasiPage() {
 
   return (
     <div className="space-y-6 relative z-10 font-sans text-zinc-900 dark:text-zinc-100 pb-16">
-      {/* 1. HERO HEADER WITH EVENT SELECTOR */}
+      {/* 1. HERO HEADER WITH EVENT SELECTOR & TENANT SCOPE */}
       <VerifikasiHero
-        activeCampus={activeCampus}
+        staffPrefix={staffPrefix}
+        scopeLabel={scopeLabel}
+        isCabangScope={isCabangOrAdmin(currentUser)}
         pendingCount={pendingCount}
         totalParticipantsInEvent={totalParticipantsInEvent}
         selectedEventId={selectedEventId}
@@ -729,7 +1028,6 @@ export default function UnifiedRtlVerifikasiPage() {
         mainTab={mainTab}
         onTabChange={(tab) => {
           setMainTab(tab);
-          setSearchQuery("");
         }}
         pendingCount={pendingCount}
         totalParticipantsInEvent={totalParticipantsInEvent}
@@ -744,37 +1042,40 @@ export default function UnifiedRtlVerifikasiPage() {
           pendingCount={pendingCount}
           approvedCount={approvedCount}
           rejectedCount={rejectedCount}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
+          searchQuery={submissionSearch}
+          onSearchQueryChange={setSubmissionSearch}
           filteredSubmissions={filteredSubmissions}
           onOpenReview={handleOpenReview}
         />
       )}
 
-      {/* 4. TAB 2: PROGRES PESERTA KEGIATAN (OTOMATIS DARI PENDAFTARAN) */}
+      {/* 4. TAB 2: PROGRES PESERTA KEGIATAN */}
       {mainTab === "PROGRES" && (
         <ParticipantProgressTab
           progresStatusFilter={progresStatusFilter}
           onProgresStatusFilterChange={setProgresStatusFilter}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
+          searchQuery={progressSearch}
+          onSearchQueryChange={setProgressSearch}
           filteredParticipants={filteredParticipants}
           selectedEventName={selectedEvent?.name || selectedEvent?.title}
           onOpenDetailModal={(p) => {
-            setSelectedParticipantProgress(p);
+            setSelectedParticipantId(p.id);
             setIsDetailModalOpen(true);
           }}
-          onSahkanKelulusan={handleSahkanKelulusan}
+          onSahkanKelulusan={(p) => handleSahkanKelulusan(p, "APPROVE")}
+          onRevokeKelulusan={(p) => handleSahkanKelulusan(p, "REVOKE")}
         />
       )}
 
       {/* 5. TAB 3: TUGAS (CRUD TUGAS RTL) */}
       {mainTab === "TUGAS" && (
         <TugasTab
+          selectedEvent={selectedEvent}
           tugasLevelFilter={tugasLevelFilter}
           onTugasLevelFilterChange={setTugasLevelFilter}
           currentApplicableReqs={currentApplicableReqs}
           events={events}
+          canManageReq={(req) => canManageRequirement(req, currentUser, events)}
           onOpenAddReq={handleOpenAddReq}
           onOpenEditReq={handleOpenEditReq}
           onPromptDeleteReq={handlePromptDeleteRequirement}
@@ -784,15 +1085,22 @@ export default function UnifiedRtlVerifikasiPage() {
       {/* 6. MODAL: REVIEW LAPORAN */}
       <ReviewSubmissionModal
         isOpen={isReviewModalOpen}
-        onOpenChange={setIsReviewModalOpen}
+        onOpenChange={(open) => {
+          setIsReviewModalOpen(open);
+          if (!open) setReviewError("");
+        }}
         reviewingSubmission={reviewingSubmission}
-        reviewingCadreName={reviewingCadreName}
-        reviewingCadreLevel={reviewingCadreLevel}
-        reviewingCadreAvatar={reviewingCadreAvatar}
         reviewStatus={reviewStatus}
-        onReviewStatusChange={setReviewStatus}
+        onReviewStatusChange={(st) => {
+          setReviewStatus(st);
+          setReviewError("");
+        }}
         reviewFeedback={reviewFeedback}
-        onReviewFeedbackChange={setReviewFeedback}
+        onReviewFeedbackChange={(val) => {
+          setReviewFeedback(val);
+          if (reviewError && val.trim()) setReviewError("");
+        }}
+        reviewError={reviewError}
         isSubmittingReview={isSubmittingReview}
         onSubmitReview={handleSaveReview}
       />
@@ -800,15 +1108,20 @@ export default function UnifiedRtlVerifikasiPage() {
       {/* 7. MODAL: DETAIL PROGRES PESERTA */}
       <ParticipantDetailModal
         isOpen={isDetailModalOpen}
-        onOpenChange={setIsDetailModalOpen}
+        onOpenChange={(open) => {
+          setIsDetailModalOpen(open);
+          if (!open) setSelectedParticipantId(null);
+        }}
         participant={selectedParticipantProgress}
-        onSahkanKelulusan={handleSahkanKelulusan}
+        onReviewSubmission={handleOpenReviewFromParticipantDetail}
+        onSahkanKelulusan={(p) => handleSahkanKelulusan(p, "APPROVE")}
+        onRevokeKelulusan={(p) => handleSahkanKelulusan(p, "REVOKE")}
       />
 
       {/* 8. MODAL: CRUD TUGAS RTL */}
       <TaskModal
         isOpen={isReqModalOpen}
-        onOpenChange={setIsReqModalOpen}
+        onOpenChange={handleCloseReqModal}
         editingReqId={editingReqId}
         selectedEventId={selectedEventId}
         selectedEvent={selectedEvent}
@@ -819,10 +1132,13 @@ export default function UnifiedRtlVerifikasiPage() {
         onReqFormTitleChange={setReqFormTitle}
         reqFormDeadline={reqFormDeadline}
         onReqFormDeadlineChange={setReqFormDeadline}
+        reqFormMinSubmissions={reqFormMinSubmissions}
+        onReqFormMinSubmissionsChange={setReqFormMinSubmissions}
         reqFormFileUrl={reqFormFileUrl}
         reqFormFileName={reqFormFileName}
         reqFormFileSize={reqFormFileSize}
         isUploadingReqFile={isUploadingReqFile}
+        isSavingReq={isSavingReq}
         onReqFileChange={handleReqFileChange}
         onRemoveReqFile={handleRemoveReqFile}
         reqFormDescription={reqFormDescription}
@@ -840,11 +1156,12 @@ export default function UnifiedRtlVerifikasiPage() {
         onConfirmDelete={handleConfirmDeleteRequirement}
       />
 
-      {/* 10. MODAL: SAHKAN KELULUSAN RTL */}
+      {/* 10. MODAL: SAHKAN / BATALKAN KELULUSAN RTL */}
       <SahkanKelulusanModal
         isOpen={isSahkanModalOpen}
         onOpenChange={setIsSahkanModalOpen}
         participant={participantToSahkan}
+        mode={sahkanActionMode}
         isSubmitting={isSubmittingSahkan}
         onConfirm={handleConfirmSahkanKelulusan}
       />

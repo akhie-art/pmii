@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState, useMemo } from "react";
 import { SmartImage } from "@/components/ui/smart-image";
 import {
   Users,
@@ -13,6 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TablePagination, paginateItems } from "@/components/ui/table-pagination";
 import type { ParticipantEvaluation, EventActivity } from "@/lib/db";
 import { getParticipantAllSessions } from "./rekapExportHelpers";
 
@@ -29,6 +32,26 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
   getParticipantAvatar,
   onOpenDetail
 }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset ke halaman 1 saat daftar peserta berubah karena filter/pencarian/kegiatan
+  const listSignature = useMemo(
+    () => filteredList.map((item) => item.id).join(","),
+    [filteredList]
+  );
+  const [prevSignature, setPrevSignature] = useState(listSignature);
+  if (listSignature !== prevSignature) {
+    setPrevSignature(listSignature);
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
+  const {
+    paginatedItems: paginatedList,
+    safePage,
+    startIndex,
+  } = paginateItems(filteredList, currentPage, pageSize);
+
   return (
     <Card className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-xs">
       {filteredList.length === 0 ? (
@@ -65,7 +88,8 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredList.map((item, index) => {
+              {paginatedList.map((item, index) => {
+                const rowNumber = startIndex + index + 1;
                 const isEvaluated = item.status !== "BELUM_DINILAI";
                 const sessions = getParticipantAllSessions(item, currentActivity?.sessions);
                 const hasSessions = sessions.length > 0;
@@ -95,7 +119,7 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
                                     rowSpan={totalRows}
                                     className="py-3 px-3 text-center text-zinc-400 font-mono font-medium align-top border-r border-zinc-100 dark:border-zinc-800/60"
                                   >
-                                    <span className="sticky top-12 block pt-1">{index + 1}</span>
+                                    <span className="sticky top-12 block pt-1">{rowNumber}</span>
                                   </td>
 
                                   <td
@@ -113,10 +137,8 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
                                             alt={item.participantName}
                                             width={40}
                                             height={40}
+                                            unoptimized
                                             className="absolute inset-0 w-full h-full object-cover rounded-full"
-                                            onError={(e) => {
-                                              (e.currentTarget as HTMLElement).style.display = "none";
-                                            }}
                                           />
                                         )}
                                       </div>
@@ -335,7 +357,7 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
                       /* Fallback row jika kegiatan belum memiliki materi */
                       <tr className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors border-b-2 border-zinc-200 dark:border-zinc-800">
                         <td className="py-3 px-3 text-center text-zinc-400 font-mono font-medium">
-                          {index + 1}
+                          {rowNumber}
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2.5">
@@ -399,6 +421,18 @@ export const YudisiumTable: React.FC<YudisiumTableProps> = ({
           </table>
         </div>
       )}
+
+      {/* Pagination Footer (referensi halaman Pengguna) */}
+      <TablePagination
+        totalItems={filteredList.length}
+        currentPage={safePage}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+        itemLabel="peserta"
+        variant="embedded"
+        className="print:hidden"
+      />
     </Card>
   );
 };
